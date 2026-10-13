@@ -1,0 +1,15 @@
+[
+  {
+    "id": "cli-target",
+    "name": "Yzistel Hoi An (Expedia)",
+    "url": "https://www.expedia.com.vn/Da-Nang-Khach-San-YZISTEL.h113589597.Thong-tin-khach-san",
+    "rating": null,
+    "ratingValue": null,
+    "ratingRaw": null,
+    "count": null,
+    "countRaw": null,
+    "capturedAt": "2026-10-12T06:02:54.492Z",
+    "success": false,
+    "error": "Trang bị chặn bởi DataDome Captcha."
+  }
+]

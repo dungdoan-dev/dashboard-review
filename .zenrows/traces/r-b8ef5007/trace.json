@@ -1,0 +1,23 @@
+{
+  "runId": "r-b8ef5007",
+  "command": "zenrows fetch",
+  "capability": "protected_fetch",
+  "url": "https://www.expedia.com/Quy-Nhon-Hotels-Quy-Nhon-Sea-Hotel.h124263055.Hotel-Information?chkin=2025-12-29&chkout=2025-12-31&x_pwa=1&rfrr=HSR&pwa_ts=1766638178041&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20vSG90ZWwtU2VhcmNo&useRewards=false&a",
+  "startedAt": "2026-10-13T04:13:43.494Z",
+  "finishedAt": "2026-10-13T04:13:59.482Z",
+  "status": "ok",
+  "request": {
+    "url": "https://www.expedia.com/Quy-Nhon-Hotels-Quy-Nhon-Sea-Hotel.h124263055.Hotel-Information?chkin=2025-12-29&chkout=2025-12-31&x_pwa=1&rfrr=HSR&pwa_ts=1766638178041&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20vSG90ZWwtU2VhcmNo&useRewards=false&a",
+    "mode": "auto",
+    "response_type": "markdown"
+  },
+  "result": {
+    "httpStatus": 200,
+    "bytes": 5273,
+    "contentType": "text/plain; charset=utf-8",
+    "finalUrl": "https://www.expedia.com/Quy-Nhon-Hotels-Quy-Nhon-Sea-Hotel.h124263055.Hotel-Information?chkin=2025-12-29&chkout=2025-12-31&x_pwa=1&rfrr=HSR&pwa_ts=1766638178041&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20vSG90ZWwtU2VhcmNo&useRewards=false&a"
+  },
+  "costUsd": 0.005,
+  "costCredits": 5,
+  "requestId": "6acdaffb7b36e7858f9288f89b833b0f"
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "cli-target",
+    "name": "Yzistel Hoi An (Trip.com)",
+    "url": "https://vn.trip.com/hotels/detail/?cityId=1775&hotelId=126921251",
+    "rating": "9,5",
+    "ratingValue": 9.5,
+    "ratingRaw": "json-ld: 9.5",
+    "count": 375,
+    "countRaw": "json-ld: 375",
+    "capturedAt": "2026-10-12T06:27:25.305Z",
+    "success": true
+  }
+]

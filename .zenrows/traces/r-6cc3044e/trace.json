@@ -1,0 +1,22 @@
+{
+  "runId": "r-6cc3044e",
+  "command": "zenrows fetch",
+  "capability": "protected_fetch",
+  "url": "https://www.tripadvisor.com.vn/Hotel_Review-g25289644-d33037118-Reviews-Yzistel_Hoi_An-Cam_Pho_Hoi_An_Quang_Nam_Province.html",
+  "startedAt": "2026-10-13T04:18:32.618Z",
+  "finishedAt": "2026-10-13T04:20:32.640Z",
+  "status": "error",
+  "request": {
+    "url": "https://www.tripadvisor.com.vn/Hotel_Review-g25289644-d33037118-Reviews-Yzistel_Hoi_An-Cam_Pho_Hoi_An_Quang_Nam_Province.html",
+    "manual": false
+  },
+  "error": {
+    "code": "REQUEST_TIMEOUT",
+    "message": "The CLI stopped waiting after 120s. The Zenrows API did not respond in time.",
+    "likely_cause": "The request was aborted client-side after 120s. The API was reached — this is not a connectivity problem. The request also passed the API's own 90s budget, so the target is very likely rendering slowly or a wait condition never matched.",
+    "next_action": "Retry with a longer client timeout (`--timeout 180000`). If the target needs a long render, drop `--wait-for` so the request finishes inside the API's budget and the API can return its own error instead.",
+    "suggested_commands": [
+      "zenrows fetch https://www.tripadvisor.com.vn/Hotel_Review-g25289644-d33037118-Reviews-Yzistel_Hoi_An-Cam_Pho_Hoi_An_Quang_Nam_Province.html --timeout 180000"
+    ]
+  }
+}

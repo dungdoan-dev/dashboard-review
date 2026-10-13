@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reviewdesk
 
-## Getting Started
+Dashboard Next.js để quản lý nhiều cơ sở, xem điểm sao và số lượng đánh giá Google Maps / Tripadvisor / Agoda / Booking.com / Trip.com / Expedia / Traveloka, lưu lịch sử snapshot và xuất CSV.
 
-First, run the development server:
+## Chạy chế độ demo
 
-```bash
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở `http://localhost:3000`. Khi chưa có biến môi trường Supabase, ứng dụng hiển thị dữ liệu minh họa. Thêm/sửa/xóa và ghi snapshot trong chế độ này chỉ thay đổi state trên trình duyệt.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Kết nối Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Tạo project Supabase.
+2. Mở SQL Editor và chạy toàn bộ nội dung `supabase/schema.sql`.
+3. Sao chép `.env.example` thành `.env.local`.
+4. Điền Project URL và Publishable key từ Supabase Dashboard → Connect.
+5. Khởi động lại `npm run dev`, đăng ký tài khoản trong giao diện và đăng nhập.
 
-## Learn More
+Schema bật RLS cho cả hai bảng. Mỗi location gắn với `auth.uid()`; snapshot chỉ đọc/ghi được nếu người dùng sở hữu location tương ứng. Không đưa `service_role` key vào biến `NEXT_PUBLIC_*` hoặc commit vào Git.
 
-To learn more about Next.js, take a look at the following resources:
+## Chức năng
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Dashboard tổng quan số cơ sở, điểm trung bình theo cơ sở và tổng số đánh giá mỗi nền tảng (Google Maps thang 5, Tripadvisor thang 5, Agoda thang 10, Booking.com thang 10, Trip.com thang 10, Expedia thang 10, Traveloka thang 10).
+- Tạo, sửa, xóa cơ sở; lưu link Google Maps, Tripadvisor, Agoda, Booking.com, Trip.com, Expedia và Traveloka.
+- **Cào dữ liệu tự động theo từng nguồn**: TripAdvisor, Agoda và Traveloka dùng Apify Actors; Expedia dùng ZenRows; các nền tảng còn lại dùng scraper hiện có. Bấm nút cập nhật trong bảng nền tảng hoặc biểu tượng đồng bộ cạnh cơ sở để lấy điểm và số lượt đánh giá mới nhất.
+- Ghi snapshot thủ công với điểm và/hoặc số lượng, giữ nhãn và thời điểm lấy (tự động phân biệt thang 5 và thang 10).
+- Tìm kiếm, lọc theo loại hình/nền tảng và xuất CSV.
+- Đăng ký/đăng nhập email-password qua Supabase Auth.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Cào dữ liệu tự động (Dashboard hỗ trợ 7 nền tảng)
 
-## Deploy on Vercel
+Bạn có thể cào dữ liệu qua 2 cách:
+1. **Từ giao diện Dashboard**:
+   - Trong bảng nền tảng, bấm **Cập nhật** để crawl nền tảng đó.
+   - Hoặc bấm biểu tượng đồng bộ cạnh từng cơ sở trong bảng tương ứng.
+   - Ứng dụng kích hoạt API `/api/crawl`, gọi dịch vụ scraper tương ứng và ghi snapshot vào Supabase.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. **Từ dòng lệnh CLI**:
+```powershell
+# Google Maps
+npm run scrape                      # Chạy ẩn Google Maps
+npm run scrape:headless             # Chạy ẩn Google Maps
+node scraper/gmaps-scraper.mjs --url "https://maps.app.goo.gl/..."  # Mặc định chạy ẩn
+node scraper/gmaps-scraper.mjs --headed --url "https://maps.app.goo.gl/..."  # Mở cửa sổ trình duyệt
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Tripadvisor (Dashboard gọi Apify Actor; các lệnh bên dưới là scraper Puppeteer CLI cũ)
+npm run scrape:tripadvisor          # Chạy ẩn Tripadvisor
+npm run scrape:tripadvisor:headless # Chạy ẩn Tripadvisor
+npm run scrape:tripadvisor:save     # Cào và lưu snapshot vào Supabase
+node scraper/tripadvisor-scraper.mjs --headless --url "https://www.tripadvisor.com.vn/Hotel_Review-..."
+
+# Agoda (Thang điểm 10)
+npm run scrape:agoda                # Chạy ẩn Agoda
+npm run scrape:agoda:headless       # Chạy ngầm Agoda
+npm run scrape:agoda:save           # Cào và lưu snapshot vào Supabase
+node scraper/agoda-scraper.mjs --headless --url "https://www.agoda.com/vi-vn/yzistel-hoi-an/hotel/hoi-an-vn.html?..."
+
+# Booking.com (Thang điểm 10)
+npm run scrape:booking              # Chạy ẩn Booking.com
+npm run scrape:booking:headless     # Chạy ngầm Booking.com
+npm run scrape:booking:save         # Cào và lưu snapshot vào Supabase
+node scraper/booking-scraper.mjs --headless --url "https://www.booking.com/hotel/vn/yzistel.vi.html"
+
+# Trip.com (Thang điểm 10)
+npm run scrape:tripcom              # Chạy ẩn Trip.com
+npm run scrape:tripcom:headless     # Chạy ngầm Trip.com
+npm run scrape:tripcom:save         # Cào và lưu snapshot vào Supabase
+node scraper/tripcom-scraper.mjs --headless --url "https://us.trip.com/hotels/detail/?cityId=1775&hotelId=126921251"
+
+# Cào tất cả các nền tảng
+npm run scrape:all
+```
+
+## Lệnh
+
+```powershell
+npm run dev
+npm run lint
+npm run build
+npm run scrape
+npm run scrape:tripadvisor
+npm run scrape:agoda
+npm run scrape:booking
+npm run scrape:tripcom
+```

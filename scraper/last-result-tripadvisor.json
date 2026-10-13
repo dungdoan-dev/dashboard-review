@@ -1,0 +1,14 @@
+[
+  {
+    "id": "cli-target",
+    "name": "Yzistel Hoi An (TripAdvisor)",
+    "url": "https://www.tripadvisor.com.vn/Hotel_Review-g25289644-d33037118-Reviews-Yzistel_Hoi_An-Cam_Pho_Hoi_An_Quang_Nam_Province.html",
+    "rating": "4,9",
+    "ratingValue": 4.9,
+    "ratingRaw": "4,9 trên 5",
+    "count": 77,
+    "countRaw": "4,94,9 trên 5 bong bóng(77 đánh giá)",
+    "capturedAt": "2026-10-12T04:45:35.203Z",
+    "success": true
+  }
+]
