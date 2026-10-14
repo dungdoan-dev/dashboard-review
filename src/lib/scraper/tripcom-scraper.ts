@@ -247,6 +247,11 @@ export async function scrapeTripcomPage(
       console.log("   ⚠️  Không tìm thấy điểm số hoặc đánh giá Trip.com.");
     }
 
+    // Khi thất bại, ghi lại trang thực sự nhận được (chặn bot, đăng nhập, chưa tải xong...) để dễ chẩn đoán.
+    const diagnostic = success ? null : await page.evaluate(() =>
+      `trang: "${document.title.slice(0, 80)}" ${location.host}${location.pathname.slice(0, 60)}; nội dung: "${(document.body?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 160)}"`,
+    ).catch(() => "không đọc được trang");
+
     return {
       id,
       name,
@@ -258,6 +263,7 @@ export async function scrapeTripcomPage(
       countRaw: extracted.countRaw,
       capturedAt: new Date().toISOString(),
       success,
+      ...(diagnostic ? { error: `Không tìm thấy điểm hoặc số đánh giá Trip.com (${diagnostic})` } : {}),
     };
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);

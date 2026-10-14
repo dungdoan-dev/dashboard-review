@@ -83,7 +83,7 @@ export async function scrapeGrabFeedback(opts: {
       result = await readFeedback(page, 600_000);
     }
     if (!result) {
-      const screen = (await page.evaluate(() => document.body.innerText).catch(() => "")).replace(/s+/g, " ").trim().slice(0, 150);
+      const screen = (await page.evaluate(() => document.body.innerText).catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 150);
       if (!opts.headless) await new Promise((resolve) => setTimeout(resolve, 30_000)); // để bạn xem màn hình lỗi
       throw new Error(`Không đọc được điểm (trang: ${page.url().slice(0, 60)}; nội dung: "${screen}"). Nếu Grab đòi xác minh, chạy "npm run scrape:grab:login -- --all" để đăng nhập tay.`);
     }
