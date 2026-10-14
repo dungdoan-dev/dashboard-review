@@ -355,9 +355,9 @@ tbody tr:hover { background: #fbfcfe; }
 .report-empty-dashboard { margin-top: 4px; }
 .timeline-section { margin-top: 24px; }
 .daily-report-page { margin-top: 34px; padding-top: 24px; border-top: 1px solid #e5eaf2; scroll-margin-top: 22px; }
-.content-wrap.daily-reports-active > :not(.daily-report-page):not(.alert) { display: none; }
+.content-wrap.daily-reports-active > :not(.daily-report-page):not(.detail-tabs):not(.alert) { display: none; }
 .content-wrap.daily-reports-active > .daily-report-page { min-height: calc(100vh - 170px); margin-top: 0; padding-top: 18px; border-top: 0; }
-.content-wrap.daily-analytics-active > :not(.daily-analytics-page):not(.alert) { display: none; }
+.content-wrap.daily-analytics-active > :not(.daily-analytics-page):not(.detail-tabs):not(.alert) { display: none; }
 .content-wrap.daily-analytics-active > .daily-analytics-page { min-height: calc(100vh - 170px); margin-top: 0; padding: 18px 0 32px; }
 .content-wrap.compare-reports-active > :not(.compare-reports-page):not(.alert) { display: none; }
 .content-wrap.compare-reports-active > .compare-reports-page { min-height: calc(100vh - 170px); padding: 18px 0 32px; }
@@ -734,7 +734,7 @@ tbody tr:hover { background: #fbfcfe; }
   .historical-import-actions .button { flex: 1; }
 }
 
-.content-wrap.tripadvisor-rank-active > :not(.tripadvisor-rank-page):not(.alert) { display: none; }
+.content-wrap.tripadvisor-rank-active > :not(.tripadvisor-rank-page):not(.detail-tabs):not(.alert) { display: none; }
 .content-wrap.tripadvisor-rank-active > .tripadvisor-rank-page { min-height: calc(100vh - 170px); margin-top: 0; padding: 18px 0 32px; }
 .rank-summary-grid .analytics-summary-card:first-child > strong { color: #168a68; }
 .rank-improved { color: #168a68 !important; }

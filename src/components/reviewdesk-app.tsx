@@ -220,7 +220,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isDetailPage = pathname === "/detail";
   const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
-  const needsLiveMetrics = pathname === "/";
+  const needsLiveMetrics = pathname === "/" || isDetailPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
