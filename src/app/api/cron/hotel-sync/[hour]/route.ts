@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
-import { hotelPlatforms as platforms, scrape, validUrl, type HotelPlatform as Platform } from "@/lib/hotel-sync";
+import { listSources, syncSource, type SyncType } from "@/lib/hotel-sync";
 
 export const maxDuration = 300;
 
@@ -26,7 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
   if (!url || !key) return Response.json({ error: "missing_server_configuration" }, { status: 500 });
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: settings, error: settingsError } = await db.from("automatic_sync_settings")
-    .select("owner_id,run_hour,location_ids").eq("enabled", true).lte("run_hour", now.hour).order("run_hour");
+    .select("owner_id,location_type,run_hour,location_ids").eq("enabled", true).lte("run_hour", now.hour).order("run_hour");
   if (settingsError) return Response.json({ error: settingsError.message }, { status: 500 });
 
   const deadline = Date.now() + 240_000;
@@ -40,7 +40,7 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
         .eq("owner_id", setting.owner_id).eq("location_id", locationId).eq("report_date", now.date).maybeSingle();
       if (previous?.status === "success" || previous?.status === "failed") continue;
       const { data: location, error: locationError } = await db.from("locations").select("id,name,type,owner_id")
-        .eq("id", locationId).eq("owner_id", setting.owner_id).eq("type", "hotel").maybeSingle();
+        .eq("id", locationId).eq("owner_id", setting.owner_id).eq("type", setting.location_type).maybeSingle();
       if (locationError) return Response.json({ error: locationError.message, completed, failed }, { status: 500 });
       if (!location) continue;
       let runId: number;
@@ -60,16 +60,13 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
       }
 
       try {
-        const { data: links, error: linksError } = await db.from("location_platforms")
-          .select("platform,url").eq("location_id", locationId).in("platform", platforms);
-        if (linksError) throw linksError;
-        if (!links?.length) throw new Error("Khách sạn chưa có nguồn đồng bộ.");
+        const sources = await listSources(db, locationId, setting.location_type as SyncType);
+        if (!sources.length) throw new Error("Cơ sở chưa có nguồn đồng bộ.");
         const metrics = [];
         const reports = [];
-        for (const link of links) {
-          const platform = link.platform as Platform;
-          if (!validUrl(platform, link.url)) throw new Error(`${platform}: liên kết không hợp lệ`);
-          const result = await scrape(platform, location.id, location.name, link.url);
+        for (const source of sources) {
+          const platform = source.platform;
+          const result = await syncSource(db, source, location);
           if (!result || !result.success || (result.ratingValue == null && result.count == null)) {
             throw new Error(`${platform}: ${result?.error ?? "không lấy được số liệu"}`);
           }

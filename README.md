@@ -10,6 +10,10 @@ Chạy `supabase/migrations/20261014020000_grabfood_metrics.sql` và `2026101404
 
 Chạy `supabase/migrations/20261014010000_tripadvisor_notice.sql` trong Supabase SQL Editor cho database hiện có. Lần đồng bộ Tripadvisor tiếp theo sẽ lưu nội dung “Thư từ Tripadvisor” nếu Markdown có mục này. Chốt sổ lại ngày cần xem để nội dung xuất hiện trong mục “Báo cáo từ Tripadvisor” của trang xếp hạng; báo cáo đã chốt trước khi thêm trường này không tự có lại nội dung cũ.
 
+## Đồng bộ tự động trên Vercel (Khách sạn, Cafe, Mart 24h)
+
+Mỗi loại hình có lịch, khung giờ và hàng đợi riêng trong Cài đặt (chạy thêm `supabase/migrations/20261014050000_automatic_sync_location_types.sql`). Cafe và Mart 24h đồng bộ Google Maps, Tripadvisor và GrabFood; GrabFood dùng tài khoản merchant lưu cho từng cơ sở (cần `GRAB_CREDENTIALS_KEY` trên Vercel), tự đăng nhập mỗi lần chạy vì Vercel không giữ phiên; nếu Grab đòi OTP hoặc chặn IP datacenter thì nguồn này lỗi. Nút "Chạy thử" ở mỗi mục kiểm tra từng nguồn mà không lưu hay chốt sổ.
+
 ## Đồng bộ khách sạn tự động trên Vercel
 
 1. Chạy `supabase/migrations/20261014000000_automatic_hotel_sync.sql` trong Supabase SQL Editor cho database hiện có. Khi tạo database mới, `supabase/schema.sql` đã chứa các bảng này.

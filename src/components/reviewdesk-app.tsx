@@ -1875,7 +1875,11 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             </div>
           </section>}
 
-          {isSettingsPage && <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} />}
+          {isSettingsPage && <>
+            <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="hotel" />
+            <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="cafe" />
+            <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="mart" />
+          </>}
           {isSettingsPage && <section className="location-settings-section" id="settings-locations" aria-labelledby="location-settings-title">
             <header className="location-settings-heading">
               <div><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT · CƠ SỞ</div><h2 id="location-settings-title">Cấu hình cơ sở</h2><p>Quản lý thông tin và liên kết nền tảng cho từng cơ sở.</p></div>

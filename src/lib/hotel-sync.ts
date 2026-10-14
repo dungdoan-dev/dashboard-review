@@ -1,4 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Platform as AnyPlatform } from "@/lib/types";
+import { decryptSecret } from "@/lib/grab-credentials";
+import { runGrabfoodScraper } from "@/lib/scraper/grabfood-scraper";
 import { runScraper } from "@/lib/scraper/gmaps-scraper";
 import { runTripadvisorScraper } from "@/lib/scraper/tripadvisor-scraper";
 import { runAgodaScraper } from "@/lib/scraper/agoda-scraper";
@@ -42,4 +45,41 @@ export async function scrape(platform: Platform, id: string, name: string, url: 
     case "tripcom": return one(runTripcomScraper([{ id, name, tripcomUrl: url }], { headless: true }));
     case "traveloka": return (await runTravelokaScraper([{ id, name, travelokaUrl: url }])).results[0];
   }
+}
+
+// ---- Cafe / Mart 24h: thêm GrabFood (tài khoản merchant lưu trong database) ----
+export type SyncType = "hotel" | "cafe" | "mart";
+export type SyncPlatform = AnyPlatform;
+export const syncPlatforms: Record<SyncType, SyncPlatform[]> = {
+  hotel: hotelPlatforms,
+  cafe: ["google", "tripadvisor", "grabfood"],
+  mart: ["google", "tripadvisor", "grabfood"],
+};
+export type SyncSource = { platform: SyncPlatform; url: string };
+
+/** Nguồn cần đồng bộ của một cơ sở: các liên kết đã lưu cộng GrabFood nếu có tài khoản merchant. `db` phải đọc được grab_merchant_accounts (service role). */
+export async function listSources(db: SupabaseClient, locationId: string, type: SyncType): Promise<SyncSource[]> {
+  const urlPlatforms = syncPlatforms[type].filter((platform) => platform !== "grabfood");
+  const { data: links, error } = await db.from("location_platforms").select("platform,url").eq("location_id", locationId).in("platform", urlPlatforms);
+  if (error) throw error;
+  const sources: SyncSource[] = (links ?? []).map((link) => ({ platform: link.platform as SyncPlatform, url: link.url }));
+  if (syncPlatforms[type].includes("grabfood")) {
+    const { data: account } = await db.from("grab_merchant_accounts").select("location_id").eq("location_id", locationId).maybeSingle();
+    if (account) sources.push({ platform: "grabfood", url: "" });
+  }
+  return sources;
+}
+
+/** Cào một nguồn; mọi lỗi (liên kết sai, thiếu tài khoản...) trả về dạng Result thất bại có thông báo. */
+export async function syncSource(db: SupabaseClient, source: SyncSource, location: { id: string; name: string }): Promise<Result> {
+  const failed = (error: string): Result => ({ success: false, ratingValue: null, count: null, capturedAt: new Date().toISOString(), error });
+  if (source.platform === "grabfood") {
+    const { data: account } = await db.from("grab_merchant_accounts").select("username,password_encrypted").eq("location_id", location.id).maybeSingle();
+    if (!account) return failed("Chưa có tài khoản Grab merchant cho cơ sở này.");
+    const output = await runGrabfoodScraper([{ id: location.id, name: location.name, username: account.username, password: decryptSecret(account.password_encrypted) }]);
+    return output.results[0] ?? failed("GrabFood không trả kết quả.");
+  }
+  const platform = source.platform as Platform;
+  if (!validUrl(platform, source.url)) return failed("Liên kết không hợp lệ.");
+  return scrape(platform, location.id, location.name, source.url);
 }

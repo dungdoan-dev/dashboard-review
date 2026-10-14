@@ -1,5 +1,7 @@
+import os from "node:os";
 import path from "node:path";
-import puppeteer, { type Page } from "puppeteer";
+import type { Page } from "puppeteer";
+import { launchBrowser } from "./launch-browser.ts"; // đuôi .ts để CLI chạy bằng Node thuần
 
 export interface GrabfoodTarget {
   id: string;
@@ -23,7 +25,8 @@ export interface GrabfoodResult {
 }
 
 const FEEDBACK_URL = "https://merchant.grab.com/feedback";
-const PROFILE_ROOT = path.join(process.cwd(), "scraper", ".grab-profile");
+// Vercel chỉ cho ghi vào thư mục tạm (không giữ phiên giữa các lần chạy: mỗi lần tự đăng nhập lại).
+const PROFILE_ROOT = process.env.VERCEL ? path.join(os.tmpdir(), "grab-profile") : path.join(process.cwd(), "scraper", ".grab-profile");
 
 /** "Trung bình 4.8 13 đánh giá" -> { ratingValue: 4.8, count: 13 } */
 export function parseGrabFeedback(text: string): { ratingValue: number; count: number } | null {
@@ -69,7 +72,7 @@ async function autoLogin(page: Page, user: string, password: string) {
 export async function scrapeGrabFeedback(opts: {
   profileDir: string; headless: boolean; login?: boolean; user?: string; password?: string;
 }) {
-  const browser = await puppeteer.launch({ headless: opts.headless, userDataDir: opts.profileDir, ...(opts.headless ? {} : { slowMo: 120 }) });
+  const browser = await launchBrowser({ headless: opts.headless, userDataDir: opts.profileDir, ...(opts.headless ? {} : { slowMo: 120 }) });
   try {
     const page = await browser.newPage();
     await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -103,7 +106,7 @@ export async function runGrabfoodScraper(targets: GrabfoodTarget[]) {
     const base = { id: target.id, name: target.name, url: FEEDBACK_URL, capturedAt: new Date().toISOString() };
     try {
       const { ratingValue, count } = await scrapeGrabFeedback({
-        profileDir: grabProfileDir(target.id), headless: process.env.GRAB_HEADED !== "1", user: target.username, password: target.password,
+        profileDir: grabProfileDir(target.id), headless: process.env.GRAB_HEADED !== "1" || Boolean(process.env.VERCEL), user: target.username, password: target.password,
       });
       results.push({
         ...base, success: true, ratingValue, count,
