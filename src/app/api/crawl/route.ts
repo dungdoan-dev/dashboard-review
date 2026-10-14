@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
       const locationRows = data ?? [];
       const locationIds = locationRows.map((row) => row.id);
-      let rows: Array<{ id: string; name: string } & Partial<Record<`${Platform}_url`, string>>> = [];
+      const linksByLocation = new Map<string, Partial<Record<Platform, string>>>();
       if (locationIds.length) {
         const { data: linkRows, error: linksError } = await supabase
           .from("location_platforms")
@@ -106,86 +106,68 @@ export async function POST(request: NextRequest) {
         if (linksError) {
           return NextResponse.json({ error: "database_error", message: linksError.message }, { status: 500 });
         }
-        const platformUrlFields: Record<Platform, `${Platform}_url`> = {
-          google: "google_url", tripadvisor: "tripadvisor_url", agoda: "agoda_url",
-          booking: "booking_url", expedia: "expedia_url", tripcom: "tripcom_url", traveloka: "traveloka_url",
-        };
-        const linksByLocation = new Map<string, Partial<Record<`${Platform}_url`, string>>>();
+        const crawlPlatforms: Platform[] = ["google", "tripadvisor", "agoda", "booking", "expedia", "tripcom", "traveloka"];
         for (const link of linkRows ?? []) {
           const platformName = link.platform as Platform;
-          const field = platformUrlFields[platformName];
-          if (!field) continue;
+          if (!crawlPlatforms.includes(platformName)) continue;
           const current = linksByLocation.get(link.location_id) ?? {};
-          current[field] = link.url;
+          current[platformName] = link.url;
           linksByLocation.set(link.location_id, current);
         }
-        rows = locationRows.map((row) => ({ ...row, ...linksByLocation.get(row.id) }));
       }
+      const rows = locationRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        urls: linksByLocation.get(row.id) ?? {},
+      }));
 
       if (platform === "google" || platform === "all") {
-        googleTargets = rows
-          .filter((r) => isPlatformUrl(r.google_url, "google"))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            googleUrl: r.google_url,
-          }));
+        googleTargets = rows.flatMap((row) => {
+          const googleUrl = row.urls.google;
+          return isPlatformUrl(googleUrl, "google") ? [{ id: row.id, name: row.name, googleUrl }] : [];
+        });
       }
 
       if (platform === "tripadvisor" || platform === "all") {
-        tripTargets = rows
-          .filter((r) => isPlatformUrl(r.tripadvisor_url, "tripadvisor"))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            tripadvisorUrl: r.tripadvisor_url,
-          }));
+        tripTargets = rows.flatMap((row) => {
+          const tripadvisorUrl = row.urls.tripadvisor;
+          return isPlatformUrl(tripadvisorUrl, "tripadvisor") ? [{ id: row.id, name: row.name, tripadvisorUrl }] : [];
+        });
       }
 
       if (platform === "agoda" || platform === "all") {
-        agodaTargets = rows
-          .filter((r) => isPlatformUrl(r.agoda_url, "agoda"))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            agodaUrl: r.agoda_url,
-          }));
+        agodaTargets = rows.flatMap((row) => {
+          const agodaUrl = row.urls.agoda;
+          return isPlatformUrl(agodaUrl, "agoda") ? [{ id: row.id, name: row.name, agodaUrl }] : [];
+        });
       }
 
       if (platform === "booking" || platform === "all") {
-        bookingTargets = rows
-          .filter((r) => isPlatformUrl(r.booking_url, "booking"))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            bookingUrl: r.booking_url,
-          }));
+        bookingTargets = rows.flatMap((row) => {
+          const bookingUrl = row.urls.booking;
+          return isPlatformUrl(bookingUrl, "booking") ? [{ id: row.id, name: row.name, bookingUrl }] : [];
+        });
       }
 
       if (platform === "tripcom" || platform === "all") {
-        tripcomTargets = rows
-          .filter((r) => isPlatformUrl(r.tripcom_url, "tripcom"))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            tripcomUrl: r.tripcom_url,
-          }));
+        tripcomTargets = rows.flatMap((row) => {
+          const tripcomUrl = row.urls.tripcom;
+          return isPlatformUrl(tripcomUrl, "tripcom") ? [{ id: row.id, name: row.name, tripcomUrl }] : [];
+        });
       }
 
       if (platform === "expedia" || platform === "all") {
-        expediaTargets = rows.filter((r) => isPlatformUrl(r.expedia_url, "expedia")).map((r) => ({
-          id: r.id,
-          name: r.name,
-          expediaUrl: r.expedia_url,
-        }));
+        expediaTargets = rows.flatMap((row) => {
+          const expediaUrl = row.urls.expedia;
+          return isPlatformUrl(expediaUrl, "expedia") ? [{ id: row.id, name: row.name, expediaUrl }] : [];
+        });
       }
 
       if (platform === "traveloka" || platform === "all") {
-        travelokaTargets = rows.filter((r) => isPlatformUrl(r.traveloka_url, "traveloka")).map((r) => ({
-          id: r.id,
-          name: r.name,
-          travelokaUrl: r.traveloka_url,
-        }));
+        travelokaTargets = rows.flatMap((row) => {
+          const travelokaUrl = row.urls.traveloka;
+          return isPlatformUrl(travelokaUrl, "traveloka") ? [{ id: row.id, name: row.name, travelokaUrl }] : [];
+        });
       }
     } else {
       // Chế độ Demo hoặc Client gửi targets lên
@@ -308,6 +290,7 @@ export async function POST(request: NextRequest) {
       ratingRaw: string | null;
       count: number | null;
       countRaw: string | null;
+      rankLabel?: string | null;
       capturedAt: string;
       success: boolean;
       error?: string;
@@ -348,6 +331,7 @@ export async function POST(request: NextRequest) {
             rating_scale: DEFAULT_RATING_SCALE.tripadvisor,
             rating_value: item.ratingValue,
             review_count: item.count,
+            tripadvisor_rank: item.rankLabel,
             count_label: "đánh giá",
             source: "api",
             captured_at: item.capturedAt,

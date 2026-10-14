@@ -19,7 +19,7 @@ alter table public.locations add constraint locations_type_check
 
 create table if not exists public.location_platforms (
   location_id uuid not null references public.locations(id) on delete cascade,
-  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka')),
+  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood', 'shopeefood')),
   url text not null check (char_length(trim(url)) between 8 and 2048),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -36,6 +36,7 @@ create table if not exists public.metric_snapshots (
   count_label text not null default 'reviews',
   captured_at timestamptz not null default now(),
   source text not null default 'manual',
+  tripadvisor_rank text,
   constraint metric_has_value check (rating_value is not null or review_count is not null)
 );
 
@@ -48,6 +49,7 @@ create table if not exists public.daily_report_snapshots (
   rating_value numeric(4,2),
   review_count bigint check (review_count is null or review_count >= 0),
   count_label text not null default 'reviews',
+  tripadvisor_rank text,
   finalized_at timestamptz not null default now(),
   finalized_by uuid default auth.uid() references auth.users(id) on delete set null,
   constraint daily_report_has_value check (rating_value is not null or review_count is not null),
@@ -61,6 +63,14 @@ create table if not exists public.daily_report_snapshots (
 );
 
 alter table public.metric_snapshots drop column if exists rating_label;
+alter table public.metric_snapshots add column if not exists tripadvisor_rank text;
+alter table public.metric_snapshots drop constraint if exists metric_snapshots_tripadvisor_rank_platform_check;
+alter table public.metric_snapshots add constraint metric_snapshots_tripadvisor_rank_platform_check
+  check (tripadvisor_rank is null or platform = 'tripadvisor');
+alter table public.daily_report_snapshots add column if not exists tripadvisor_rank text;
+alter table public.daily_report_snapshots drop constraint if exists daily_report_tripadvisor_rank_platform_check;
+alter table public.daily_report_snapshots add constraint daily_report_tripadvisor_rank_platform_check
+  check (tripadvisor_rank is null or platform = 'tripadvisor');
 alter table public.metric_snapshots alter column rating_scale drop default;
 alter table public.metric_snapshots drop constraint if exists metric_snapshots_platform_check;
 alter table public.metric_snapshots add constraint metric_snapshots_platform_check
@@ -109,7 +119,7 @@ create or replace view public.latest_metric_snapshots
 with (security_invoker = true)
 as
 select distinct on (location_id, platform)
-  id, location_id, platform, rating_scale, rating_value, review_count, count_label, captured_at, source
+  id, location_id, platform, rating_scale, rating_value, review_count, count_label, captured_at, source, tripadvisor_rank
 from public.metric_snapshots
 order by location_id, platform, captured_at desc, id desc;
 revoke all on public.latest_metric_snapshots from public, anon;

@@ -46,7 +46,7 @@ npm run scrape:headless             # Chạy ẩn Google Maps
 node scraper/gmaps-scraper.mjs --url "https://maps.app.goo.gl/..."  # Mặc định chạy ẩn
 node scraper/gmaps-scraper.mjs --headed --url "https://maps.app.goo.gl/..."  # Mở cửa sổ trình duyệt
 
-# Tripadvisor (Dashboard gọi Apify Actor; các lệnh bên dưới là scraper Puppeteer CLI cũ)
+# Tripadvisor (Dashboard gọi ZenRows Fetch; cần ZENROWS_API_KEY. Các lệnh bên dưới là scraper Puppeteer CLI cũ)
 npm run scrape:tripadvisor          # Chạy ẩn Tripadvisor
 npm run scrape:tripadvisor:headless # Chạy ẩn Tripadvisor
 npm run scrape:tripadvisor:save     # Cào và lưu snapshot vào Supabase

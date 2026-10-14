@@ -13,42 +13,171 @@ export interface TripadvisorResult {
   ratingRaw: string | null;
   count: number | null;
   countRaw: string | null;
+  rankLabel: string | null;
   capturedAt: string;
   success: boolean;
   error?: string;
   status?: number;
 }
 
-const ACTOR_ID = "Hvp4YfFGyLM635Q2F";
-const ACTOR_RUN_URL = `https://api.apify.com/v2/acts/${ACTOR_ID}/run-sync-get-dataset-items`;
-const ACTOR_TIMEOUT_SECONDS = 300;
+const ZENROWS_FETCH_ENDPOINT = "https://api.zenrows.com/v1/";
+const ZENROWS_TIMEOUT_MS = 180_000;
 
-interface TripadvisorActorItem {
-  placeInfo?: unknown;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
-function parseRating(value: unknown): number | null {
+function parseNumber(value: unknown, max: number): number | null {
   const parsed = typeof value === "number"
     ? value
     : typeof value === "string"
       ? Number(value.trim().replace(",", "."))
       : Number.NaN;
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 5 ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= max ? parsed : null;
 }
 
 function parseCount(value: unknown): number | null {
   const parsed = typeof value === "number"
     ? value
     : typeof value === "string"
-      ? Number(value.trim().replace(/[,.\s]/g, ""))
+      ? Number(value.trim().replace(/[,\s.]/g, ""))
       : Number.NaN;
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function decodeHtmlText(value: string) {
+  return value
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number(decimal)))
+    .replace(/&#x([\da-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)));
+}
+
+function extractJsonLd(html: string): Record<string, unknown>[] {
+  const values: Record<string, unknown>[] = [];
+  const scripts = html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  for (const script of scripts) {
+    try {
+      const parsed: unknown = JSON.parse(script[1].replace(/\\u002F/gi, "/"));
+      const candidates = Array.isArray(parsed) ? parsed : [parsed];
+      for (const candidate of candidates) {
+        if (candidate && typeof candidate === "object") values.push(candidate as Record<string, unknown>);
+      }
+    } catch {
+      // TripAdvisor also embeds escaped application data; the visible markup is a fallback.
+    }
+  }
+  return values;
+}
+
+function findAggregateRating(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (record.aggregateRating && typeof record.aggregateRating === "object") {
+    return record.aggregateRating as Record<string, unknown>;
+  }
+  if (Array.isArray(record)) {
+    for (const item of record) {
+      const found = findAggregateRating(item);
+      if (found) return found;
+    }
+  }
+  if (record["@graph"]) return findAggregateRating(record["@graph"]);
+  return null;
+}
+
+function extractAttributeText(html: string, automationId: string): string | null {
+  const escapedId = automationId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`<[^>]+data-automation=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/`, "i"));
+  if (!match) return null;
+  return decodeHtmlText(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+function extractRankLabel(value: string): string | null {
+  const text = decodeHtmlText(value).replace(/\s+/g, " ").trim();
+  const patterns = [
+    /Số\s*#?\s*\d[\d.,]*\s+(?:trên|trong)\s+\d[\d.,]*\s+[^|<>]{1,100}/iu,
+    /Ranked\s+#?\s*\d[\d.,]*\s+of\s+\d[\d.,]*\s+[^|<>]{1,100}/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const cleaned = match[0]
+      .split(/\s+(?:truy cập|gửi|gửi|send|visit|website|điện thoại|phone|call|email)\b/i)[0]
+      .replace(/\s+\+?\d[\d\s().-]{6,}$/u, "")
+      .trim()
+      .replace(/[.,;:]+$/, "");
+    if (cleaned) return cleaned;
+  }
+  return null;
+}
+
+function parseRankLabel(html: string): string | null {
+  const clientLinks = html.matchAll(/<a\b[^>]*href=["'][^"']*ClientLink\?value=[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const link of clientLinks) {
+    const rankLabel = extractRankLabel(link[1].replace(/<[^>]*>/g, " "));
+    if (rankLabel) return rankLabel;
+  }
+
+  const visibleText = html.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ");
+  const visibleRank = extractRankLabel(visibleText);
+  if (visibleRank) return visibleRank;
+
+  // TripAdvisor sometimes keeps the localized ranking only inside URL-encoded page data.
+  const encodedMatch = html.match(/S(?:%5B|%E1%BB%91|ố)[\s\S]{0,180}?Mua[\s\S]{0,80}?(?=\\{3,}|")/i)?.[0];
+  if (!encodedMatch) return null;
+  try {
+    return extractRankLabel(decodeURIComponent(encodedMatch.replace(/\\+/g, "%")));
+  } catch {
+    return null;
+  }
+}
+
+function parseTripadvisorHtml(html: string) {
+  const aggregate = extractJsonLd(html).map(findAggregateRating).find(Boolean) ?? null;
+  const ratingText = aggregate?.ratingValue == null
+    ? extractAttributeText(html, "bubbleRatingValue")
+    : String(aggregate.ratingValue);
+  const countText = aggregate?.reviewCount == null
+    ? extractAttributeText(html, "bubbleReviewCount")?.match(/[\d.,]+/)?.[0] ?? null
+    : String(aggregate.reviewCount);
+  const ratingValue = parseNumber(ratingText, 5);
+  const count = parseCount(countText);
+  return {
+    ratingValue,
+    ratingRaw: ratingText,
+    count,
+    countRaw: countText,
+    rankLabel: parseRankLabel(html),
+  };
+}
+
+function parseTripadvisorMarkdown(markdown: string) {
+  const ratingMatch = markdown.match(/([\d]+(?:[.,][\d]+)?)\s+(?:trên|of)\s+5\s+(?:bong bóng|bubbles?)/i)
+    ?? markdown.match(/(?:^|\n)\s*([\d]+[.,][\d]+)\s*(?=\n|$)/);
+  const countMatch = markdown.match(/\[\(?\s*([\d.,]+)\s+(?:đánh giá|nhận xét|reviews?)\s*\)?\]\s*\(/i)
+    ?? markdown.match(/\b([\d.,]+)\s+(?:đánh giá|nhận xét|reviews?)\b/i);
+  // Rank links vary by Tripadvisor page type; use only the Markdown link label,
+  // stopping at `]` so the destination URL cannot leak into the saved rank text.
+  const rankLinkLabels = markdown.matchAll(/\[([^\]]+)\]\([^)]+\)/g);
+  let rankLabel: string | null = null;
+  for (const link of rankLinkLabels) {
+    rankLabel = extractRankLabel(link[1]);
+    if (rankLabel) break;
+  }
+  rankLabel ??= extractRankLabel(markdown);
+
+  const ratingText = ratingMatch?.[1] ?? null;
+  const countText = countMatch?.[1] ?? null;
+  return {
+    ratingValue: parseNumber(ratingText, 5),
+    ratingRaw: ratingText,
+    count: parseCount(countText),
+    countRaw: countText,
+    rankLabel,
+  };
 }
 
 function errorResult(target: TripadvisorTarget, error: string, status?: number): TripadvisorResult {
@@ -61,6 +190,7 @@ function errorResult(target: TripadvisorTarget, error: string, status?: number):
     ratingRaw: null,
     count: null,
     countRaw: null,
+    rankLabel: null,
     capturedAt: new Date().toISOString(),
     success: false,
     error,
@@ -68,94 +198,75 @@ function errorResult(target: TripadvisorTarget, error: string, status?: number):
   };
 }
 
-async function scrapeTripadvisorTarget(
-  target: TripadvisorTarget,
-  apiToken: string,
-): Promise<TripadvisorResult> {
+async function scrapeTripadvisorTarget(target: TripadvisorTarget, apiKey: string): Promise<TripadvisorResult> {
   try {
-    const endpoint = new URL(ACTOR_RUN_URL);
-    endpoint.searchParams.set("timeout", String(ACTOR_TIMEOUT_SECONDS));
-    endpoint.searchParams.set("format", "json");
+    const requestUrl = new URL(ZENROWS_FETCH_ENDPOINT);
+    requestUrl.searchParams.set("apikey", apiKey);
+    requestUrl.searchParams.set("url", target.tripadvisorUrl);
+    requestUrl.searchParams.set("mode", "auto");
+    requestUrl.searchParams.set("proxy_country", "vn");
+    requestUrl.searchParams.set("original_status", "true");
+    requestUrl.searchParams.set("response_type", "markdown");
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        startUrls: [{ url: target.tripadvisorUrl }],
-        maxItemsPerQuery: 1,
-        scrapeReviewerInfo: false,
-      }),
-      signal: AbortSignal.timeout((ACTOR_TIMEOUT_SECONDS + 10) * 1000),
+    const response = await fetch(requestUrl, {
+      method: "GET",
+      headers: { Accept: "text/markdown, text/plain;q=0.9, */*;q=0.8" },
       cache: "no-store",
+      signal: AbortSignal.timeout(ZENROWS_TIMEOUT_MS),
     });
+    const body = await response.text();
+
+    const requestId = response.headers.get("X-Request-Id");
+    const suffix = requestId ? ` (ZenRows request ${requestId})` : "";
 
     if (!response.ok) {
-      const details = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 300);
-      return errorResult(
-        target,
-        `Apify Tripadvisor lỗi HTTP ${response.status}${details ? `: ${details}` : ""}`,
-        response.status,
-      );
+      const details = body.replace(/\s+/g, " ").trim().slice(0, 240);
+      const prefix = response.status === 401
+        ? "ZenRows xác thực thất bại. Kiểm tra ZENROWS_API_KEY."
+        : `ZenRows Tripadvisor lỗi HTTP ${response.status}`;
+      return errorResult(target, `${prefix}${suffix}${details && response.status !== 401 ? `: ${details}` : ""}`, response.status);
     }
 
-    const payload: unknown = await response.json();
-    if (!Array.isArray(payload)) {
-      return errorResult(target, "Apify Tripadvisor trả dataset không đúng định dạng.");
-    }
-
-    const items = (payload as TripadvisorActorItem[])
-      .map((item) => ({ item: asRecord(item), place: asRecord(item?.placeInfo) }))
-      .filter((row): row is { item: Record<string, unknown>; place: Record<string, unknown> } => row.item !== null && row.place !== null);
-    if (!items.length) {
-      return errorResult(target, "Actor Tripadvisor chạy xong nhưng dataset không có placeInfo.");
-    }
-
-    // placeInfo is repeated on review rows; select a row containing the aggregate fields.
-    const summary = items.find(({ place }) =>
-      parseRating(place.rating) !== null || parseCount(place.numberOfReviews) !== null,
-    ) ?? items[0];
-    const ratingValue = parseRating(summary.place.rating);
-    const count = parseCount(summary.place.numberOfReviews);
-    if (ratingValue === null && count === null) {
-      const fields = Object.keys(summary.place).slice(0, 24).join(", ") || "không có trường";
-      return errorResult(target, `Actor Tripadvisor không trả điểm tổng hợp hoặc số lượt đánh giá. Các trường placeInfo: ${fields}.`);
-    }
-
+    const markdownParsed = parseTripadvisorMarkdown(body);
+    const htmlParsed = parseTripadvisorHtml(body);
+    const parsed = markdownParsed.ratingValue != null || markdownParsed.count != null
+      ? markdownParsed
+      : htmlParsed;
+    const success = parsed.ratingValue != null || parsed.count != null;
     return {
       id: target.id,
       name: target.name,
-      url: typeof summary.place.webUrl === "string" ? summary.place.webUrl : target.tripadvisorUrl,
-      rating: ratingValue === null ? null : ratingValue.toFixed(1).replace(".", ","),
-      ratingValue,
-      ratingRaw: summary.place.rating == null ? null : String(summary.place.rating),
-      count,
-      countRaw: summary.place.numberOfReviews == null ? null : String(summary.place.numberOfReviews),
+      url: response.headers.get("Zr-Final-Url") || target.tripadvisorUrl,
+      ...parsed,
+      rating: parsed.ratingValue == null ? null : parsed.ratingValue.toFixed(1).replace(".", ","),
       capturedAt: new Date().toISOString(),
-      success: true,
+      success,
+      ...(!success ? { error: "ZenRows trả nội dung nhưng không nhận diện được điểm, số nhận xét hoặc xếp hạng Tripadvisor." } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return errorResult(target, `Không thể gọi Apify Tripadvisor: ${message}`);
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    return errorResult(
+      target,
+      timedOut
+        ? `ZenRows Fetch vượt quá ${ZENROWS_TIMEOUT_MS / 1000} giây.`
+        : `Không gọi được ZenRows Tripadvisor: ${message}`,
+    );
   }
 }
 
 export async function runTripadvisorScraper(targets: TripadvisorTarget[]) {
-  const apiToken = process.env.APIFY_API_TOKEN?.trim();
-  if (!apiToken) {
+  const apiKey = process.env.ZENROWS_API_KEY?.trim();
+  if (!apiKey) {
     const results = targets.map((target) => errorResult(
       target,
-      "Thiếu APIFY_API_TOKEN. Thêm token Apify vào cấu hình môi trường rồi khởi động lại ứng dụng.",
+      "Thiếu ZENROWS_API_KEY. Thêm key ZenRows vào cấu hình môi trường rồi khởi động lại ứng dụng.",
     ));
     return { success: false, totalTargets: targets.length, successCount: 0, results };
   }
 
   const results: TripadvisorResult[] = [];
-  for (const target of targets) {
-    results.push(await scrapeTripadvisorTarget(target, apiToken));
-  }
+  for (const target of targets) results.push(await scrapeTripadvisorTarget(target, apiKey));
   return {
     success: results.some((result) => result.success),
     totalTargets: targets.length,

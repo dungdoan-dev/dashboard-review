@@ -9,20 +9,44 @@ create table if not exists public.location_platforms (
   primary key (location_id, platform)
 );
 
-insert into public.location_platforms(location_id, platform, url)
-select l.id, source.platform, source.url
-from public.locations as l
-cross join lateral (values
-  ('google', l.google_url),
-  ('tripadvisor', l.tripadvisor_url),
-  ('agoda', l.agoda_url),
-  ('booking', l.booking_url),
-  ('expedia', l.expedia_url),
-  ('tripcom', l.tripcom_url),
-  ('traveloka', l.traveloka_url)
-) as source(platform, url)
-where nullif(trim(source.url), '') is not null
-on conflict (location_id, platform) do update set url = excluded.url;
+-- Legacy URL columns may already be absent when the canonical schema was applied first.
+-- Copy each one only if that column still exists, preserving links already in location_platforms.
+do $$
+declare
+  legacy_link record;
+begin
+  for legacy_link in
+    select * from (values
+      ('google', 'google_url'),
+      ('tripadvisor', 'tripadvisor_url'),
+      ('agoda', 'agoda_url'),
+      ('booking', 'booking_url'),
+      ('expedia', 'expedia_url'),
+      ('tripcom', 'tripcom_url'),
+      ('traveloka', 'traveloka_url')
+    ) as legacy(platform, column_name)
+  loop
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'locations'
+        and column_name = legacy_link.column_name
+    ) then
+      execute format(
+        'insert into public.location_platforms(location_id, platform, url)
+         select l.id, %L, l.%I::text
+         from public.locations as l
+         where length(trim(l.%I::text)) > 0
+         on conflict (location_id, platform) do update set url = excluded.url',
+        legacy_link.platform,
+        legacy_link.column_name,
+        legacy_link.column_name
+      );
+    end if;
+  end loop;
+end;
+$$;
 
 alter table public.locations drop column if exists google_url;
 alter table public.locations drop column if exists tripadvisor_url;
@@ -75,13 +99,41 @@ create index if not exists location_platforms_platform_idx on public.location_pl
 create index if not exists snapshots_location_platform_time_idx
   on public.metric_snapshots(location_id, platform, captured_at desc, id desc);
 
-create or replace view public.latest_metric_snapshots
-with (security_invoker = true)
-as
-select distinct on (location_id, platform)
-  id, location_id, platform, rating_scale, rating_value, review_count, count_label, captured_at, source
-from public.metric_snapshots
-order by location_id, platform, captured_at desc, id desc;
+-- Keep the view's existing column shape when this migration is reapplied after
+-- the Tripadvisor rank migration has already added tripadvisor_rank.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'metric_snapshots'
+      and column_name = 'tripadvisor_rank'
+  ) then
+    execute $view$
+      create or replace view public.latest_metric_snapshots
+      with (security_invoker = true)
+      as
+      select distinct on (location_id, platform)
+        id, location_id, platform, rating_scale, rating_value, review_count,
+        count_label, captured_at, source, tripadvisor_rank
+      from public.metric_snapshots
+      order by location_id, platform, captured_at desc, id desc
+    $view$;
+  else
+    execute $view$
+      create or replace view public.latest_metric_snapshots
+      with (security_invoker = true)
+      as
+      select distinct on (location_id, platform)
+        id, location_id, platform, rating_scale, rating_value, review_count,
+        count_label, captured_at, source
+      from public.metric_snapshots
+      order by location_id, platform, captured_at desc, id desc
+    $view$;
+  end if;
+end;
+$$;
 
 revoke all on public.latest_metric_snapshots from public, anon;
 grant select on public.latest_metric_snapshots to authenticated;

@@ -7,6 +7,8 @@ export type Platform =
   | "tripcom"
   | "traveloka";
 
+export type LocationLinkPlatform = Platform | "grabfood" | "shopeefood";
+
 export type LocationType =
   | "hotel"
   | "cafe"
@@ -22,6 +24,7 @@ export type Metric = {
   reviewCount: number | null;
   countLabel: string;
   capturedAt: string;
+  tripadvisorRank?: string | null;
 };
 
 export type LocationRecord = {
@@ -36,6 +39,8 @@ export type LocationRecord = {
   tripcomUrl: string;
   expediaUrl?: string;
   travelokaUrl?: string;
+  grabfoodUrl?: string;
+  shopeefoodUrl?: string;
   google: Metric | null;
   tripadvisor: Metric | null;
   agoda: Metric | null;
@@ -51,6 +56,8 @@ export type LocationInput = Pick<
 > & {
   expediaUrl?: string;
   travelokaUrl?: string;
+  grabfoodUrl?: string;
+  shopeefoodUrl?: string;
 };
 
 export type SnapshotInput = {

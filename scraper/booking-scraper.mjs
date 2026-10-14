@@ -218,10 +218,8 @@ export async function scrapeBookingPage(browser, loc) {
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Scraper chạy ngoài phiên đăng nhập cần NEXT_PUBLIC_SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY để đọc dữ liệu qua RLS.");
   return createClient(url, key);
 }
 
@@ -229,13 +227,13 @@ async function loadTargetsFromSupabase() {
   const supabase = getSupabase();
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from("locations")
-    .select("id, name, booking_url")
-    .not("booking_url", "is", null);
-  if (error || !data) return [];
-  return data
-    .filter((r) => r.booking_url && r.booking_url.trim().startsWith("https://"))
-    .map((r) => ({ id: r.id, name: r.name, bookingUrl: r.booking_url }));
+    .from("location_platforms")
+    .select("location_id, url, locations!inner(name)")
+    .eq("platform", "booking");
+  if (error) throw new Error(`Không thể tải link Booking từ Supabase: ${error.message}`);
+  return (data ?? [])
+    .filter((row) => row.url?.trim().startsWith("https://"))
+    .map((row) => ({ id: row.location_id, name: row.locations.name, bookingUrl: row.url }));
 }
 
 async function saveResultsToSupabase(results) {

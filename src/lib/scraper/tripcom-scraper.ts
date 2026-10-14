@@ -41,8 +41,13 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function parseTripcomRating(raw: string | null): string | null {
   if (!raw) return null;
-  const m = raw.match(/(\d{1,2})[,.](\d)/);
-  return m ? `${m[1]},${m[2]}` : null;
+  const normalized = raw.trim().replace(",", ".");
+  if (!/^\d{1,2}(?:\.\d+)?$/.test(normalized)) return null;
+
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0 || value > 10) return null;
+
+  return normalized.replace(".", ",");
 }
 
 export function parseTripcomCount(raw: string | null): number | null {

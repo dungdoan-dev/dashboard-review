@@ -1,4 +1,4 @@
-import type { LocationInput, LocationRecord, Platform } from "@/lib/types";
+import type { LocationInput, LocationLinkPlatform, LocationRecord, Platform } from "@/lib/types";
 
 export type PlatformUrlField =
   | "googleUrl"
@@ -7,9 +7,11 @@ export type PlatformUrlField =
   | "bookingUrl"
   | "tripcomUrl"
   | "expediaUrl"
-  | "travelokaUrl";
+  | "travelokaUrl"
+  | "grabfoodUrl"
+  | "shopeefoodUrl";
 
-export const PLATFORM_URL_FIELDS: Record<Platform, PlatformUrlField> = {
+export const PLATFORM_URL_FIELDS: Record<LocationLinkPlatform, PlatformUrlField> = {
   google: "googleUrl",
   tripadvisor: "tripadvisorUrl",
   agoda: "agodaUrl",
@@ -17,6 +19,8 @@ export const PLATFORM_URL_FIELDS: Record<Platform, PlatformUrlField> = {
   tripcom: "tripcomUrl",
   expedia: "expediaUrl",
   traveloka: "travelokaUrl",
+  grabfood: "grabfoodUrl",
+  shopeefood: "shopeefoodUrl",
 };
 
 export const DEFAULT_RATING_SCALE: Record<Platform, 5 | 10> = {

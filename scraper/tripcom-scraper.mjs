@@ -235,10 +235,8 @@ export async function scrapeTripcomPage(browser, loc) {
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Scraper chạy ngoài phiên đăng nhập cần NEXT_PUBLIC_SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY để đọc dữ liệu qua RLS.");
   return createClient(url, key);
 }
 
@@ -246,13 +244,13 @@ async function loadTargetsFromSupabase() {
   const supabase = getSupabase();
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from("locations")
-    .select("id, name, tripcom_url")
-    .not("tripcom_url", "is", null);
-  if (error || !data) return [];
-  return data
-    .filter((r) => r.tripcom_url && r.tripcom_url.trim().startsWith("https://"))
-    .map((r) => ({ id: r.id, name: r.name, tripcomUrl: r.tripcom_url }));
+    .from("location_platforms")
+    .select("location_id, url, locations!inner(name)")
+    .eq("platform", "tripcom");
+  if (error) throw new Error(`Không thể tải link Trip.com từ Supabase: ${error.message}`);
+  return (data ?? [])
+    .filter((row) => row.url?.trim().startsWith("https://"))
+    .map((row) => ({ id: row.location_id, name: row.locations.name, tripcomUrl: row.url }));
 }
 
 async function saveResultsToSupabase(results) {
