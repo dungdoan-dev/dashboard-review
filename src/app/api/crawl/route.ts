@@ -297,6 +297,17 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     let savedCount = 0;
+    const pendingSnapshots: Array<{
+      location_id: string;
+      platform: Platform;
+      rating_scale: number;
+      rating_value: number | null;
+      review_count: number | null;
+      count_label: string;
+      source: "api";
+      captured_at: string;
+      tripadvisor_rank?: string | null;
+    }> = [];
 
     // 1. Chạy Google Scraper
     if (googleTargets.length > 0) {
@@ -304,7 +315,7 @@ export async function POST(request: NextRequest) {
       for (const item of googleOutput.results) {
         allResults.push({ platform: "google", ...item });
         if (supabase && user && item.success) {
-          const { error: insErr } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "google",
             rating_scale: DEFAULT_RATING_SCALE.google,
@@ -314,7 +325,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insErr) savedCount++;
         }
       }
     }
@@ -325,7 +335,7 @@ export async function POST(request: NextRequest) {
       for (const item of tripOutput.results) {
         allResults.push({ platform: "tripadvisor", ...item });
         if (supabase && user && item.success) {
-          const { error: insErr } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "tripadvisor",
             rating_scale: DEFAULT_RATING_SCALE.tripadvisor,
@@ -336,7 +346,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insErr) savedCount++;
         }
       }
     }
@@ -347,7 +356,7 @@ export async function POST(request: NextRequest) {
       for (const item of agodaOutput.results) {
         allResults.push({ platform: "agoda", ...item });
         if (supabase && user && item.success) {
-          const { error: insErr } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "agoda",
             rating_scale: DEFAULT_RATING_SCALE.agoda,
@@ -357,7 +366,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insErr) savedCount++;
         }
       }
     }
@@ -368,7 +376,7 @@ export async function POST(request: NextRequest) {
       for (const item of bookingOutput.results) {
         allResults.push({ platform: "booking", ...item });
         if (supabase && user && item.success) {
-          const { error: insErr } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "booking",
             rating_scale: DEFAULT_RATING_SCALE.booking,
@@ -378,7 +386,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insErr) savedCount++;
         }
       }
     }
@@ -389,7 +396,7 @@ export async function POST(request: NextRequest) {
       for (const item of tripcomOutput.results) {
         allResults.push({ platform: "tripcom", ...item });
         if (supabase && user && item.success) {
-          const { error: insErr } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "tripcom",
             rating_scale: DEFAULT_RATING_SCALE.tripcom,
@@ -399,7 +406,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insErr) savedCount++;
         }
       }
     }
@@ -409,7 +415,7 @@ export async function POST(request: NextRequest) {
       for (const item of output.results) {
         allResults.push({ platform: "expedia", ...item });
         if (supabase && user && (item.ratingValue != null || item.count != null)) {
-          const { error: insertError } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "expedia",
             rating_scale: DEFAULT_RATING_SCALE.expedia,
@@ -419,7 +425,6 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insertError) savedCount++;
         }
       }
     }
@@ -429,7 +434,7 @@ export async function POST(request: NextRequest) {
       for (const item of output.results) {
         allResults.push({ platform: "traveloka", ...item });
         if (supabase && user && item.success) {
-          const { error: insertError } = await supabase.from("metric_snapshots").insert({
+          pendingSnapshots.push({
             location_id: item.id,
             platform: "traveloka",
             rating_scale: DEFAULT_RATING_SCALE.traveloka,
@@ -439,8 +444,17 @@ export async function POST(request: NextRequest) {
             source: "api",
             captured_at: item.capturedAt,
           });
-          if (!insertError) savedCount++;
         }
+      }
+    }
+
+    const saveErrors: string[] = [];
+    if (supabase && user) {
+      for (let offset = 0; offset < pendingSnapshots.length; offset += 100) {
+        const batch = pendingSnapshots.slice(offset, offset + 100);
+        const { error: insertError } = await supabase.from("metric_snapshots").insert(batch);
+        if (insertError) saveErrors.push(insertError.message);
+        else savedCount += batch.length;
       }
     }
 
@@ -449,9 +463,9 @@ export async function POST(request: NextRequest) {
     const failureSummary = failedResults
       .map((result) => `${result.name}: ${result.error ?? "không tìm thấy số liệu"}`)
       .join("; ");
-    const allSucceeded = successfulResults.length === totalToScrape;
+    const allSucceeded = successfulResults.length === totalToScrape && saveErrors.length === 0;
     const upstreamRateLimited = failedResults.some((result) => result.error?.includes("HTTP 429"));
-    const responseStatus = allSucceeded ? 200 : upstreamRateLimited ? 429 : successfulResults.length === 0 ? 502 : 207;
+    const responseStatus = saveErrors.length ? savedCount > 0 ? 207 : 500 : allSucceeded ? 200 : upstreamRateLimited ? 429 : successfulResults.length === 0 ? 502 : 207;
 
     return NextResponse.json({
       success: allSucceeded,
@@ -460,7 +474,7 @@ export async function POST(request: NextRequest) {
       successCount: successfulResults.length,
       savedCount,
       results: allResults,
-      message: `Kết quả crawl: ${successfulResults.length}/${totalToScrape} liên kết thành công.${failureSummary ? ` Lỗi: ${failureSummary}` : ""}`,
+      message: `Kết quả crawl: ${successfulResults.length}/${totalToScrape} liên kết thành công.${failureSummary ? ` Lỗi: ${failureSummary}` : ""}${saveErrors.length ? ` Không lưu được ${pendingSnapshots.length - savedCount} snapshot: ${saveErrors.join("; ")}` : ""}`,
     }, { status: responseStatus });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

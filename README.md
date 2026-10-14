@@ -1,5 +1,13 @@
 # Reviewdesk
 
+## Đồng bộ khách sạn tự động trên Vercel
+
+1. Chạy `supabase/migrations/20261014000000_automatic_hotel_sync.sql` trong Supabase SQL Editor cho database hiện có. Khi tạo database mới, `supabase/schema.sql` đã chứa các bảng này.
+2. Trong Vercel Project Settings → Environment Variables, đặt `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` và `CRON_SECRET` (chuỗi ngẫu nhiên ít nhất 16 ký tự). Giữ service role key và cron secret ở phía server; không thêm tiền tố `NEXT_PUBLIC_` cho chúng. Thêm các API key scraper đang dùng nếu cần.
+3. Deploy lại lên Vercel. `vercel.json` tạo 24 cron hằng ngày, mỗi cron phụ trách một khung giờ Việt Nam. Trong Cài đặt, bật lịch, chọn khung giờ và sắp xếp các khách sạn trong hàng đợi.
+
+Cron chạy theo giờ Việt Nam và xử lý từng cơ sở theo thứ tự. Khi mọi nguồn đã kết nối của một khách sạn lấy và lưu số liệu thành công, hệ thống chốt báo cáo ngày đó. Nếu nguồn lỗi, trạng thái lỗi xuất hiện trong Cài đặt và khách sạn đó không được chốt tự động. Một lần chạy Vercel có giới hạn tối đa 5 phút; nếu hàng đợi dài, các cơ sở còn lại được tiếp tục ở lần cron kế tiếp trong cùng ngày. Trên Vercel Hobby, cron có thể gọi bất kỳ lúc nào trong khung giờ đã chọn, không bảo đảm đúng phút đầu giờ.
+
 Dashboard Next.js để quản lý nhiều cơ sở, xem điểm sao và số lượng đánh giá Google Maps / Tripadvisor / Agoda / Booking.com / Trip.com / Expedia / Traveloka, lưu lịch sử snapshot và xuất CSV.
 
 ## Chạy chế độ demo

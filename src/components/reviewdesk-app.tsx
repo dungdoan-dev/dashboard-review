@@ -35,12 +35,13 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
 import { PlatformBrandLogo } from "@/components/platform-brand-logo";
+import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
 import type {
   LocationInput,
   LocationLinkPlatform,
@@ -193,20 +194,26 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const router = useRouter();
   const isReportPage = pathname === "/report";
   const isDailyAnalyticsPage = pathname === "/reports";
+  const isComparePage = pathname === "/compare";
   const isTripadvisorRankPage = pathname === "/tripadvisor-rank";
-  const isReportDataPage = isReportPage || isDailyAnalyticsPage || isTripadvisorRankPage;
+  const isReportDataPage = isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage;
   const isSettingsPage = pathname === "/settings";
+  const needsLiveMetrics = pathname === "/";
+  const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(supabaseConfigured);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [comparisonSelectedIds, setComparisonSelectedIds] = useState<string[] | null>(null);
+  const [appliedComparisonIds, setAppliedComparisonIds] = useState<string[] | null>(null);
   const [timelineSnapshots, setTimelineSnapshots] = useState<DailyReportSnapshot[]>([]);
+  const timelineCache = useRef(new Map<string, { rows: DailyReportSnapshot[]; loadedAt: number }>());
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState("");
   const [timelineRefresh, setTimelineRefresh] = useState(0);
-  const [dailyReportRange, setDailyReportRange] = useState<"all" | "30" | "90" | "365">("all");
+  const [dailyReportRange, setDailyReportRange] = useState<"all" | "30" | "90" | "365">("30");
   const [historicalReportPreview, setHistoricalReportPreview] = useState<HistoricalReportPreview | null>(null);
   const [readingHistoricalFile, setReadingHistoricalFile] = useState(false);
   const [importingHistoricalRows, setImportingHistoricalRows] = useState(false);
@@ -234,22 +241,26 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     if (!locations.length) return;
     try {
       const savedLocationId = window.localStorage.getItem(locationSelectionStorageKey);
-      if (savedLocationId && locations.some((location) => location.id === savedLocationId)) {
+      if (savedLocationId === "all-hotels" && isDailyAnalyticsPage && locations.some((location) => location.type === "hotel")) {
+        setSelectedLocationId("all-hotels");
+      } else if (savedLocationId && locations.some((location) => location.id === savedLocationId)) {
         setSelectedLocationId((current) => current && locations.some((location) => location.id === current) ? current : savedLocationId);
       }
     } catch {
       // Keep the default branch selected if browser storage is unavailable.
     }
-  }, [locations, locationSelectionStorageKey]);
+  }, [locations, locationSelectionStorageKey, isDailyAnalyticsPage]);
 
   useEffect(() => {
-    if (!selectedLocationId || !locations.some((location) => location.id === selectedLocationId)) return;
+    if (!selectedLocationId || (selectedLocationId === "all-hotels"
+      ? !isDailyAnalyticsPage || !locations.some((location) => location.type === "hotel")
+      : !locations.some((location) => location.id === selectedLocationId))) return;
     try {
       window.localStorage.setItem(locationSelectionStorageKey, selectedLocationId);
     } catch {
       // The selected branch remains available for this page session.
     }
-  }, [locations, locationSelectionStorageKey, selectedLocationId]);
+  }, [locations, locationSelectionStorageKey, selectedLocationId, isDailyAnalyticsPage]);
 
   useEffect(() => {
     try {
@@ -382,14 +393,14 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       const ids = (rows ?? []).map((row) => row.id);
       let snapshots: Record<string, unknown>[] = [];
       let platformLinks: Record<string, unknown>[] = [];
-      if (ids.length) {
+      if (ids.length && (needsLiveMetrics || needsPlatformLinks)) {
         const [{ data: snapshotData, error: snapshotError }, { data: linkData, error: linksError }] = await withTimeout(
           Promise.all([
-            supabase
+            needsLiveMetrics ? supabase
               .from("latest_metric_snapshots")
               .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,captured_at")
-              .in("location_id", ids),
-            supabase.from("location_platforms").select("location_id,platform,url").in("location_id", ids),
+              .in("location_id", ids) : Promise.resolve({ data: [], error: null }),
+            needsPlatformLinks ? supabase.from("location_platforms").select("location_id,platform,url").in("location_id", ids) : Promise.resolve({ data: [], error: null }),
           ]),
           20000,
           "Kết nối Supabase quá thời gian chờ khi tải dữ liệu cơ sở.",
@@ -451,7 +462,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     } finally {
       setLoading(false);
     }
-  }, [supabaseConfigured, user]);
+  }, [supabaseConfigured, user, needsLiveMetrics, needsPlatformLinks]);
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -462,7 +473,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     try {
       const supabase = createClient();
       const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (active) setUser(session?.user ?? null);
+        if (active) setUser((current) => current?.id === session?.user?.id ? current : session?.user ?? null);
       });
       unsubscribe = () => data.subscription.unsubscribe();
       void withTimeout(
@@ -473,7 +484,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         .then(({ data: authData, error: authError }) => {
           if (!active) return;
           if (authError) setError(authError.message);
-          setUser(authData.user);
+          setUser((current) => current?.id === authData.user?.id ? current : authData.user);
         })
         .catch((authError: unknown) => {
           if (!active) return;
@@ -542,16 +553,24 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [modal]);
 
-  const dashboardLocation = locations.find((location) => location.id === selectedLocationId) ?? locations[0] ?? null;
+  const allHotelsSelected = isDailyAnalyticsPage && selectedLocationId === "all-hotels";
+  const hotelLocations = useMemo(() => locations.filter((location) => location.type === "hotel"), [locations]);
+  const comparisonLocations = useMemo(() => isComparePage
+    ? locations.filter((location) => appliedComparisonIds === null || appliedComparisonIds.includes(location.id))
+    : hotelLocations, [isComparePage, locations, appliedComparisonIds, hotelLocations]);
+  const draftComparisonLocations = locations.filter((location) => comparisonSelectedIds === null || comparisonSelectedIds.includes(location.id));
+  const comparisonMode = allHotelsSelected || isComparePage;
+  const dashboardLocation = useMemo(() => locations.find((location) => location.id === selectedLocationId) ?? locations[0] ?? null, [locations, selectedLocationId]);
   const timelineMode = !isReportDataPage ? "hidden" : supabaseConfigured ? "supabase" : "demo";
   const branchLocations = dashboardLocation ? [dashboardLocation] : [];
   const branchFinalizablePlatforms = reportPlatformOrder.filter((platform) => {
     const metric = dashboardLocation?.[platform];
     return metric != null && (metric.rating != null || metric.reviewCount != null);
   });
+  const selectedReportPlatforms = useMemo(() => reportPlatformOrder.filter((platform) => reportPlatforms.includes(platform)), [reportPlatforms]);
 
   const reportData = useMemo(() => {
-    const selectedPlatforms = reportPlatformOrder.filter((platform) => reportPlatforms.includes(platform));
+    const selectedPlatforms = selectedReportPlatforms;
     const reportLocations = dashboardLocation ? [dashboardLocation] : [];
     const locationRows = reportLocations.map((location) => {
       const platformMetrics = selectedPlatforms.map((platform) => {
@@ -593,7 +612,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       platformCoverage,
       locationCoverage,
     };
-  }, [dashboardLocation, reportPlatforms, reportScale]);
+  }, [dashboardLocation, selectedReportPlatforms, reportScale]);
 
   useEffect(() => {
     if (timelineMode === "hidden") {
@@ -605,30 +624,53 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       setTimelineError("");
       return;
     }
-    if (!user || !dashboardLocation) {
+    if (!user || (comparisonMode ? comparisonLocations.length === 0 : !dashboardLocation)) {
       setTimelineSnapshots([]);
       setTimelineLoading(false);
       setTimelineError("");
       return;
     }
     let active = true;
+    const scopeIds = (comparisonMode ? comparisonLocations.map((location) => location.id) : [dashboardLocation!.id]).sort();
+    const cacheKey = JSON.stringify([user.id, scopeIds, dailyReportRange, timelineRefresh]);
+    const cachedResult = timelineCache.current.get(cacheKey);
+    if (cachedResult && Date.now() - cachedResult.loadedAt < 60_000) {
+      setTimelineSnapshots(cachedResult.rows);
+      setTimelineLoading(false);
+      setTimelineError("");
+      return;
+    }
+    timelineCache.current.delete(cacheKey);
     setTimelineLoading(true);
     setTimelineError("");
-    void createClient()
-      .from("daily_report_snapshots")
-      .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,report_date,finalized_at")
-      .eq("location_id", dashboardLocation.id)
-      .order("report_date", { ascending: false })
-      .limit(1000)
-      .then(({ data, error: historyError }) => {
-        if (!active) return;
-        if (historyError) {
-          setTimelineSnapshots([]);
-          setTimelineError(historyError.message);
-          setTimelineLoading(false);
-          return;
-        }
-        setTimelineSnapshots(((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    void (async () => {
+      const rows: Record<string, unknown>[] = [];
+      const pageSize = 1000;
+      const supabase = createClient();
+      const locationIds = scopeIds;
+      let startDate: string | null = null;
+      if (dailyReportRange !== "all") {
+        const firstDay = new Date(`${reportDateInVietnam()}T00:00:00Z`);
+        firstDay.setUTCDate(firstDay.getUTCDate() - Number(dailyReportRange) + 1);
+        startDate = firstDay.toISOString().slice(0, 10);
+      }
+      for (let offset = 0; active; offset += pageSize) {
+        let baseQuery = supabase
+          .from("daily_report_snapshots")
+          .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,report_date,finalized_at")
+          .order("report_date", { ascending: false })
+          .order("id", { ascending: false });
+        if (startDate) baseQuery = baseQuery.gte("report_date", startDate);
+        const query = comparisonMode
+          ? baseQuery.in("location_id", locationIds)
+          : baseQuery.eq("location_id", dashboardLocation!.id);
+        const { data, error: historyError } = await query.range(offset, offset + pageSize - 1);
+        if (historyError) throw historyError;
+        rows.push(...((data ?? []) as Record<string, unknown>[]));
+        if (!data || data.length < pageSize) break;
+      }
+      if (!active) return;
+      const snapshots = rows.map((row) => ({
           id: String(row.id ?? `${row.location_id}-${row.platform}-${row.report_date}`),
           locationId: String(row.location_id),
           platform: String(row.platform) as Platform,
@@ -639,16 +681,25 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           tripadvisorRank: row.tripadvisor_rank == null ? null : String(row.tripadvisor_rank),
           reportDate: String(row.report_date),
           finalizedAt: String(row.finalized_at),
-        })));
-        setTimelineLoading(false);
-      });
+      }));
+      timelineCache.current.set(cacheKey, { rows: snapshots, loadedAt: Date.now() });
+      if (timelineCache.current.size > 8) timelineCache.current.delete(timelineCache.current.keys().next().value!);
+      setTimelineSnapshots(snapshots);
+    })().catch((historyError: unknown) => {
+      if (!active) return;
+      setTimelineSnapshots([]);
+      setTimelineError(historyError instanceof Error ? historyError.message : String(historyError));
+    }).finally(() => {
+      if (active) setTimelineLoading(false);
+    });
     return () => { active = false; };
-  }, [timelineMode, user, dashboardLocation?.id, timelineRefresh]);
+  }, [timelineMode, user, dashboardLocation, comparisonMode, comparisonLocations, dailyReportRange, timelineRefresh]);
 
   const timelineRows = useMemo(() => {
     const grouped = new Map<string, Partial<Record<Platform, DailyReportSnapshot>>>();
     for (const snapshot of timelineSnapshots) {
       if (snapshot.locationId !== dashboardLocation?.id) continue;
+      if (isTripadvisorRankPage ? snapshot.platform !== "tripadvisor" : !selectedReportPlatforms.includes(snapshot.platform)) continue;
       const dateKey = snapshot.reportDate;
       const day = grouped.get(dateKey) ?? {};
       const current = day[snapshot.platform];
@@ -656,7 +707,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       grouped.set(dateKey, day);
     }
     return Array.from(grouped, ([date, metrics]) => ({ date, metrics })).sort((left, right) => left.date.localeCompare(right.date));
-  }, [timelineSnapshots, dashboardLocation?.id]);
+  }, [timelineSnapshots, dashboardLocation?.id, isTripadvisorRankPage, selectedReportPlatforms]);
 
   const dailyAnalyticsRows = useMemo(() => {
     if (!timelineRows.length || dailyReportRange === "all") return timelineRows;
@@ -665,6 +716,39 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     const startDate = latestDate.toISOString().slice(0, 10);
     return timelineRows.filter((row) => row.date >= startDate);
   }, [timelineRows, dailyReportRange]);
+
+  const hotelComparisonData = useMemo(() => {
+    if (!comparisonMode) return { scoreRows: [], reviewRows: [] };
+    const comparisonIds = new Set(comparisonLocations.map((location) => location.id));
+    const grouped = new Map<string, Map<string, DailyReportSnapshot[]>>();
+    for (const snapshot of timelineSnapshots) {
+      if (!comparisonIds.has(snapshot.locationId) || !reportPlatforms.includes(snapshot.platform)) continue;
+      const byHotel = grouped.get(snapshot.reportDate) ?? new Map<string, DailyReportSnapshot[]>();
+      byHotel.set(snapshot.locationId, [...(byHotel.get(snapshot.locationId) ?? []), snapshot]);
+      grouped.set(snapshot.reportDate, byHotel);
+    }
+    const dates = [...grouped.keys()].sort();
+    const latestDate = dates.at(-1);
+    const startDate = latestDate && dailyReportRange !== "all"
+      ? new Date(`${latestDate}T00:00:00Z`) : null;
+    if (startDate) startDate.setUTCDate(startDate.getUTCDate() - Number(dailyReportRange) + 1);
+    const scoreRows: Record<string, string | number | null>[] = [];
+    const reviewRows: Record<string, string | number | null>[] = [];
+    for (const date of dates.filter((date) => !startDate || date >= startDate.toISOString().slice(0, 10))) {
+      const scoreRow: Record<string, string | number | null> = { date };
+      const reviewRow: Record<string, string | number | null> = { date };
+      for (const location of comparisonLocations) {
+        const metrics = grouped.get(date)?.get(location.id) ?? [];
+        const scores = metrics.flatMap((metric) => metric.rating == null || metric.ratingScale <= 0 ? [] : [metric.rating / metric.ratingScale * reportScale]);
+        const counts = metrics.flatMap((metric) => metric.reviewCount == null ? [] : [metric.reviewCount]);
+        scoreRow[location.id] = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
+        reviewRow[location.id] = counts.length ? counts.reduce((sum, count) => sum + count, 0) : null;
+      }
+      if (comparisonLocations.some((location) => scoreRow[location.id] != null)) scoreRows.push(scoreRow);
+      if (comparisonLocations.some((location) => reviewRow[location.id] != null)) reviewRows.push(reviewRow);
+    }
+    return { scoreRows, reviewRows };
+  }, [comparisonMode, comparisonLocations, timelineSnapshots, reportPlatforms, reportScale, dailyReportRange]);
 
   const tripadvisorRankRows = useMemo<TripadvisorRankReportRow[]>(() => dailyAnalyticsRows.flatMap((row) => {
     const metric = row.metrics.tripadvisor;
@@ -685,9 +769,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     }];
   }), [dailyAnalyticsRows]);
 
-  const dailyAnalyticsPlatforms = useMemo(() => reportData.selectedPlatforms.filter((platform) =>
+  const dailyAnalyticsPlatforms = useMemo(() => selectedReportPlatforms.filter((platform) =>
     dailyAnalyticsRows.some((row) => row.metrics[platform] != null),
-  ), [dailyAnalyticsRows, reportData.selectedPlatforms]);
+  ), [dailyAnalyticsRows, selectedReportPlatforms]);
 
   const dailyAnalyticsScoreDomain = useMemo(() => {
     const scores = dailyAnalyticsRows.flatMap((row) => dailyAnalyticsPlatforms.flatMap((platform) => {
@@ -1348,6 +1432,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <Link className={`nav-link ${!isReportDataPage && !isSettingsPage && activeSection === "overview" ? "active" : ""}`} href="/"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
           <Link className={`nav-link ${isReportPage ? "active" : ""}`} href="/report"><CalendarDays size={17} /><span>Dashboard theo ngày</span></Link>
           <Link className={`nav-link ${isDailyAnalyticsPage ? "active" : ""}`} href="/reports"><BarChart3 size={17} /><span>Báo cáo theo ngày</span></Link>
+          <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare"><TrendingUp size={17} /><span>So sánh báo cáo</span></Link>
           <Link className={`nav-link ${isTripadvisorRankPage ? "active" : ""}`} href="/tripadvisor-rank"><Medal size={17} /><span>Xếp hạng Tripadvisor</span></Link>
           <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
           <button className="nav-link" type="button" onClick={exportCsv}><ArrowDownToLine size={17} /><span>Xuất dữ liệu</span></button>
@@ -1361,20 +1446,21 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
-          <div className="topbar-title"><span className="topbar-overline">{isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "BÁO CÁO THEO NGÀY" : isReportPage ? "DASHBOARD THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : "DASHBOARD OVERVIEW"}</span><strong>{isSettingsPage ? "Cài đặt" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
-          <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn cơ sở</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>
+          <div className="topbar-title"><span className="topbar-overline">{isComparePage ? "SO SÁNH BÁO CÁO" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "BÁO CÁO THEO NGÀY" : isReportPage ? "DASHBOARD THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : "DASHBOARD OVERVIEW"}</span><strong>{isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          {!isComparePage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn cơ sở</option>{isDailyAnalyticsPage && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
         </header>
-        <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
+        <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isComparePage ? "compare-reports-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
           {!supabaseConfigured && <div className="demo-banner"><span className="demo-spark"><Database size={16} /></span><div><strong>Đang xem dữ liệu mẫu</strong><span>Kết nối Supabase để lưu dữ liệu riêng cho tài khoản của bạn.</span></div><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Cách kết nối <ArrowUpRight size={14} /></a></div>}
           {error && <div className="alert alert-error" role="alert"><span>{error}</span><button onClick={() => setError("")} aria-label="Đóng thông báo"><X size={16} /></button></div>}
           {notice && <div className="alert alert-success" role="status"><Check size={16} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Đóng thông báo"><X size={16} /></button></div>}
 
           {isSettingsPage && <section className="settings-page-heading"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h1>Cấu hình workspace</h1><p>Quản lý cách tính báo cáo và thông tin liên kết của từng cơ sở.</p></section>}
 
-          <section className={`page-heading ${!isReportPage && !isSettingsPage ? "overview-hero" : ""}`}><div className="overview-hero-copy"><div className="eyebrow"><Compass size={14} /> THEO DÕI DANH TIẾNG</div><h1>{dashboardLocation?.name ?? "Chưa có cơ sở"}</h1><p>{dashboardLocation ? `${dashboardLocation.area || "Chưa có khu vực"} · ${typeLabels[dashboardLocation.type]}` : "Thêm cơ sở để bắt đầu theo dõi đánh giá."}</p></div><button className="button button-outline dashboard-add-location" onClick={() => openLocationModal()}><Plus size={15} />Thêm cơ sở</button></section>
+          {!isReportDataPage && !isSettingsPage && <>
+          <section className="page-heading overview-hero"><div className="overview-hero-copy"><div className="eyebrow"><Compass size={14} /> THEO DÕI DANH TIẾNG</div><h1>{dashboardLocation?.name ?? "Chưa có cơ sở"}</h1><p>{dashboardLocation ? `${dashboardLocation.area || "Chưa có khu vực"} · ${typeLabels[dashboardLocation.type]}` : "Thêm cơ sở để bắt đầu theo dõi đánh giá."}</p></div><button className="button button-outline dashboard-add-location" onClick={() => openLocationModal()}><Plus size={15} />Thêm cơ sở</button></section>
 
-          <section className={`stats-grid ${!isReportPage && !isSettingsPage ? "overview-stats" : ""}`} aria-label="Chỉ số tổng quan">
+          <section className="stats-grid overview-stats" aria-label="Chỉ số tổng quan">
             <StatCard icon={<Star size={18} />} label="Điểm trung bình các kênh" value={reportData.averageScore == null ? "—" : reportData.averageScore.toFixed(1).replace(".", ",")} suffix={`/ ${reportScale}`} meta={dashboardLocation ? `Chuẩn hóa trên ${dashboardLocation.name}` : "Chưa có dữ liệu điểm"} tone="blue" />
             <StatCard icon={<TrendingUp size={18} />} label="Tổng lượt đánh giá" value={moneyless(reportData.reviewTotal)} meta="Cộng snapshot mới nhất trên các kênh đã chọn" tone="green" />
             <StatCard icon={<Link2 size={18} />} label="Kênh có dữ liệu" value={`${reportData.platformCoverage}`} suffix={`/ ${reportData.selectedPlatforms.length}`} meta="Các nền tảng có snapshot hiện tại" tone="violet" />
@@ -1425,12 +1511,14 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               </article>
             </div> : <article className="report-card report-empty-dashboard"><p className="report-empty">Chưa có cơ sở để lập báo cáo. Hãy thêm cơ sở và chọn cơ sở cần xem.</p></article>}
           </section>
+          </>}
 
           {isReportPage && <section className="timeline-section daily-report-page" id="daily-reports" aria-labelledby="timeline-title">
             <header className="timeline-heading">
               <div><div className="section-kicker"><span className="live-mark" /> BÁO CÁO ĐÃ CHỐT</div><h2 id="timeline-title">Báo cáo theo ngày</h2><p>Số điểm và lượt đánh giá đã chốt, lưu riêng theo từng chi nhánh.</p></div>
               <div className="daily-report-controls">
                 <label className="daily-report-location-picker"><Building2 size={15} /><span>Chi nhánh</span><select aria-label="Chọn chi nhánh để xem báo cáo" value={dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn chi nhánh</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={14} /></label>
+                <label className="daily-report-location-picker"><CalendarDays size={15} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian dữ liệu đã chốt" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={14} /></label>
                 <span className="timeline-count">{timelineRows.length} ngày đã chốt</span>
                 <label className="button button-outline report-import-trigger">
                   {readingHistoricalFile ? <LoaderCircle size={15} className="spin" /> : <Upload size={15} />}
@@ -1473,11 +1561,11 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 : timelineError ? <div className="timeline-empty timeline-error">Không tải được lịch sử: {timelineError}</div>
                   : timelineRows.length === 0 ? <div className="timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu báo cáo đã chốt</strong><span>Chốt dữ liệu hôm nay ở trang tổng quan để bắt đầu lịch sử cho {dashboardLocation?.name ?? "chi nhánh này"}.</span></div></div>
                     : <div className="timeline-table-scroll"><table className="timeline-table"><thead>
-                      <tr><th className="timeline-date">NGÀY</th>{reportData.selectedPlatforms.map((platform) => <th key={platform}>{platformLabels[platform]}</th>)}</tr>
+                      <tr><th className="timeline-date">NGÀY</th>{selectedReportPlatforms.map((platform) => <th key={platform}>{platformLabels[platform]}</th>)}</tr>
                     </thead><tbody>
                       {timelineRows.map((row) => <tr key={row.date}>
-                        <th className="timeline-date-value"><time dateTime={row.date}>{new Date(`${row.date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })}</time></th>
-                        {reportData.selectedPlatforms.map((platform) => {
+                        <th className="timeline-date-value"><time dateTime={row.date}>{new Date(`${row.date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })}</time><small className="timeline-date-coverage">Đã chốt {selectedReportPlatforms.filter((platform) => row.metrics[platform]).length}/{selectedReportPlatforms.length} nguồn</small></th>
+                        {selectedReportPlatforms.map((platform) => {
                           const metric = row.metrics[platform];
                           const normalizedScore = metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale;
                           return <td className="timeline-metric-cell" key={`${row.date}-${platform}`}>
@@ -1491,22 +1579,64 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                         })}
                       </tr>)}
                     </tbody></table></div>}
-              {timelineRows.length > 0 && <footer className="timeline-footer">Đang xem {dashboardLocation?.name} · {timelineRows.length} ngày đã chốt{timelineSnapshots.length >= 1000 ? " · đã giới hạn 1.000 bản ghi gần nhất" : ""}</footer>}
+              {timelineRows.length > 0 && <footer className="timeline-footer">Đang xem {dashboardLocation?.name} · {timelineRows.length} ngày đã chốt</footer>}
             </div>
           </section>}
 
           {isDailyAnalyticsPage && <section className="daily-analytics-page" aria-labelledby="daily-analytics-title">
             <header className="daily-analytics-heading">
-              <div><div className="section-kicker"><BarChart3 size={14} /> SỐ LIỆU ĐÃ CHỐT</div><h1 id="daily-analytics-title">Báo cáo theo ngày</h1><p>Xu hướng điểm sao và lượt đánh giá từ dữ liệu đã chốt của {dashboardLocation?.name ?? "chi nhánh đang chọn"}.</p></div>
+              <div><div className="section-kicker"><BarChart3 size={14} /> SỐ LIỆU ĐÃ CHỐT</div><h1 id="daily-analytics-title">Báo cáo theo ngày</h1><p>Xu hướng điểm sao và lượt đánh giá từ dữ liệu đã chốt của {allHotelsSelected ? "tất cả khách sạn" : dashboardLocation?.name ?? "chi nhánh đang chọn"}.</p></div>
               <label className="analytics-range-picker"><CalendarDays size={15} /><span>Khoảng thời gian</span><select value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)} aria-label="Chọn khoảng thời gian báo cáo"><option value="all">Toàn bộ dữ liệu</option><option value="30">30 ngày gần nhất</option><option value="90">90 ngày gần nhất</option><option value="365">365 ngày gần nhất</option></select></label>
             </header>
+            <fieldset className="analytics-source-filter">
+              <legend>Nguồn đánh giá</legend>
+              <div className="analytics-source-options">
+                <button type="button" className={`analytics-source-chip ${reportPlatforms.length === reportPlatformOrder.length ? "active" : ""}`} aria-pressed={reportPlatforms.length === reportPlatformOrder.length} onClick={() => setReportPlatforms(reportPlatformOrder)}>Tất cả nguồn</button>
+                {reportPlatformOrder.map((platform) => <label className={`analytics-source-chip ${reportPlatforms.includes(platform) ? "active" : ""}`} key={platform}>
+                  <input type="checkbox" checked={reportPlatforms.includes(platform)} onChange={() => setReportPlatforms((current) => current.includes(platform) ? current.length > 1 ? current.filter((item) => item !== platform) : current : reportPlatformOrder.filter((item) => current.includes(item) || item === platform))} />
+                  <span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}
+                </label>)}
+              </div>
+            </fieldset>
             {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải dữ liệu đã chốt…</div>
               : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được dữ liệu đã chốt: {timelineError}</div>
+                : allHotelsSelected ? hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho các khách sạn trong khoảng ngày này.</div> : <>
+                  {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
+                    <header><div><h3>So sánh điểm giữa các khách sạn</h3><p>Mỗi cột là điểm trung bình của các nền tảng đã chọn, quy đổi về thang {reportScale}. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.scoreRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
+                    <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, hotelLocations.length * 24)) }}>
+                      <ResponsiveContainer width="100%" height={390}>
+                        <BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
+                          <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
+                          <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                          <YAxis domain={[0, reportScale]} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={38} />
+                          <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
+                          <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
+                          {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div></div>
+                  </article>}
+                  {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
+                    <header><div><h3>So sánh lượt đánh giá giữa các khách sạn</h3><p>Tổng lượt đánh giá đã chốt từ các nền tảng đang chọn cho từng khách sạn, theo ngày. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.reviewRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
+                    <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, hotelLocations.length * 24)) }}>
+                      <ResponsiveContainer width="100%" height={390}>
+                        <BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
+                          <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
+                          <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                          <YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={58} />
+                          <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt đánh giá` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
+                          <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
+                          {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div></div>
+                  </article>}
+                </>
                 : dailyAnalyticsRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu đã chốt</strong><span>Chốt dữ liệu hôm nay từ trang tổng quan, sau đó báo cáo sẽ xuất hiện tại đây.</span></div></div>
                   : <>
                     <div className="analytics-summary-grid">
-                      <article className="analytics-summary-card"><span>Ngày đã chốt</span><strong>{dailyAnalyticsRows.length.toLocaleString("vi-VN")}</strong><small>{new Date(`${dailyAnalyticsRows[0].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })} – {new Date(`${dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</small></article>
-                      <article className="analytics-summary-card"><span>Nền tảng có dữ liệu</span><strong>{dailyAnalyticsPlatforms.length}</strong><small>Trong {reportData.selectedPlatforms.length} nền tảng được chọn</small></article>
+                      <article className="analytics-summary-card"><span>Ngày có số liệu đã chốt</span><strong>{dailyAnalyticsRows.length.toLocaleString("vi-VN")}</strong><small>{new Date(`${dailyAnalyticsRows[0].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })} – {new Date(`${dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</small></article>
+                      <article className="analytics-summary-card"><span>Nền tảng có dữ liệu</span><strong>{dailyAnalyticsPlatforms.length}</strong><small>Trong {selectedReportPlatforms.length} nền tảng được chọn</small></article>
                       <article className="analytics-summary-card"><span>Lần chốt gần nhất</span><strong>{new Date(`${dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong><small>{dashboardLocation?.name}</small></article>
                     </div>
                     <div className="analytics-platform-grid">
@@ -1556,8 +1686,38 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                   </>}
           </section>}
 
+          {isComparePage && <section className="compare-reports-page" aria-labelledby="compare-reports-title">
+            <header className="daily-analytics-heading"><div><div className="section-kicker"><TrendingUp size={14} /> ĐỐI CHIẾU DỮ LIỆU ĐÃ CHỐT</div><h1 id="compare-reports-title">So sánh các báo cáo</h1><p>Đối chiếu điểm và số lượt đánh giá theo ngày giữa các cơ sở trên cùng nguồn dữ liệu.</p></div>
+              <label className="analytics-range-picker"><CalendarDays size={15} /><span>Khoảng thời gian</span><select value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)} aria-label="Chọn khoảng thời gian so sánh"><option value="all">Toàn bộ dữ liệu</option><option value="30">30 ngày gần nhất</option><option value="90">90 ngày gần nhất</option><option value="365">365 ngày gần nhất</option></select></label>
+            </header>
+            <fieldset className="analytics-source-filter"><legend>Cơ sở so sánh</legend><div className="analytics-source-options">
+              <button type="button" className={`analytics-source-chip ${comparisonSelectedIds === null ? "active" : ""}`} aria-pressed={comparisonSelectedIds === null} onClick={() => setComparisonSelectedIds(null)}>Tất cả cơ sở</button>
+              {locations.map((location) => <label className={`analytics-source-chip ${draftComparisonLocations.some((item) => item.id === location.id) ? "active" : ""}`} key={location.id}><input type="checkbox" checked={draftComparisonLocations.some((item) => item.id === location.id)} onChange={() => setComparisonSelectedIds((current) => {
+                const selected = current ?? locations.map((item) => item.id);
+                if (selected.includes(location.id)) return selected.length > 1 ? selected.filter((id) => id !== location.id) : selected;
+                return locations.filter((item) => selected.includes(item.id) || item.id === location.id).map((item) => item.id);
+              })} />{location.name}</label>)}
+              <button type="button" className="button button-primary" onClick={() => setAppliedComparisonIds(comparisonSelectedIds)}>Áp dụng cơ sở</button>
+            </div></fieldset>
+            <fieldset className="analytics-source-filter"><legend>Nguồn đánh giá</legend><div className="analytics-source-options">
+              <button type="button" className={`analytics-source-chip ${reportPlatforms.length === reportPlatformOrder.length ? "active" : ""}`} aria-pressed={reportPlatforms.length === reportPlatformOrder.length} onClick={() => setReportPlatforms(reportPlatformOrder)}>Tất cả nguồn</button>
+              {reportPlatformOrder.map((platform) => <label className={`analytics-source-chip ${reportPlatforms.includes(platform) ? "active" : ""}`} key={platform}><input type="checkbox" checked={reportPlatforms.includes(platform)} onChange={() => setReportPlatforms((current) => current.includes(platform) ? current.length > 1 ? current.filter((item) => item !== platform) : current : reportPlatformOrder.filter((item) => current.includes(item) || item === platform))} /><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}</label>)}
+            </div></fieldset>
+            {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải báo cáo đã chốt…</div> : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được báo cáo: {timelineError}</div> : hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho lựa chọn này.</div> : <>
+              <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{reportPlatforms.length} nguồn đang chọn</span></div>
+              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><div className="compare-table-scroll"><table><thead><tr><th>Cơ sở</th><th>Điểm / {reportScale}</th><th>Ngày chốt điểm</th><th>Lượt đánh giá</th><th>Ngày chốt lượt</th></tr></thead><tbody>{comparisonLocations.map((location) => {
+                const scoreRow = [...hotelComparisonData.scoreRows].reverse().find((row) => row[location.id] != null);
+                const reviewRow = [...hotelComparisonData.reviewRows].reverse().find((row) => row[location.id] != null);
+                return <tr key={location.id}><th scope="row">{location.name}</th><td>{typeof scoreRow?.[location.id] === "number" ? `${(scoreRow[location.id] as number).toFixed(1).replace(".", ",")}` : "—"}</td><td>{scoreRow ? new Date(`${scoreRow.date}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" }) : "—"}</td><td>{typeof reviewRow?.[location.id] === "number" ? moneyless(reviewRow[location.id] as number) : "—"}</td><td>{reviewRow ? new Date(`${reviewRow.date}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" }) : "—"}</td></tr>;
+              })}</tbody></table></div></article>
+            </>}
+          </section>}
+
           {isTripadvisorRankPage && <TripadvisorRankReportPage locationName={dashboardLocation?.name ?? null} rows={tripadvisorRankRows} loading={timelineLoading} error={timelineError} range={dailyReportRange} onRangeChange={setDailyReportRange} />}
 
+          {!isReportDataPage && !isSettingsPage && <>
           <section className="insight-row" id="platforms">
             <div className="insight-copy"><div className="section-kicker"><span className="live-mark" /> KẾT QUẢ THEO CƠ SỞ</div><h2>{dashboardLocation ? dashboardLocation.name : "Chưa chọn cơ sở"}</h2><p>Điểm được chuẩn hóa về thang {reportScale}; lượt đánh giá hiển thị riêng cho từng nền tảng.</p></div>
             <div className="platform-summary">{reportData.selectedPlatforms.map((platform) => {
@@ -1603,6 +1763,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               </section>;
             })}
           </section>
+          </>}
 
           {isSettingsPage && <section className="report-settings-section" id="settings" aria-labelledby="report-settings-title">
             <div className="report-settings-intro"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h2 id="report-settings-title">Cấu hình báo cáo</h2><p>Chọn thang điểm chuẩn hóa và các nền tảng được tính vào báo cáo. Tùy chọn được lưu trên trình duyệt này.</p></div>
@@ -1616,6 +1777,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             </div>
           </section>}
 
+          {isSettingsPage && <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} />}
           {isSettingsPage && <section className="location-settings-section" id="settings-locations" aria-labelledby="location-settings-title">
             <header className="location-settings-heading">
               <div><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT · CƠ SỞ</div><h2 id="location-settings-title">Cấu hình cơ sở</h2><p>Quản lý thông tin và liên kết nền tảng cho từng cơ sở.</p></div>
