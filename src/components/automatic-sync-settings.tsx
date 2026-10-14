@@ -5,11 +5,12 @@ import { ArrowDown, ArrowUp, Clock3, FlaskConical, LoaderCircle } from "lucide-r
 import { createClient } from "@/lib/supabase/client";
 import type { LocationRecord } from "@/lib/types";
 
-export type SyncLocationType = "hotel" | "cafe" | "mart";
+export type SyncLocationType = "hotel" | "cafe" | "mart" | "entertainment";
 const typeText: Record<SyncLocationType, { title: string; noun: string }> = {
   hotel: { title: "Đồng bộ khách sạn hằng ngày", noun: "khách sạn" },
   cafe: { title: "Đồng bộ cafe hằng ngày", noun: "cơ sở cafe" },
   mart: { title: "Đồng bộ Mart 24h hằng ngày", noun: "cơ sở Mart 24h" },
+  entertainment: { title: "Đồng bộ Giải trí hằng ngày", noun: "cơ sở Giải trí" },
 };
 
 type Run = { location_id: string; report_date: string; status: string; message: string | null; started_at: string };

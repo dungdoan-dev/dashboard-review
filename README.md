@@ -14,7 +14,7 @@ Chạy `supabase/migrations/20261014010000_tripadvisor_notice.sql` trong Supabas
 
 Quy tắc chốt sổ: nguồn nào lấy và lưu số liệu thành công thì được chốt sổ ngay; nguồn lỗi bị bỏ qua, lần chạy đó ghi trạng thái "chốt một phần" (hoặc "lỗi" nếu không nguồn nào thành công) và mỗi lỗi được báo vào chuông thông báo trên header (bảng `notifications`, giữ 30 ngày; lỗi khi cào thủ công cũng được ghi vào đây). Chạy thêm `supabase/migrations/20261014060000_notifications_and_partial_sync.sql`.
 
-Mỗi loại hình có lịch, khung giờ và hàng đợi riêng trong Cài đặt (chạy thêm `supabase/migrations/20261014050000_automatic_sync_location_types.sql`). Cafe và Mart 24h đồng bộ Google Maps, Tripadvisor và GrabFood; GrabFood dùng tài khoản merchant lưu cho từng cơ sở (cần `GRAB_CREDENTIALS_KEY` trên Vercel), tự đăng nhập mỗi lần chạy vì Vercel không giữ phiên; nếu Grab đòi OTP hoặc chặn IP datacenter thì nguồn này lỗi. Nút "Chạy thử" ở mỗi mục kiểm tra từng nguồn mà không lưu hay chốt sổ.
+Mỗi loại hình có lịch, khung giờ và hàng đợi riêng trong Cài đặt (chạy thêm `supabase/migrations/20261014050000_automatic_sync_location_types.sql`). Giải trí là loại thứ 4, chỉ có Google Maps và Tripadvisor (chạy `supabase/migrations/20261014070000_entertainment_location_type.sql`). Cafe và Mart 24h đồng bộ Google Maps, Tripadvisor và GrabFood; GrabFood dùng tài khoản merchant lưu cho từng cơ sở (cần `GRAB_CREDENTIALS_KEY` trên Vercel), tự đăng nhập mỗi lần chạy vì Vercel không giữ phiên; nếu Grab đòi OTP hoặc chặn IP datacenter thì nguồn này lỗi. Nút "Chạy thử" ở mỗi mục kiểm tra từng nguồn mà không lưu hay chốt sổ.
 
 ## Đồng bộ khách sạn tự động trên Vercel
 

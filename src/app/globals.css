@@ -172,6 +172,7 @@ tbody tr:hover { background: #fbfcfe; }
 .location-icon.hotel { color: #a87332; background: #fbf2e5; }
 .location-icon.cafe { color: #b56942; background: #fcf0e9; }
 .location-icon.mart { color: #616ab5; background: #eff0fc; }
+.location-icon.entertainment { color: #2f8a6b; background: #e8f6f0; }
 .location-name { display: grid; min-width: 0; gap: 2px; }
 .location-name strong { overflow: hidden; max-width: 235px; color: #344b69; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .location-name small { display: flex; align-items: center; gap: 3px; color: #9ba7b5; font-size: 9px; }
@@ -179,6 +180,7 @@ tbody tr:hover { background: #fbfcfe; }
 .type-chip.hotel { color: #986a31; background: #fbf3e8; }
 .type-chip.cafe { color: #a96648; background: #fbf0eb; }
 .type-chip.mart { color: #656db0; background: #f0f1fc; }
+.type-chip.entertainment { color: #2f7d63; background: #e9f6f0; }
 .score-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; font-size: 10px; font-weight: 700; }
 .rating-cell-content { display: grid; justify-items: start; gap: 5px; }
 .tripadvisor-rank-label { max-width: 240px; color: #71809a; font-size: 10px; line-height: 1.35; }
@@ -216,7 +218,7 @@ tbody tr:hover { background: #fbfcfe; }
 .modal-header p { margin: 0; color: #8795a8; font-size: 10px; }
 .modal-error { padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #f2d3d0; border-radius: 8px; background: #fff5f3; color: #9f4139; font-size: 10px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 19px 23px 14px; }
-.location-links-grid:is([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="agoda"], [data-link-platform="booking"], [data-link-platform="tripcom"], [data-link-platform="expedia"], [data-link-platform="traveloka"]),
+.location-links-grid:is([data-location-type="cafe"], [data-location-type="mart"], [data-location-type="entertainment"]) :is([data-link-platform="agoda"], [data-link-platform="booking"], [data-link-platform="tripcom"], [data-link-platform="expedia"], [data-link-platform="traveloka"]),
 .location-links-grid:not([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="grabfood"], [data-link-platform="shopeefood"]),
 .location-links-grid[data-location-type="mart"] [data-link-platform="shopeefood"] { display: none; }
 .field { display: grid; align-content: start; gap: 6px; color: #586b84; font-size: 10px; font-weight: 700; }
@@ -816,3 +818,56 @@ tbody tr:hover { background: #fbfcfe; }
 .notification-item.read .notification-body strong { font-weight: 500; }
 .notification-body small { color: #586b84; font-size: 12px; overflow-wrap: anywhere; }
 .notification-body time { color: #98a4b2; font-size: 11px; }
+
+/* Header có thêm ô Thời gian: cho phép xuống dòng thay vì tràn khi màn hình hẹp */
+.dashboard-topbar { flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 8px; }
+.location-picker.range-picker { min-width: 170px; flex: 0 0 auto; }
+.dashboard-topbar .location-picker:not(.type-picker):not(.range-picker) { min-width: min(300px,35vw); }
+@media (max-width: 600px) { .location-picker.range-picker { min-width: 0; } }
+
+/* Tổng quan: bảng điểm các cơ sở cùng loại */
+.scoreboard { margin-bottom: 28px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 2px 5px #1b2b450a; }
+.scoreboard-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.scoreboard-head h2 { margin: 6px 0 3px; color: #233a5a; font: 750 18px 'Manrope',sans-serif; }
+.scoreboard-head p { margin: 0; color: #6d7f9a; font-size: 12px; }
+.scoreboard-sort { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid #e0e7f0; border-radius: 8px; color: #6d7f9a; font-size: 11px; }
+.scoreboard-sort select { border: 0; outline: 0; background: transparent; color: #354a67; font: 600 12px 'Inter',sans-serif; }
+.scoreboard-empty { margin: 0; padding: 22px 0; color: #8795a8; font-size: 13px; text-align: center; }
+.scoreboard-highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.scoreboard .highlight { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #edf0f4; border-radius: 10px; background: #fbfcfe; }
+.scoreboard .highlight small { display: block; color: #8795a8; font-size: 11px; }
+.scoreboard .highlight strong { display: block; color: #233a5a; font-size: 13px; }
+.scoreboard .highlight em { color: #586b84; font-size: 12px; font-style: normal; }
+.scoreboard .tone { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 8px; }
+.scoreboard .tone.good { color: #247b5b; background: #e8f6f0; }
+.scoreboard .tone.warn { color: #b7791f; background: #fdf3e1; }
+.scoreboard .tone.bad { color: #c0392b; background: #fdecea; }
+.scoreboard-scroll { overflow-x: auto; }
+.scoreboard table { width: 100%; min-width: 720px; border-collapse: collapse; }
+.scoreboard th, .scoreboard td { padding: 10px 12px; border-top: 1px solid #edf0f4; text-align: left; vertical-align: middle; font-size: 13px; }
+.scoreboard thead th { border-top: 0; color: #6d7f9a; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.scoreboard tbody th { min-width: 180px; font-weight: 500; }
+.scoreboard tbody th button { display: block; padding: 0; border: 0; background: none; color: #233a5a; font: 700 13px 'Inter',sans-serif; text-align: left; cursor: pointer; }
+.scoreboard tbody th button:hover { color: #285ca9; text-decoration: underline; }
+.scoreboard tbody th small { display: block; margin-top: 2px; color: #98a4b2; font-size: 11px; }
+.scoreboard tr.selected > * { background: #f2f6ff; }
+.scoreboard .cell { display: grid; gap: 2px; }
+.scoreboard .cell small { color: #8795a8; font-size: 11px; white-space: nowrap; }
+.scoreboard .score { font-size: 15px; font-weight: 700; }
+.scoreboard .score.good { color: #247b5b; }
+.scoreboard .score.warn { color: #b7791f; }
+.scoreboard .score.bad { color: #c0392b; }
+.scoreboard .muted { color: #a3adba; }
+.scoreboard .delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
+.scoreboard .delta.up { color: #247b5b; }
+.scoreboard .delta.down { color: #c0392b; }
+.scoreboard .delta.flat { color: #8795a8; font-weight: 500; }
+.scoreboard .age { color: #586b84; font-size: 12px; white-space: nowrap; }
+.scoreboard .age.stale { color: #b7791f; font-weight: 700; }
+
+/* Chi tiết cơ sở: thanh tab chung cho Hôm nay / Xu hướng / Bảng số liệu / Xếp hạng Tripadvisor */
+.detail-tabs { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.detail-tabs a { flex: 0 0 auto; padding: 10px 16px; border-bottom: 2px solid transparent; color: #6d7f9a; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.detail-tabs a:hover { color: #285ca9; }
+.detail-tabs a[aria-current="page"] { border-bottom-color: #285ca9; color: #285ca9; }
+.detail-tabs a:focus-visible { outline: 2px solid #3568c8; outline-offset: -2px; }

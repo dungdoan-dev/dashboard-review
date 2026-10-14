@@ -48,12 +48,13 @@ export async function scrape(platform: Platform, id: string, name: string, url: 
 }
 
 // ---- Cafe / Mart 24h: thêm GrabFood (tài khoản merchant lưu trong database) ----
-export type SyncType = "hotel" | "cafe" | "mart";
+export type SyncType = "hotel" | "cafe" | "mart" | "entertainment";
 export type SyncPlatform = AnyPlatform;
 export const syncPlatforms: Record<SyncType, SyncPlatform[]> = {
   hotel: hotelPlatforms,
   cafe: ["google", "tripadvisor", "grabfood"],
   mart: ["google", "tripadvisor", "grabfood"],
+  entertainment: ["google", "tripadvisor"],
 };
 export type SyncSource = { platform: SyncPlatform; url: string };
 

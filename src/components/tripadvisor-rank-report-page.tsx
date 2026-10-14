@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, LoaderCircle, Medal } from "lucide-react";
+import { LoaderCircle, Medal } from "lucide-react";
 import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -16,22 +16,18 @@ export type TripadvisorRankReportRow = {
   reviewCount: number | null;
 };
 
-type RankRange = "all" | "30" | "90" | "365";
-
 type Props = {
   locationName: string | null;
   rows: TripadvisorRankReportRow[];
   loading: boolean;
   error: string;
-  range: RankRange;
-  onRangeChange: (range: RankRange) => void;
 };
 
 const countText = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const dateText = (value: string, options: Intl.DateTimeFormatOptions) =>
   new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { ...options, timeZone: "UTC" });
 
-export default function TripadvisorRankReportPage({ locationName, rows, loading, error, range, onRangeChange }: Props) {
+export default function TripadvisorRankReportPage({ locationName, rows, loading, error }: Props) {
   const chartRows = useMemo(() => rows
     .filter((row) => row.position != null)
     .map((row) => ({ date: row.date, position: row.position as number, rankLabel: row.rankLabel })), [rows]);
@@ -48,13 +44,6 @@ export default function TripadvisorRankReportPage({ locationName, rows, loading,
         <h1 id="tripadvisor-rank-title">Xếp hạng Tripadvisor</h1>
         <p>Lịch sử thứ hạng, điểm sao và lượt đánh giá đã chốt của {locationName ?? "chi nhánh đang chọn"}.</p>
       </div>
-      <label className="analytics-range-picker">
-        <CalendarDays size={15} /><span>Khoảng thời gian</span>
-        <select value={range} onChange={(event) => onRangeChange(event.target.value as RankRange)} aria-label="Chọn khoảng thời gian xếp hạng">
-          <option value="all">Toàn bộ dữ liệu</option><option value="30">30 ngày gần nhất</option>
-          <option value="90">90 ngày gần nhất</option><option value="365">365 ngày gần nhất</option>
-        </select>
-      </label>
     </header>
     {loading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải lịch sử xếp hạng…</div>
       : error ? <div className="timeline-panel timeline-empty timeline-error">Không tải được lịch sử: {error}</div>

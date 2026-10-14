@@ -14,6 +14,7 @@ export type LocationType =
   | "hotel"
   | "cafe"
   | "mart"
+  | "entertainment"
   | "restaurant"
   | "resort"
   | "homestay"

@@ -8,14 +8,14 @@ create table if not exists public.locations (
   owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 160),
   area text not null default '' check (char_length(area) <= 180),
-  type text not null default 'hotel' check (type in ('hotel', 'cafe', 'mart', 'restaurant', 'resort', 'homestay', 'other')),
+  type text not null default 'hotel' check (type in ('hotel', 'cafe', 'mart', 'restaurant', 'resort', 'homestay', 'other', 'entertainment')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.locations drop constraint if exists locations_type_check;
 alter table public.locations add constraint locations_type_check
-  check (type in ('hotel', 'cafe', 'mart', 'restaurant', 'resort', 'homestay', 'other'));
+  check (type in ('hotel', 'cafe', 'mart', 'restaurant', 'resort', 'homestay', 'other', 'entertainment'));
 
 create table if not exists public.location_platforms (
   location_id uuid not null references public.locations(id) on delete cascade,
@@ -234,7 +234,7 @@ grant usage, select on sequence public.daily_report_snapshots_id_seq to authenti
 -- Automatic daily hotel sync.
 create table if not exists public.automatic_sync_settings (
   owner_id uuid not null references auth.users(id) on delete cascade,
-  location_type text not null default 'hotel' check (location_type in ('hotel', 'cafe', 'mart')),
+  location_type text not null default 'hotel' check (location_type in ('hotel', 'cafe', 'mart', 'entertainment')),
   enabled boolean not null default false,
   run_hour smallint not null default 2 check (run_hour between 0 and 23),
   location_ids uuid[] not null default '{}',
@@ -276,7 +276,7 @@ create or replace function public.save_automatic_sync_settings(
 declare v_owner uuid := auth.uid();
 begin
   if v_owner is null then raise exception 'Authentication required'; end if;
-  if p_location_type is null or p_location_type not in ('hotel', 'cafe', 'mart') then
+  if p_location_type is null or p_location_type not in ('hotel', 'cafe', 'mart', 'entertainment') then
     raise exception 'Invalid location type';
   end if;
   if p_run_hour is null or p_run_hour < 0 or p_run_hour > 23 then

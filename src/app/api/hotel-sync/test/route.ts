@@ -5,7 +5,7 @@ import { listSources, syncSource, type SyncType } from "@/lib/hotel-sync";
 
 export const maxDuration = 300;
 
-// Chạy thử đồng bộ cho một cơ sở (khách sạn, cafe hoặc mart): cào từng nguồn như cron nhưng KHÔNG lưu snapshot và KHÔNG chốt sổ.
+// Chạy thử đồng bộ cho một cơ sở (khách sạn, cafe, mart hoặc giải trí): cào từng nguồn như cron nhưng KHÔNG lưu snapshot và KHÔNG chốt sổ.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const locationId = typeof body.locationId === "string" ? body.locationId : "";
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (!auth.user) return NextResponse.json({ message: "Chưa đăng nhập." }, { status: 401 });
   // RLS: chỉ trả về cơ sở thuộc tài khoản đang đăng nhập.
   const { data: location } = await supabase.from("locations").select("id,name,type").eq("id", locationId).maybeSingle();
-  if (!location || !["hotel", "cafe", "mart"].includes(location.type)) return NextResponse.json({ message: "Không tìm thấy cơ sở." }, { status: 404 });
+  if (!location || !["hotel", "cafe", "mart", "entertainment"].includes(location.type)) return NextResponse.json({ message: "Không tìm thấy cơ sở." }, { status: 404 });
 
   // Tài khoản Grab chỉ đọc được bằng service role; quyền sở hữu đã kiểm tra ở trên.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
