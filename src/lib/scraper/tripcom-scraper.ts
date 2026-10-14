@@ -1,5 +1,6 @@
 import { type Browser } from "puppeteer";
 import { launchBrowser } from "./launch-browser";
+import { fetchTripcomViaZenRows } from "./tripcom-zenrows";
 
 export interface TripcomTarget {
   id: string;
@@ -302,6 +303,16 @@ export async function runTripcomScraper(
     timeout = PAGE_TIMEOUT,
     onProgress,
   } = options;
+
+  // Trip.com chuyển Chrome từ IP datacenter (Vercel) sang trang đăng nhập; ZenRows có proxy và trình duyệt phù hợp.
+  const zenrowsKey = process.env.ZENROWS_API_KEY?.trim();
+  if (zenrowsKey) {
+    const results: TripcomResult[] = [];
+    for (const target of targets) results.push(await fetchTripcomViaZenRows(target, zenrowsKey));
+    const successCount = results.filter((r) => r.success).length;
+    return { success: successCount > 0, totalTargets: targets.length, successCount, results };
+  }
+
 
   console.log(
     `\n🚀 Khởi chạy cào Trip.com cho ${targets.length} cơ sở... (headless: ${headless})`,

@@ -137,7 +137,13 @@ export async function runTravelokaScraper(targets: TravelokaTarget[]) {
 
   const results: TravelokaResult[] = [];
   for (const target of targets) {
-    results.push(await scrapeTravelokaTarget(target, apiToken));
+    let result = await scrapeTravelokaTarget(target, apiToken);
+    // Actor Apify thỉnh thoảng sập (HTTP 400 run-failed) rồi chạy lại là được: thử thêm một lần.
+    if (!result.success && result.status && result.status >= 400 && result.status !== 401) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      result = await scrapeTravelokaTarget(target, apiToken);
+    }
+    results.push(result);
   }
   return {
     success: results.some((result) => result.success),
