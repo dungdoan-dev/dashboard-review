@@ -15,7 +15,7 @@ const typeText: Record<SyncLocationType, { title: string; noun: string }> = {
 type Run = { location_id: string; report_date: string; status: string; message: string | null; started_at: string };
 
 type TestResult = { name: string; allOk: boolean; results: Array<{ platform: string; ok: boolean; rating?: number | null; count?: number | null; rank?: string | null; error?: string; seconds: number }> };
-const sourceLabels: Record<string, string> = { google: "Google Maps", tripadvisor: "Tripadvisor", agoda: "Agoda", booking: "Booking.com", expedia: "Expedia", tripcom: "Trip.com", traveloka: "Traveloka" };
+const sourceLabels: Record<string, string> = { google: "Google Maps", tripadvisor: "Tripadvisor", agoda: "Agoda", booking: "Booking.com", expedia: "Expedia", tripcom: "Trip.com", traveloka: "Traveloka", grabfood: "GrabFood" };
 
 export function AutomaticSyncSettings({ userId, locations, locationType = "hotel" }: { userId: string | null; locations: LocationRecord[]; locationType?: SyncLocationType }) {
   const { title, noun } = typeText[locationType];
