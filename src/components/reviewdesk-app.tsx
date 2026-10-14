@@ -42,6 +42,7 @@ import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
 import { PlatformBrandLogo } from "@/components/platform-brand-logo";
 import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
+import { NotificationBell } from "@/components/notification-bell";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
   LocationInput,
@@ -1548,6 +1549,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <div className="topbar-title"><span className="topbar-overline">{isComparePage ? "SO SÁNH BÁO CÁO" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "BÁO CÁO THEO NGÀY" : isReportPage ? "DASHBOARD THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : "DASHBOARD OVERVIEW"}</span><strong>{isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {!isComparePage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label><label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label></>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
+          {supabaseConfigured && <NotificationBell userId={user?.id ?? null} />}
         </header>
         <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isComparePage ? "compare-reports-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
           {!supabaseConfigured && <div className="demo-banner"><span className="demo-spark"><Database size={16} /></span><div><strong>Đang xem dữ liệu mẫu</strong><span>Kết nối Supabase để lưu dữ liệu riêng cho tài khoản của bạn.</span></div><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Cách kết nối <ArrowUpRight size={14} /></a></div>}

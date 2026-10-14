@@ -12,6 +12,8 @@ Chạy `supabase/migrations/20261014010000_tripadvisor_notice.sql` trong Supabas
 
 ## Đồng bộ tự động trên Vercel (Khách sạn, Cafe, Mart 24h)
 
+Quy tắc chốt sổ: nguồn nào lấy và lưu số liệu thành công thì được chốt sổ ngay; nguồn lỗi bị bỏ qua, lần chạy đó ghi trạng thái "chốt một phần" (hoặc "lỗi" nếu không nguồn nào thành công) và mỗi lỗi được báo vào chuông thông báo trên header (bảng `notifications`, giữ 30 ngày; lỗi khi cào thủ công cũng được ghi vào đây). Chạy thêm `supabase/migrations/20261014060000_notifications_and_partial_sync.sql`.
+
 Mỗi loại hình có lịch, khung giờ và hàng đợi riêng trong Cài đặt (chạy thêm `supabase/migrations/20261014050000_automatic_sync_location_types.sql`). Cafe và Mart 24h đồng bộ Google Maps, Tripadvisor và GrabFood; GrabFood dùng tài khoản merchant lưu cho từng cơ sở (cần `GRAB_CREDENTIALS_KEY` trên Vercel), tự đăng nhập mỗi lần chạy vì Vercel không giữ phiên; nếu Grab đòi OTP hoặc chặn IP datacenter thì nguồn này lỗi. Nút "Chạy thử" ở mỗi mục kiểm tra từng nguồn mà không lưu hay chốt sổ.
 
 ## Đồng bộ khách sạn tự động trên Vercel
@@ -20,7 +22,7 @@ Mỗi loại hình có lịch, khung giờ và hàng đợi riêng trong Cài đ
 2. Trong Vercel Project Settings → Environment Variables, đặt `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` và `CRON_SECRET` (chuỗi ngẫu nhiên ít nhất 16 ký tự). Giữ service role key và cron secret ở phía server; không thêm tiền tố `NEXT_PUBLIC_` cho chúng. Thêm các API key scraper đang dùng nếu cần.
 3. Deploy lại lên Vercel. `vercel.json` tạo 24 cron hằng ngày, mỗi cron phụ trách một khung giờ Việt Nam. Trong Cài đặt, bật lịch, chọn khung giờ và sắp xếp các khách sạn trong hàng đợi.
 
-Cron chạy theo giờ Việt Nam và xử lý từng cơ sở theo thứ tự. Khi mọi nguồn đã kết nối của một khách sạn lấy và lưu số liệu thành công, hệ thống chốt báo cáo ngày đó. Nếu nguồn lỗi, trạng thái lỗi xuất hiện trong Cài đặt và khách sạn đó không được chốt tự động. Một lần chạy Vercel có giới hạn tối đa 5 phút; nếu hàng đợi dài, các cơ sở còn lại được tiếp tục ở lần cron kế tiếp trong cùng ngày. Trên Vercel Hobby, cron có thể gọi bất kỳ lúc nào trong khung giờ đã chọn, không bảo đảm đúng phút đầu giờ.
+Cron chạy theo giờ Việt Nam và xử lý từng cơ sở theo thứ tự. Mỗi nguồn lấy và lưu số liệu thành công thì được chốt báo cáo ngày ngay; nguồn lỗi không chặn các nguồn khác, xuất hiện trong "Lần chạy gần đây" ở Cài đặt và trong chuông thông báo. Mỗi cơ sở chỉ được thử một lần mỗi ngày, nên nguồn lỗi cần được cập nhật và chốt thủ công nếu muốn có số liệu hôm đó. Một lần chạy Vercel có giới hạn tối đa 5 phút; nếu hàng đợi dài, các cơ sở còn lại được tiếp tục ở lần cron kế tiếp trong cùng ngày. Trên Vercel Hobby, cron có thể gọi bất kỳ lúc nào trong khung giờ đã chọn, không bảo đảm đúng phút đầu giờ.
 
 Dashboard Next.js để quản lý nhiều cơ sở, xem điểm sao và số lượng đánh giá Google Maps / Tripadvisor / Agoda / Booking.com / Trip.com / Expedia / Traveloka, lưu lịch sử snapshot và xuất CSV.
 

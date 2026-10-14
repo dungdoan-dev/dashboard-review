@@ -10,7 +10,7 @@ import { runGrabfoodScraper, type GrabfoodTarget } from "@/lib/scraper/grabfood-
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/grab-credentials";
-import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
+import { DEFAULT_RATING_SCALE, PLATFORM_LABELS } from "@/lib/platforms";
 import type { Platform } from "@/lib/types";
 
 // Mutex cờ tránh cào đồng thời nhiều phiên
@@ -512,6 +512,13 @@ export async function POST(request: NextRequest) {
 
     const successfulResults = allResults.filter((r) => r.success);
     const failedResults = allResults.filter((r) => !r.success);
+    // Báo lỗi vào chuông thông báo (bỏ qua nếu không ghi được: thông báo chỉ là phụ).
+    if (supabase && user && failedResults.length) {
+      await supabase.from("notifications").insert(failedResults.map((result) => ({
+        owner_id: user.id, location_id: result.id, source: "crawl", level: "error", platform: result.platform,
+        title: `${result.name} · ${PLATFORM_LABELS[result.platform]} lỗi`, message: (result.error ?? "Không tìm thấy số liệu").slice(0, 1000),
+      })));
+    }
     const failureSummary = failedResults
       .map((result) => `${result.name}: ${result.error ?? "không tìm thấy số liệu"}`)
       .join("; ");

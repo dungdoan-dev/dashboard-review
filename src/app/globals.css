@@ -791,3 +791,28 @@ tbody tr:hover { background: #fbfcfe; }
 .automatic-sync-test-result .fail > span:first-child { color: #9f4139; font-weight: 700; }
 .automatic-sync-test-result .fail > span:last-child { color: #9f4139; text-align: right; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .automatic-sync-test-result > div { flex-direction: column; gap: 2px; } .automatic-sync-test-result .fail > span:last-child { text-align: left; } }
+
+/* Chuông thông báo ở header */
+.notification-bell { position: relative; flex: 0 0 auto; }
+.notification-trigger { position: relative; width: 38px; height: 38px; }
+.notification-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #d64545; color: #fff; font-size: 10px; font-weight: 700; line-height: 18px; text-align: center; }
+.notification-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(380px, calc(100vw - 28px)); max-height: min(520px, 70vh); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 12px 32px #172b4a26; overflow: hidden; }
+.notification-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #edf0f4; }
+.notification-panel-head > div { display: flex; align-items: center; gap: 8px; }
+.notification-link { border: 0; background: none; color: #285ca9; font-size: 12px; font-weight: 600; cursor: pointer; }
+.notification-link:disabled { color: #a3adba; cursor: default; }
+.notification-empty { margin: 0; padding: 28px 14px; color: #8795a8; font-size: 13px; text-align: center; }
+.notification-list { margin: 0; padding: 0; list-style: none; overflow-y: auto; }
+.notification-item + .notification-item { border-top: 1px solid #f0f3f7; }
+.notification-item > button { display: flex; width: 100%; gap: 10px; padding: 11px 14px; border: 0; background: none; text-align: left; cursor: pointer; }
+.notification-item.unread > button { background: #f5f8ff; }
+.notification-item > button:hover { background: #eef3fc; }
+.notification-icon { flex: 0 0 auto; margin-top: 1px; }
+.notification-item.error .notification-icon { color: #c0392b; }
+.notification-item.warning .notification-icon { color: #b7791f; }
+.notification-item.info .notification-icon { color: #285ca9; }
+.notification-body { display: grid; gap: 3px; min-width: 0; }
+.notification-body strong { color: #233a5a; font-size: 13px; }
+.notification-item.read .notification-body strong { font-weight: 500; }
+.notification-body small { color: #586b84; font-size: 12px; overflow-wrap: anywhere; }
+.notification-body time { color: #98a4b2; font-size: 11px; }

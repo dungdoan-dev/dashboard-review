@@ -1,8 +1,19 @@
-import { createClient } from "@supabase/supabase-js";
-import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { DEFAULT_RATING_SCALE, PLATFORM_LABELS } from "@/lib/platforms";
 import { listSources, syncSource, type SyncType } from "@/lib/hotel-sync";
 
 export const maxDuration = 300;
+
+type Notice = { level: "error" | "warning" | "info"; platform: string | null; title: string; message: string };
+
+// Thông báo là phụ: lỗi khi ghi thông báo không được làm hỏng đồng bộ.
+async function notify(db: SupabaseClient, ownerId: string, locationId: string, notices: Notice[]) {
+  if (!notices.length) return;
+  await db.from("notifications").insert(notices.map((notice) => ({
+    owner_id: ownerId, location_id: locationId, source: "auto-sync", level: notice.level, platform: notice.platform,
+    title: notice.title.slice(0, 200), message: notice.message.slice(0, 1000),
+  })));
+}
 
 function vietnamTime() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -29,6 +40,9 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
     .select("owner_id,location_type,run_hour,location_ids").eq("enabled", true).lte("run_hour", now.hour).order("run_hour");
   if (settingsError) return Response.json({ error: settingsError.message }, { status: 500 });
 
+  // Giữ thông báo 30 ngày.
+  await db.from("notifications").delete().lt("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+
   const deadline = Date.now() + 240_000;
   let completed = 0;
   let failed = 0;
@@ -38,7 +52,7 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
       if (vietnamTime().date !== now.date) return Response.json({ completed, failed, remaining: true });
       const { data: previous } = await db.from("automatic_sync_runs").select("id,status,started_at")
         .eq("owner_id", setting.owner_id).eq("location_id", locationId).eq("report_date", now.date).maybeSingle();
-      if (previous?.status === "success" || previous?.status === "failed") continue;
+      if (previous && previous.status !== "running") continue; // đã chạy hôm nay (success, partial hoặc failed)
       const { data: location, error: locationError } = await db.from("locations").select("id,name,type,owner_id")
         .eq("id", locationId).eq("owner_id", setting.owner_id).eq("type", setting.location_type).maybeSingle();
       if (locationError) return Response.json({ error: locationError.message, completed, failed }, { status: 500 });
@@ -64,11 +78,16 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
         if (!sources.length) throw new Error("Cơ sở chưa có nguồn đồng bộ.");
         const metrics = [];
         const reports = [];
+        const errors: { platform: string; message: string }[] = [];
         for (const source of sources) {
           const platform = source.platform;
-          const result = await syncSource(db, source, location);
+          // Một nguồn lỗi không chặn các nguồn khác: nguồn thành công vẫn được lưu và chốt sổ.
+          const result = await syncSource(db, source, location).catch((cause): { success: false; ratingValue: null; count: null; error: string } => ({
+            success: false, ratingValue: null, count: null, error: cause instanceof Error ? cause.message : String(cause),
+          }));
           if (!result || !result.success || (result.ratingValue == null && result.count == null)) {
-            throw new Error(`${platform}: ${result?.error ?? "không lấy được số liệu"}`);
+            errors.push({ platform, message: result?.error ?? "không lấy được số liệu" });
+            continue;
           }
           const base = {
             location_id: location.id, platform, rating_scale: DEFAULT_RATING_SCALE[platform],
@@ -81,15 +100,26 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
           reports.push({ ...base, report_date: now.date, finalized_at: new Date().toISOString(), finalized_by: setting.owner_id });
         }
         if (vietnamTime().date !== now.date) throw new Error("Lần đồng bộ vượt qua ngày mới; chưa chốt sổ.");
-        const { error: metricError } = await db.from("metric_snapshots").insert(metrics);
-        if (metricError) throw metricError;
-        const { error: reportError } = await db.from("daily_report_snapshots").upsert(reports, { onConflict: "location_id,platform,report_date" });
-        if (reportError) throw reportError;
-        await db.from("automatic_sync_runs").update({ status: "success", message: `${reports.length} nguồn đã chốt sổ`, finished_at: new Date().toISOString() }).eq("id", runId);
-        completed++;
+        if (metrics.length) {
+          const { error: metricError } = await db.from("metric_snapshots").insert(metrics);
+          if (metricError) throw metricError;
+          const { error: reportError } = await db.from("daily_report_snapshots").upsert(reports, { onConflict: "location_id,platform,report_date" });
+          if (reportError) throw reportError;
+        }
+        const status = !metrics.length ? "failed" : errors.length ? "partial" : "success";
+        const summary = [
+          metrics.length ? `${metrics.length} nguồn đã chốt sổ` : "Không nguồn nào lấy được số liệu",
+          ...(errors.length ? [`lỗi: ${errors.map((item) => `${item.platform}: ${item.message}`).join("; ")}`] : []),
+        ].join(" · ");
+        await db.from("automatic_sync_runs").update({ status, message: summary.slice(0, 500), finished_at: new Date().toISOString() }).eq("id", runId);
+        await notify(db, setting.owner_id, location.id, errors.map((item) => ({
+          level: "error", platform: item.platform, title: `${location.name} · ${PLATFORM_LABELS[item.platform as keyof typeof PLATFORM_LABELS] ?? item.platform} lỗi`, message: item.message,
+        })));
+        if (status === "success") completed++; else failed++;
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         await db.from("automatic_sync_runs").update({ status: "failed", message: message.slice(0, 500), finished_at: new Date().toISOString() }).eq("id", runId);
+        await notify(db, setting.owner_id, location.id, [{ level: "error", platform: null, title: `${location.name} · đồng bộ tự động thất bại`, message }]);
         failed++;
       }
     }

@@ -40,3 +40,14 @@ export function getPlatformUrl(
 ): string {
   return value[PLATFORM_URL_FIELDS[platform]] ?? "";
 }
+
+export const PLATFORM_LABELS: Record<Platform, string> = {
+  google: "Google Maps",
+  tripadvisor: "Tripadvisor",
+  agoda: "Agoda",
+  booking: "Booking.com",
+  tripcom: "Trip.com",
+  expedia: "Expedia",
+  traveloka: "Traveloka",
+  grabfood: "GrabFood",
+};
