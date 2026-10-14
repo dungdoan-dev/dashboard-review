@@ -31,6 +31,7 @@ export const DEFAULT_RATING_SCALE: Record<Platform, 5 | 10> = {
   expedia: 10,
   tripcom: 10,
   traveloka: 10,
+  grabfood: 5,
 };
 
 export function getPlatformUrl(

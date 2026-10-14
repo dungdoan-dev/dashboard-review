@@ -37,11 +37,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
+import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
 import { PlatformBrandLogo } from "@/components/platform-brand-logo";
 import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
+import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
   LocationInput,
   LocationLinkPlatform,
@@ -55,8 +56,8 @@ import type { User } from "@supabase/supabase-js";
 
 const typeLabels: Record<LocationType, string> = {
   hotel: "Khách sạn",
-  cafe: "Cà phê & F&B",
-  mart: "Cửa hàng",
+  cafe: "Cafe",
+  mart: "Mart 24h",
   restaurant: "Nhà hàng",
   resort: "Khu nghỉ dưỡng",
   homestay: "Homestay",
@@ -71,9 +72,21 @@ const platformLabels: Record<Platform, string> = {
   tripcom: "Trip.com",
   expedia: "Expedia",
   traveloka: "Traveloka",
+  grabfood: "GrabFood",
 };
 
-const reportPlatformOrder: Platform[] = ["google", "booking", "tripadvisor", "tripcom", "agoda", "expedia", "traveloka"];
+type LocationFilterType = "hotel" | "cafe" | "mart";
+const filterTypeOptions: Array<[LocationFilterType, string]> = [["hotel", "Khách sạn"], ["cafe", "Cafe"], ["mart", "Mart 24h"]];
+// Nền tảng của từng loại hình; Cafe và Mart 24h dùng chung bộ nguồn.
+const typePlatformOrder: Record<LocationFilterType, Platform[]> = {
+  hotel: ["google", "booking", "tripadvisor", "tripcom", "agoda", "expedia", "traveloka"],
+  cafe: ["google", "tripadvisor", "grabfood"],
+  mart: ["google", "tripadvisor", "grabfood"],
+};
+const allReportPlatforms: Platform[] = [...typePlatformOrder.hotel, "grabfood"];
+function filterTypeOf(type: LocationType): LocationFilterType {
+  return type === "cafe" || type === "restaurant" ? "cafe" : type === "mart" || type === "other" ? "mart" : "hotel";
+}
 const reportPlatformColors: Record<Platform, string> = {
   google: "#4285f4",
   tripadvisor: "#168a68",
@@ -82,6 +95,7 @@ const reportPlatformColors: Record<Platform, string> = {
   expedia: "#e7a52a",
   tripcom: "#1494a3",
   traveloka: "#168fd0",
+  grabfood: "#00b14f",
 };
 
 const demoExpediaUrl = "https://www.expedia.com.vn/Da-Nang-Khach-San-YZISTEL.h113589597.Thong-tin-khach-san?chkin=2025-04-11&chkout=2025-04-13&x_pwa=1&rfrr=HSR&pwa_ts=1743476005040&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20udm4vSG90ZWwtU2VhcmNo&useRewards=false&rm1=a2&regionId=6034264&destination=H%E1%BB%99i+An%2C+Qu%E1%BA%A3ng+Nam+%28t%E1%BB%89nh%29%2C+Vi%C3%AA%CC%A3t+Nam&destType=MARKET&neighborhoodId=553248633981701234&selected=113589597&latLong=15.87749%2C108.331009&sort=RECOMMENDED&top_dp=881834&top_cur=VND&userIntent=&selectedRoomType=326233694&selectedRatePlan=400456848&searchId=9b6c19c5-5039-4499-b679-4849b8fd28a4";
@@ -141,6 +155,7 @@ type DailyReportSnapshot = {
   reviewCount: number | null;
   countLabel: string;
   tripadvisorRank?: string | null;
+  tripadvisorNotice?: string | null;
   reportDate: string;
   finalizedAt: string;
 };
@@ -186,6 +201,7 @@ function metricFromRow(row: Record<string, unknown>): Metric {
     countLabel: String(row.count_label ?? "đánh giá"),
     capturedAt: String(row.captured_at),
     tripadvisorRank: row.tripadvisor_rank == null ? null : String(row.tripadvisor_rank),
+    tripadvisorNotice: row.tripadvisor_notice == null ? null : String(row.tripadvisor_notice),
   };
 }
 
@@ -206,6 +222,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [selectedType, setSelectedType] = useState<LocationFilterType>("hotel");
+  const reportPlatformOrder = typePlatformOrder[selectedType];
   const [comparisonSelectedIds, setComparisonSelectedIds] = useState<string[] | null>(null);
   const [appliedComparisonIds, setAppliedComparisonIds] = useState<string[] | null>(null);
   const [timelineSnapshots, setTimelineSnapshots] = useState<DailyReportSnapshot[]>([]);
@@ -214,6 +232,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [timelineError, setTimelineError] = useState("");
   const [timelineRefresh, setTimelineRefresh] = useState(0);
   const [dailyReportRange, setDailyReportRange] = useState<"all" | "30" | "90" | "365">("30");
+  const [compareRange, setCompareRange] = useState<"7" | "30" | "90" | "365" | "all">("7");
+  const historyRange = isComparePage ? compareRange : dailyReportRange;
   const [historicalReportPreview, setHistoricalReportPreview] = useState<HistoricalReportPreview | null>(null);
   const [readingHistoricalFile, setReadingHistoricalFile] = useState(false);
   const [importingHistoricalRows, setImportingHistoricalRows] = useState(false);
@@ -223,6 +243,13 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [modal, setModal] = useState<"location" | "snapshot" | null>(null);
   const [snapshotPlatform, setSnapshotPlatform] = useState<Platform>("google");
   const [editing, setEditing] = useState<LocationRecord | null>(null);
+  const [grabAccount, setGrabAccount] = useState({ username: "", hasPassword: false });
+  const editingId = editing?.id;
+  useEffect(() => {
+    setGrabAccount({ username: "", hasPassword: false });
+    if (modal !== "location" || !editingId || !supabaseConfigured) return;
+    void fetch(`/api/grab-account?locationId=${editingId}`).then((res) => (res.ok ? res.json() : null)).then((data) => { if (data) setGrabAccount(data); }).catch(() => {});
+  }, [modal, editingId, supabaseConfigured]);
   const [locationFormType, setLocationFormType] = useState<LocationType>("hotel");
   const [saving, setSaving] = useState(false);
   const [crawling, setCrawling] = useState(false);
@@ -232,7 +259,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [activeSection, setActiveSection] = useState("overview");
   const [formDraft, setFormDraft] = useState<FormDraft | null>(null);
   const [reportScale, setReportScale] = useState<5 | 10>(5);
-  const [reportPlatforms, setReportPlatforms] = useState<Platform[]>(reportPlatformOrder);
+  const [reportPlatforms, setReportPlatforms] = useState<Platform[]>(allReportPlatforms);
+  const [dailyReportPlatformFilter, setDailyReportPlatformFilter] = useState<Platform[] | null>(null);
   const [reportSettingsReady, setReportSettingsReady] = useState(false);
   const reportSettingsKey = `reviewdesk-report-settings-${user?.id ?? "demo"}`;
   const locationSelectionStorageKey = `reviewdesk-selected-location-${user?.id ?? "demo"}`;
@@ -241,15 +269,23 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     if (!locations.length) return;
     try {
       const savedLocationId = window.localStorage.getItem(locationSelectionStorageKey);
+      const savedLocation = locations.find((location) => location.id === savedLocationId);
       if (savedLocationId === "all-hotels" && isDailyAnalyticsPage && locations.some((location) => location.type === "hotel")) {
         setSelectedLocationId("all-hotels");
-      } else if (savedLocationId && locations.some((location) => location.id === savedLocationId)) {
-        setSelectedLocationId((current) => current && locations.some((location) => location.id === current) ? current : savedLocationId);
+        setSelectedType("hotel");
+      } else if (savedLocation) {
+        setSelectedLocationId((current) => current && locations.some((location) => location.id === current) ? current : savedLocationId!);
       }
     } catch {
       // Keep the default branch selected if browser storage is unavailable.
     }
   }, [locations, locationSelectionStorageKey, isDailyAnalyticsPage]);
+
+  // Giữ bộ lọc loại hình khớp với cơ sở đang chọn (ví dụ khi khôi phục lựa chọn đã lưu).
+  useEffect(() => {
+    const selected = locations.find((location) => location.id === selectedLocationId);
+    if (selected) setSelectedType(filterTypeOf(selected.type));
+  }, [locations, selectedLocationId]);
 
   useEffect(() => {
     if (!selectedLocationId || (selectedLocationId === "all-hotels"
@@ -371,7 +407,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
   function openLocationModal(location?: LocationRecord) {
     setEditing(location ?? null);
-    setLocationFormType(location?.type ?? "hotel");
+    setLocationFormType(location?.type ?? selectedType);
     setModal("location");
   }
 
@@ -398,7 +434,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           Promise.all([
             needsLiveMetrics ? supabase
               .from("latest_metric_snapshots")
-              .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,captured_at")
+              .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,tripadvisor_notice,captured_at")
               .in("location_id", ids) : Promise.resolve({ data: [], error: null }),
             needsPlatformLinks ? supabase.from("location_platforms").select("location_id,platform,url").in("location_id", ids) : Promise.resolve({ data: [], error: null }),
           ]),
@@ -419,7 +455,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       const latest = new Map<string, Record<Platform, Metric | null>>();
       for (const row of snapshots) {
         const current = latest.get(String(row.location_id)) ?? {
-          google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null,
+          google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null, grabfood: null,
         };
         const platformName = String(row.platform);
         if (platformName in current) {
@@ -439,7 +475,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         (rows ?? []).map((row) => {
           const locationLinks = links.get(row.id) ?? {};
           const metrics = latest.get(row.id) ?? {
-            google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null,
+            google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null, grabfood: null,
           };
           const urlFields = Object.fromEntries(
             (Object.keys(PLATFORM_URL_FIELDS) as LocationLinkPlatform[]).map((platform) => [
@@ -483,7 +519,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       )
         .then(({ data: authData, error: authError }) => {
           if (!active) return;
-          if (authError) setError(authError.message);
+          // Chưa đăng nhập là trạng thái bình thường, không phải lỗi.
+          if (authError && authError.name !== "AuthSessionMissingError") setError(authError.message);
           setUser((current) => current?.id === authData.user?.id ? current : authData.user);
         })
         .catch((authError: unknown) => {
@@ -525,8 +562,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         if (parsed.scale === 5 || parsed.scale === 10) setReportScale(parsed.scale);
         if (Array.isArray(parsed.platforms)) {
           const selected = parsed.platforms.filter((platform): platform is Platform =>
-            typeof platform === "string" && reportPlatformOrder.includes(platform as Platform),
+            typeof platform === "string" && allReportPlatforms.includes(platform as Platform),
           );
+          // Bản lưu cũ (chưa có v) không biết GrabFood: bật mặc định để Cafe có dữ liệu.
+          if ((parsed as { v?: number }).v !== 2 && !selected.includes("grabfood")) selected.push("grabfood");
           if (selected.length) setReportPlatforms(selected);
         }
       }
@@ -539,7 +578,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   useEffect(() => {
     if (!reportSettingsReady) return;
     try {
-      window.localStorage.setItem(reportSettingsKey, JSON.stringify({ scale: reportScale, platforms: reportPlatforms }));
+      window.localStorage.setItem(reportSettingsKey, JSON.stringify({ v: 2, scale: reportScale, platforms: reportPlatforms }));
     } catch {
       // Keep the current session usable if preferences cannot be saved.
     }
@@ -553,21 +592,46 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [modal]);
 
-  const allHotelsSelected = isDailyAnalyticsPage && selectedLocationId === "all-hotels";
+  const allHotelsSelected = isDailyAnalyticsPage && selectedType === "hotel" && selectedLocationId === "all-hotels";
+  const typeLocations = useMemo(() => locations.filter((location) => filterTypeOf(location.type) === selectedType), [locations, selectedType]);
   const hotelLocations = useMemo(() => locations.filter((location) => location.type === "hotel"), [locations]);
   const comparisonLocations = useMemo(() => isComparePage
-    ? locations.filter((location) => appliedComparisonIds === null || appliedComparisonIds.includes(location.id))
-    : hotelLocations, [isComparePage, locations, appliedComparisonIds, hotelLocations]);
-  const draftComparisonLocations = locations.filter((location) => comparisonSelectedIds === null || comparisonSelectedIds.includes(location.id));
+    ? typeLocations.filter((location) => appliedComparisonIds === null || appliedComparisonIds.includes(location.id))
+    : hotelLocations, [isComparePage, typeLocations, appliedComparisonIds, hotelLocations]);
+  const draftComparisonLocations = typeLocations.filter((location) => comparisonSelectedIds === null || comparisonSelectedIds.includes(location.id));
   const comparisonMode = allHotelsSelected || isComparePage;
-  const dashboardLocation = useMemo(() => locations.find((location) => location.id === selectedLocationId) ?? locations[0] ?? null, [locations, selectedLocationId]);
+  const dashboardLocation = useMemo(() => typeLocations.find((location) => location.id === selectedLocationId) ?? typeLocations[0] ?? null, [typeLocations, selectedLocationId]);
   const timelineMode = !isReportDataPage ? "hidden" : supabaseConfigured ? "supabase" : "demo";
   const branchLocations = dashboardLocation ? [dashboardLocation] : [];
   const branchFinalizablePlatforms = reportPlatformOrder.filter((platform) => {
     const metric = dashboardLocation?.[platform];
     return metric != null && (metric.rating != null || metric.reviewCount != null);
   });
-  const selectedReportPlatforms = useMemo(() => reportPlatformOrder.filter((platform) => reportPlatforms.includes(platform)), [reportPlatforms]);
+  function changeLocationType(type: LocationFilterType) {
+    setSelectedType(type);
+    setSelectedLocationId(locations.find((location) => filterTypeOf(location.type) === type)?.id ?? "");
+    setComparisonSelectedIds(null);
+    setAppliedComparisonIds(null);
+  }
+
+  const isOverviewPage = !isReportDataPage && !isSettingsPage;
+  const selectedReportPlatforms = useMemo(() => {
+    const chosen = reportPlatformOrder.filter((platform) => (isReportPage || isOverviewPage ? dailyReportPlatformFilter ?? reportPlatforms : reportPlatforms).includes(platform));
+    return chosen.length ? chosen : reportPlatformOrder; // loại hình chưa chọn nguồn nào: dùng toàn bộ nguồn của loại đó
+  }, [isReportPage, isOverviewPage, dailyReportPlatformFilter, reportPlatforms, reportPlatformOrder]);
+
+  const platformFilter = (
+    <fieldset className="analytics-source-filter daily-report-source-filter overview-source-filter"><legend>Nền tảng</legend><div className="analytics-source-options">
+      <button type="button" className={`analytics-source-chip ${selectedReportPlatforms.length === reportPlatformOrder.length ? "active" : ""}`} aria-pressed={selectedReportPlatforms.length === reportPlatformOrder.length} onClick={() => setDailyReportPlatformFilter(reportPlatformOrder)}>Tất cả nguồn</button>
+      {reportPlatformOrder.map((platform) => <label className={`analytics-source-chip ${selectedReportPlatforms.includes(platform) ? "active" : ""}`} key={platform}>
+        <input type="checkbox" checked={selectedReportPlatforms.includes(platform)} onChange={() => setDailyReportPlatformFilter((current) => {
+          const selected = current ?? reportPlatforms;
+          if (selected.includes(platform)) return selected.length > 1 ? selected.filter((item) => item !== platform) : selected;
+          return reportPlatformOrder.filter((item) => selected.includes(item) || item === platform);
+        })} /><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}
+      </label>)}
+    </div></fieldset>
+  );
 
   const reportData = useMemo(() => {
     const selectedPlatforms = selectedReportPlatforms;
@@ -632,7 +696,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     }
     let active = true;
     const scopeIds = (comparisonMode ? comparisonLocations.map((location) => location.id) : [dashboardLocation!.id]).sort();
-    const cacheKey = JSON.stringify([user.id, scopeIds, dailyReportRange, timelineRefresh]);
+    const cacheKey = JSON.stringify([user.id, scopeIds, historyRange, timelineRefresh]);
     const cachedResult = timelineCache.current.get(cacheKey);
     if (cachedResult && Date.now() - cachedResult.loadedAt < 60_000) {
       setTimelineSnapshots(cachedResult.rows);
@@ -649,15 +713,15 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       const supabase = createClient();
       const locationIds = scopeIds;
       let startDate: string | null = null;
-      if (dailyReportRange !== "all") {
+      if (historyRange !== "all") {
         const firstDay = new Date(`${reportDateInVietnam()}T00:00:00Z`);
-        firstDay.setUTCDate(firstDay.getUTCDate() - Number(dailyReportRange) + 1);
+        firstDay.setUTCDate(firstDay.getUTCDate() - Number(historyRange) + 1);
         startDate = firstDay.toISOString().slice(0, 10);
       }
       for (let offset = 0; active; offset += pageSize) {
         let baseQuery = supabase
           .from("daily_report_snapshots")
-          .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,report_date,finalized_at")
+          .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,tripadvisor_notice,report_date,finalized_at")
           .order("report_date", { ascending: false })
           .order("id", { ascending: false });
         if (startDate) baseQuery = baseQuery.gte("report_date", startDate);
@@ -679,6 +743,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           reviewCount: row.review_count == null ? null : Number(row.review_count),
           countLabel: String(row.count_label ?? "đánh giá"),
           tripadvisorRank: row.tripadvisor_rank == null ? null : String(row.tripadvisor_rank),
+          tripadvisorNotice: row.tripadvisor_notice == null ? null : String(row.tripadvisor_notice),
           reportDate: String(row.report_date),
           finalizedAt: String(row.finalized_at),
       }));
@@ -693,7 +758,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       if (active) setTimelineLoading(false);
     });
     return () => { active = false; };
-  }, [timelineMode, user, dashboardLocation, comparisonMode, comparisonLocations, dailyReportRange, timelineRefresh]);
+  }, [timelineMode, user, dashboardLocation, comparisonMode, comparisonLocations, historyRange, timelineRefresh]);
 
   const timelineRows = useMemo(() => {
     const grouped = new Map<string, Partial<Record<Platform, DailyReportSnapshot>>>();
@@ -722,16 +787,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     const comparisonIds = new Set(comparisonLocations.map((location) => location.id));
     const grouped = new Map<string, Map<string, DailyReportSnapshot[]>>();
     for (const snapshot of timelineSnapshots) {
-      if (!comparisonIds.has(snapshot.locationId) || !reportPlatforms.includes(snapshot.platform)) continue;
+      if (!comparisonIds.has(snapshot.locationId) || !selectedReportPlatforms.includes(snapshot.platform)) continue;
       const byHotel = grouped.get(snapshot.reportDate) ?? new Map<string, DailyReportSnapshot[]>();
       byHotel.set(snapshot.locationId, [...(byHotel.get(snapshot.locationId) ?? []), snapshot]);
       grouped.set(snapshot.reportDate, byHotel);
     }
     const dates = [...grouped.keys()].sort();
     const latestDate = dates.at(-1);
-    const startDate = latestDate && dailyReportRange !== "all"
+    const startDate = latestDate && historyRange !== "all"
       ? new Date(`${latestDate}T00:00:00Z`) : null;
-    if (startDate) startDate.setUTCDate(startDate.getUTCDate() - Number(dailyReportRange) + 1);
+    if (startDate) startDate.setUTCDate(startDate.getUTCDate() - Number(historyRange) + 1);
     const scoreRows: Record<string, string | number | null>[] = [];
     const reviewRows: Record<string, string | number | null>[] = [];
     for (const date of dates.filter((date) => !startDate || date >= startDate.toISOString().slice(0, 10))) {
@@ -748,18 +813,20 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       if (comparisonLocations.some((location) => reviewRow[location.id] != null)) reviewRows.push(reviewRow);
     }
     return { scoreRows, reviewRows };
-  }, [comparisonMode, comparisonLocations, timelineSnapshots, reportPlatforms, reportScale, dailyReportRange]);
+  }, [comparisonMode, comparisonLocations, timelineSnapshots, selectedReportPlatforms, reportScale, historyRange]);
 
   const tripadvisorRankRows = useMemo<TripadvisorRankReportRow[]>(() => dailyAnalyticsRows.flatMap((row) => {
     const metric = row.metrics.tripadvisor;
-    if (!metric?.tripadvisorRank) return [];
-    const match = metric.tripadvisorRank.match(/Số\s*#?\s*([\d.,]+)\s+(?:trên|trong)\s+([\d.,]+)(?:\s+(.+))?/i)
-      ?? metric.tripadvisorRank.match(/#?([\d.,]+)\s*\/\s*([\d.,]+)(?:\s+(.+))?/i);
+    if (!metric?.tripadvisorRank && !metric?.tripadvisorNotice) return [];
+    const rankLabel = metric.tripadvisorRank ?? "";
+    const match = rankLabel.match(/Số\s*#?\s*([\d.,]+)\s+(?:trên|trong)\s+([\d.,]+)(?:\s+(.+))?/i)
+      ?? rankLabel.match(/#?([\d.,]+)\s*\/\s*([\d.,]+)(?:\s+(.+))?/i);
     const position = match ? Number(match[1].replace(/[.,]/g, "")) : null;
     const total = match ? Number(match[2].replace(/[.,]/g, "")) : null;
     return [{
       date: row.date,
-      rankLabel: metric.tripadvisorRank,
+      rankLabel,
+      tripadvisorNotice: metric.tripadvisorNotice ?? null,
       position: position != null && Number.isFinite(position) ? position : null,
       total: total != null && Number.isFinite(total) ? total : null,
       category: match?.[3]?.trim() ?? null,
@@ -917,7 +984,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     setError("");
     if (!supabaseConfigured) {
       if (editing) setLocations((items) => items.map((item) => item.id === editing.id ? { ...item, ...input } : item));
-      else setLocations((items) => [{ id: crypto.randomUUID(), ...input, google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null }, ...items]);
+      else setLocations((items) => [{ id: crypto.randomUUID(), ...input, google: null, tripadvisor: null, agoda: null, booking: null, tripcom: null, expedia: null, traveloka: null, grabfood: null }, ...items]);
       setNotice(editing ? "Đã cập nhật cơ sở trong bản demo." : "Đã thêm cơ sở trong bản demo.");
     } else {
       const supabase = createClient();
@@ -941,6 +1008,19 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         setError(`Location saved, but platform links could not be saved: ${linksError.message}`);
         setSaving(false);
         return;
+      }
+      if (filterTypeOf(input.type) !== "hotel" || grabAccount.username) {
+        const grabResponse = await fetch("/api/grab-account", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locationId: result.data.id, username: String(form.get("grabUser") ?? ""), password: String(form.get("grabPassword") ?? "") }),
+        }).catch(() => null);
+        if (!grabResponse?.ok) {
+          setError(`Đã lưu cơ sở nhưng chưa lưu được tài khoản Grab: ${(await grabResponse?.json().catch(() => null))?.message ?? "lỗi mạng"}`);
+          setSaving(false);
+          await loadLocations();
+          return;
+        }
       }
       closeModal();
       setEditing(null);
@@ -1054,6 +1134,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           review_count: metric.reviewCount,
           count_label: metric.countLabel,
           tripadvisor_rank: platform === "tripadvisor" ? metric.tripadvisorRank ?? null : null,
+          tripadvisor_notice: platform === "tripadvisor" ? metric.tripadvisorNotice ?? null : null,
           finalized_at: finalizedAt,
           finalized_by: user.id,
         }, { onConflict: "location_id,platform,report_date" });
@@ -1069,6 +1150,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           reviewCount: metric.reviewCount,
           countLabel: metric.countLabel,
           tripadvisorRank: platform === "tripadvisor" ? metric.tripadvisorRank ?? null : null,
+          tripadvisorNotice: platform === "tripadvisor" ? metric.tripadvisorNotice ?? null : null,
           reportDate,
           finalizedAt,
         };
@@ -1102,6 +1184,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         reviewCount: metric.reviewCount,
         countLabel: metric.countLabel,
         tripadvisorRank: platform === "tripadvisor" ? metric.tripadvisorRank ?? null : null,
+        tripadvisorNotice: platform === "tripadvisor" ? metric.tripadvisorNotice ?? null : null,
         reportDate,
         finalizedAt,
       }];
@@ -1121,6 +1204,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             review_count: row.reviewCount,
             count_label: row.countLabel,
             tripadvisor_rank: row.platform === "tripadvisor" ? row.tripadvisorRank ?? null : null,
+            tripadvisor_notice: row.platform === "tripadvisor" ? row.tripadvisorNotice ?? null : null,
             finalized_at: row.finalizedAt,
             finalized_by: user.id,
           })),
@@ -1191,6 +1275,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       .filter((l) => l.travelokaUrl && l.travelokaUrl.trim().startsWith("https://"))
       .map((l) => ({ id: l.id, name: l.name, travelokaUrl: l.travelokaUrl ?? "" }));
 
+    const grabfoodTargetsToCrawl = (
+      targetLocationId ? locations.filter((l) => l.id === targetLocationId) : locations
+    )
+      .filter((l) => filterTypeOf(l.type) !== "hotel")
+      .map((l) => ({ id: l.id, name: l.name }));
+
     if (platform === "google" && googleTargetsToCrawl.length === 0) {
       setError(
         targetLocationId
@@ -1246,6 +1336,11 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       return;
     }
 
+    if (platform === "grabfood" && grabfoodTargetsToCrawl.length === 0) {
+      setError(targetLocationId ? "Chỉ cơ sở Cafe và Mart 24h mới lấy được dữ liệu GrabFood." : "Chưa có cơ sở Cafe hoặc Mart 24h nào.");
+      return;
+    }
+
     if (
       platform === "all" &&
       googleTargetsToCrawl.length === 0 &&
@@ -1254,7 +1349,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       bookingTargetsToCrawl.length === 0 &&
       tripcomTargetsToCrawl.length === 0 &&
       expediaTargetsToCrawl.length === 0 &&
-      travelokaTargetsToCrawl.length === 0
+      travelokaTargetsToCrawl.length === 0 &&
+      grabfoodTargetsToCrawl.length === 0
     ) {
       setError("Chưa có cơ sở nào có liên kết để cào dữ liệu.");
       return;
@@ -1305,7 +1401,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               reviewCount: item.count,
               countLabel: item.platform === "expedia" ? "nhận xét" : "đánh giá",
               capturedAt: item.capturedAt,
-              ...(item.platform === "tripadvisor" ? { tripadvisorRank: item.rankLabel ?? null } : {}),
+              ...(item.platform === "tripadvisor" ? { tripadvisorRank: item.rankLabel ?? null, tripadvisorNotice: item.tripadvisorNotice ?? null } : {}),
             };
 
             if (item.platform === "google") {
@@ -1322,6 +1418,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               updated[idx] = { ...updated[idx], expedia: metric };
             } else if (item.platform === "traveloka") {
               updated[idx] = { ...updated[idx], traveloka: metric };
+            } else if (item.platform === "grabfood") {
+              updated[idx] = { ...updated[idx], grabfood: metric };
             }
           }
           return updated;
@@ -1359,6 +1457,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         ["tripcom", "Trip.com"],
         ["expedia", "Expedia"],
         ["traveloka", "Traveloka"],
+        ["grabfood", "GrabFood"],
       ] as const) {
         const metric = location[platform];
         if (metric) rows.push([location.name, location.area, typeLabels[location.type], label, metric.rating ?? "", metric.ratingScale,  metric.reviewCount ?? "", metric.countLabel, metric.capturedAt]);
@@ -1447,7 +1546,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
           <div className="topbar-title"><span className="topbar-overline">{isComparePage ? "SO SÁNH BÁO CÁO" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "BÁO CÁO THEO NGÀY" : isReportPage ? "DASHBOARD THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : "DASHBOARD OVERVIEW"}</span><strong>{isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
-          {!isComparePage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn cơ sở</option>{isDailyAnalyticsPage && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}
+          {!isComparePage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label><label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label></>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
         </header>
         <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isComparePage ? "compare-reports-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
@@ -1468,6 +1567,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </section>
 
 
+
+          {platformFilter}
 
           <section className="report-dashboard" aria-labelledby="report-dashboard-title">
             <header className="report-dashboard-head">
@@ -1517,7 +1618,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <header className="timeline-heading">
               <div><div className="section-kicker"><span className="live-mark" /> BÁO CÁO ĐÃ CHỐT</div><h2 id="timeline-title">Báo cáo theo ngày</h2><p>Số điểm và lượt đánh giá đã chốt, lưu riêng theo từng chi nhánh.</p></div>
               <div className="daily-report-controls">
-                <label className="daily-report-location-picker"><Building2 size={15} /><span>Chi nhánh</span><select aria-label="Chọn chi nhánh để xem báo cáo" value={dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn chi nhánh</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={14} /></label>
+                <label className="daily-report-location-picker"><Building2 size={15} /><span>Chi nhánh</span><select aria-label="Chọn chi nhánh để xem báo cáo" value={dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>Chọn chi nhánh</option>{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={14} /></label>
                 <label className="daily-report-location-picker"><CalendarDays size={15} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian dữ liệu đã chốt" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={14} /></label>
                 <span className="timeline-count">{timelineRows.length} ngày đã chốt</span>
                 <label className="button button-outline report-import-trigger">
@@ -1527,6 +1628,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 </label>
               </div>
             </header>
+            {platformFilter}
             {historicalReportPreview && historicalReportSummary && <section className="historical-import-preview" aria-labelledby="historical-import-title">
               <header className="historical-import-heading">
                 <div><div className="section-kicker"><Upload size={14} /> XEM TRƯỚC DỮ LIỆU</div><h3 id="historical-import-title">{historicalReportPreview.fileName}</h3><p>Sheet “{historicalReportPreview.sheetName}” · {historicalReportPreview.rows.length.toLocaleString("vi-VN")} snapshot</p></div>
@@ -1687,15 +1789,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </section>}
 
           {isComparePage && <section className="compare-reports-page" aria-labelledby="compare-reports-title">
-            <header className="daily-analytics-heading"><div><div className="section-kicker"><TrendingUp size={14} /> ĐỐI CHIẾU DỮ LIỆU ĐÃ CHỐT</div><h1 id="compare-reports-title">So sánh các báo cáo</h1><p>Đối chiếu điểm và số lượt đánh giá theo ngày giữa các cơ sở trên cùng nguồn dữ liệu.</p></div>
-              <label className="analytics-range-picker"><CalendarDays size={15} /><span>Khoảng thời gian</span><select value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)} aria-label="Chọn khoảng thời gian so sánh"><option value="all">Toàn bộ dữ liệu</option><option value="30">30 ngày gần nhất</option><option value="90">90 ngày gần nhất</option><option value="365">365 ngày gần nhất</option></select></label>
+            <header className="daily-analytics-heading"><div><div className="section-kicker"><TrendingUp size={14} /> ĐỐI CHIẾU DỮ LIỆU ĐÃ CHỐT</div><h1 id="compare-reports-title">So sánh các báo cáo</h1><p>Đối chiếu điểm và số lượt đánh giá theo ngày giữa các cơ sở cùng loại, trên cùng nguồn dữ liệu.</p></div>
+              <label className="analytics-range-picker"><Store size={15} /><span>Loại cơ sở</span><select value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)} aria-label="Chọn loại cơ sở để so sánh">{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select></label>
+              <label className="analytics-range-picker"><CalendarDays size={15} /><span>Khoảng thời gian</span><select value={compareRange} onChange={(event) => setCompareRange(event.target.value as typeof compareRange)} aria-label="Chọn khoảng thời gian so sánh"><option value="7">7 ngày gần nhất</option><option value="all">Toàn bộ dữ liệu</option><option value="30">30 ngày gần nhất</option><option value="90">90 ngày gần nhất</option><option value="365">365 ngày gần nhất</option></select></label>
             </header>
-            <fieldset className="analytics-source-filter"><legend>Cơ sở so sánh</legend><div className="analytics-source-options">
+            <fieldset className="analytics-source-filter"><legend>Cơ sở so sánh · {filterTypeOptions.find(([type]) => type === selectedType)?.[1]}</legend><div className="analytics-source-options">
               <button type="button" className={`analytics-source-chip ${comparisonSelectedIds === null ? "active" : ""}`} aria-pressed={comparisonSelectedIds === null} onClick={() => setComparisonSelectedIds(null)}>Tất cả cơ sở</button>
-              {locations.map((location) => <label className={`analytics-source-chip ${draftComparisonLocations.some((item) => item.id === location.id) ? "active" : ""}`} key={location.id}><input type="checkbox" checked={draftComparisonLocations.some((item) => item.id === location.id)} onChange={() => setComparisonSelectedIds((current) => {
-                const selected = current ?? locations.map((item) => item.id);
+              {typeLocations.map((location) => <label className={`analytics-source-chip ${draftComparisonLocations.some((item) => item.id === location.id) ? "active" : ""}`} key={location.id}><input type="checkbox" checked={draftComparisonLocations.some((item) => item.id === location.id)} onChange={() => setComparisonSelectedIds((current) => {
+                const selected = current ?? typeLocations.map((item) => item.id);
                 if (selected.includes(location.id)) return selected.length > 1 ? selected.filter((id) => id !== location.id) : selected;
-                return locations.filter((item) => selected.includes(item.id) || item.id === location.id).map((item) => item.id);
+                return typeLocations.filter((item) => selected.includes(item.id) || item.id === location.id).map((item) => item.id);
               })} />{location.name}</label>)}
               <button type="button" className="button button-primary" onClick={() => setAppliedComparisonIds(comparisonSelectedIds)}>Áp dụng cơ sở</button>
             </div></fieldset>
@@ -1707,6 +1810,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{reportPlatforms.length} nguồn đang chọn</span></div>
               {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
               {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              <DailyComparisonChanges locations={comparisonLocations} scoreRows={hotelComparisonData.scoreRows} reviewRows={hotelComparisonData.reviewRows} snapshots={timelineSnapshots} platforms={selectedReportPlatforms} ratingScale={reportScale} />
               <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><div className="compare-table-scroll"><table><thead><tr><th>Cơ sở</th><th>Điểm / {reportScale}</th><th>Ngày chốt điểm</th><th>Lượt đánh giá</th><th>Ngày chốt lượt</th></tr></thead><tbody>{comparisonLocations.map((location) => {
                 const scoreRow = [...hotelComparisonData.scoreRows].reverse().find((row) => row[location.id] != null);
                 const reviewRow = [...hotelComparisonData.reviewRows].reverse().find((row) => row[location.id] != null);
@@ -1722,7 +1826,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <div className="insight-copy"><div className="section-kicker"><span className="live-mark" /> KẾT QUẢ THEO CƠ SỞ</div><h2>{dashboardLocation ? dashboardLocation.name : "Chưa chọn cơ sở"}</h2><p>Điểm được chuẩn hóa về thang {reportScale}; lượt đánh giá hiển thị riêng cho từng nền tảng.</p></div>
             <div className="platform-summary">{reportData.selectedPlatforms.map((platform) => {
               const platformClass = platform === "google" ? "google-logo" : platform === "tripadvisor" ? "trip-logo" : `${platform}-logo`;
-              const logoText = platform === "google" ? "G" : platform === "tripadvisor" ? "T" : platform === "booking" ? "B" : platform === "tripcom" ? "TC" : platform === "expedia" ? "E" : platform === "traveloka" ? "T" : "A";
+              const logoText = platform === "google" ? "G" : platform === "tripadvisor" ? "T" : platform === "booking" ? "B" : platform === "tripcom" ? "TC" : platform === "expedia" ? "E" : platform === "traveloka" ? "T" : platform === "grabfood" ? "Gr" : "A";
               const metric = dashboardLocation?.[platform];
               const score = metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale;
               return <div className="platform-item" key={platform}><span className={`platform-logo ${platformClass}`}>{logoText}</span><div><strong>{platformLabels[platform]}</strong><small>{metric?.reviewCount == null ? "Chưa có lượt đánh giá" : `${moneyless(metric.reviewCount)} ${metric.countLabel}`}</small></div><span className="platform-value">{score == null ? "—" : score.toFixed(1).replace(".", ",")}<small> / {reportScale}</small></span></div>;
@@ -1731,37 +1835,31 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </section>
 
         <section className="locations-section" id="locations">
-            <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Các bảng bên dưới chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
-            {(["google", "tripadvisor", "agoda", "booking", "tripcom", "expedia", "traveloka"] as const).map((platform) => {
+            <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Mỗi thẻ là một nền tảng, chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
+            <div className="platform-detail-grid">
+            {(["google", "tripadvisor", "agoda", "booking", "tripcom", "expedia", "traveloka", "grabfood"] as const).filter((platform) => selectedReportPlatforms.includes(platform)).map((platform) => {
               const platformLabel = platformLabels[platform];
               const metricKey = platform;
               const crawlIcon = <RefreshCw size={15} strokeWidth={1.8} />;
               const isScale10 = ["agoda", "booking", "tripcom", "expedia", "traveloka"].includes(platform);
               return <section className={`platform-table-section ${platform}`} key={platform} aria-labelledby={`${platform}-table-title`}>
                 <header className="platform-table-heading"><div className={`platform-logo brand-logo ${platform}`}><PlatformBrandLogo platform={platform} /></div><div><h3 id={`${platform}-table-title`}>{platformLabel}</h3><p>{branchLocations.length} chi nhánh đang xem</p></div><div className="platform-table-actions"><button className="button button-outline" onClick={() => { setSnapshotPlatform(platform); setModal("snapshot"); }} disabled={!dashboardLocation}><Plus size={15} />Nhập số liệu</button><button className="button button-outline finalize-button" onClick={() => void finalizeDailySnapshot(platform)} disabled={!dashboardLocation || !dashboardLocation[platform] || finalizingPlatform !== null || finalizingAll || crawling}>{finalizingPlatform === platform ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}Chốt hôm nay</button><button className="button button-outline" onClick={() => dashboardLocation && void triggerCrawl(platform, dashboardLocation.id)} disabled={crawling || !dashboardLocation}>{crawling && crawlingPlatform === platform && crawlingTargetId === dashboardLocation?.id ? <LoaderCircle size={15} className="spin" /> : crawlIcon}Cập nhật {platformLabel}</button></div></header>
-                <div className="table-panel"><div className="table-scroll"><table><thead><tr><th className="location-column">CƠ SỞ</th><th>LOẠI HÌNH</th><th>ĐIỂM {isScale10 ? "(THANG 10)" : "(THANG 5)"}</th>{platform === "tripadvisor" && <th>Xếp hạng</th>}<th>ĐÁNH GIÁ</th><th>CẬP NHẬT</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>
-                  {branchLocations.map((location) => {
-                    const metric = location[metricKey] ?? null;
-                    const sourceUrl =
-                      platform === "google"
-                        ? location.googleUrl
-                        : platform === "tripadvisor"
-                          ? location.tripadvisorUrl
-                          : platform === "agoda"
-                            ? location.agodaUrl
-                            : platform === "booking"
-                              ? location.bookingUrl
-                              : platform === "tripcom"
-                                ? location.tripcomUrl
-                                : platform === "expedia"
-                                  ? location.expediaUrl
-                                  : location.travelokaUrl;
-                    return <tr key={location.id}><td><div className="location-cell"><span className={`location-icon ${location.type}`}>{location.type === "hotel" ? <Building2 size={17} /> : location.type === "cafe" ? <Utensils size={17} /> : <Store size={17} />}</span><span className="location-name"><strong>{location.name}</strong><small><MapPin size={12} />{location.area || "Chưa có khu vực"}</small></span></div></td><td><span className={`type-chip ${location.type}`}>{typeLabels[location.type]}</span></td><td><RatingCell metric={metric} platform={platform} /></td>{platform === "tripadvisor" && <td className="tripadvisor-rank-cell">{metric?.tripadvisorRank || "—"}</td>}<td><ReviewCountCell metric={metric} /></td><td><span className="updated-time">{metric?.capturedAt ? dateText.format(new Date(metric.capturedAt)) : "Chưa có dữ liệu"}</span></td><td><div className="row-actions">{sourceUrl && <button className="icon-button" onClick={() => void triggerCrawl(platform, location.id)} disabled={crawling} aria-label={`Cào dữ liệu ${platformLabel} cho ${location.name}`} title={`Cào ${platformLabel} cho cơ sở này`}>{crawling && crawlingPlatform === platform && crawlingTargetId === location.id ? <LoaderCircle size={15} className="spin" /> : crawlIcon}</button>}</div></td></tr>;
-                  })}
-                  {!branchLocations.length && <tr><td colSpan={platform === "tripadvisor" ? 7 : 6}><div className="empty-table"><span className="empty-icon"><Search size={19} /></span><strong>{loading ? "Đang tải danh sách…" : "Chưa có chi nhánh được chọn"}</strong><p>{locations.length ? "Chọn cơ sở ở thanh trên để xem dữ liệu." : "Thêm cơ sở trong Cài đặt để bắt đầu theo dõi."}</p>{!locations.length && <Link className="button button-primary" href="/settings#settings-locations"><Settings2 size={16} />Cấu hình cơ sở</Link>}</div></td></tr>}
-                </tbody></table></div><div className="table-footer"><span>Hiển thị <strong>{branchLocations.length}</strong> chi nhánh đang chọn</span><span><span className="footer-dot" />{supabaseConfigured ? "Dữ liệu theo tài khoản" : "Dữ liệu demo trong trình duyệt"}</span></div></div>
+                {branchLocations.map((location) => {
+                  const metric = location[metricKey] ?? null;
+                  const sourceUrl = getPlatformUrl(location, platform);
+                  return <dl className="platform-detail-list" key={location.id}>
+                    <div className="pd-score"><dt>Điểm {isScale10 ? "(thang 10)" : "(thang 5)"}</dt><dd><RatingCell metric={metric} platform={platform} /></dd></div>
+                    {platform === "tripadvisor" && <div><dt>Xếp hạng</dt><dd>{metric?.tripadvisorRank || "—"}</dd></div>}
+                    <div><dt>Số đánh giá</dt><dd><ReviewCountCell metric={metric} /></dd></div>
+                    <div><dt>Cập nhật</dt><dd>{metric?.capturedAt ? dateText.format(new Date(metric.capturedAt)) : "Chưa có dữ liệu"}</dd></div>
+                    {platform === "tripadvisor" && metric?.tripadvisorNotice && <div className="pd-notice"><dt>Thư từ Tripadvisor</dt><dd>{metric.tripadvisorNotice}</dd></div>}
+                    <div><dt>Nguồn</dt><dd>{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer">Mở liên kết</a> : platform === "grabfood" ? "Tài khoản merchant" : "Chưa có liên kết"}</dd></div>
+                  </dl>;
+                })}
+                {!branchLocations.length && <div className="empty-table"><span className="empty-icon"><Search size={19} /></span><strong>{loading ? "Đang tải danh sách…" : "Chưa có chi nhánh được chọn"}</strong><p>{locations.length ? "Chọn cơ sở ở thanh trên để xem dữ liệu." : "Thêm cơ sở trong Cài đặt để bắt đầu theo dõi."}</p>{!locations.length && <Link className="button button-primary" href="/settings#settings-locations"><Settings2 size={16} />Cấu hình cơ sở</Link>}</div>}
               </section>;
             })}
+            </div>
           </section>
           </>}
 
@@ -1794,6 +1892,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                     { platform: "tripcom", url: location.tripcomUrl },
                     { platform: "expedia", url: location.expediaUrl },
                     { platform: "traveloka", url: location.travelokaUrl },
+                    { platform: "grabfood", url: location.grabfoodUrl },
                   ];
                   const links = configuredLinks.filter((item): item is { platform: Platform; url: string } => Boolean(item.url));
                   return <tr key={location.id}>
@@ -1815,7 +1914,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeModal(); }}><section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header className="modal-header"><div><span className="section-kicker">{modal === "location" ? "THÔNG TIN CƠ SỞ" : `NHẬP SỐ LIỆU · ${snapshotPlatform.toUpperCase()}`}</span><h2 id="modal-title">{modal === "location" ? editing ? "Chỉnh sửa cơ sở" : "Thêm cơ sở mới" : `Ghi nhận ${platformLabels[snapshotPlatform]}`}</h2><p>{modal === "location" ? "Quản lý thông tin và liên kết các nền tảng." : `Lưu điểm và số lượng đánh giá cho ${platformLabels[snapshotPlatform]}.`}</p></div><button className="icon-button" onClick={closeModal} aria-label="Đóng hộp thoại"><X size={18} /></button></header>
         {error && <div className="modal-error" role="alert">{error}</div>}
-        {modal === "location" ? <form data-draft-modal="location" onSubmit={saveLocation} onInput={(event) => saveFormDraft(event, "location")} onChange={(event) => saveFormDraft(event, "location")}><div className="form-grid location-links-grid" data-location-type={locationFormType}><label className="field full-field">Tên cơ sở<input name="name" required maxLength={160} defaultValue={locationFormValues.name ?? editing?.name ?? ""} placeholder="Ví dụ: Mộc Nhiên Coffee Quận 1" /></label><label className="field">Khu vực / địa chỉ<input name="area" maxLength={180} defaultValue={locationFormValues.area ?? editing?.area ?? ""} placeholder="Quận 1 · TP. Hồ Chí Minh" /></label><label className="field">Loại hình<select name="type" value={locationFormType} onChange={(event) => setLocationFormType(event.target.value as LocationType)}><option value="hotel">Khách sạn</option><option value="cafe">Cà phê & F&B</option><option value="mart">Cửa hàng</option></select></label><label className="field full-field location-link-field" data-link-platform="google">Google Maps URL<input name="googleUrl" type="url" defaultValue={locationFormValues.googleUrl ?? editing?.googleUrl ?? ""} placeholder="https://maps.google.com/..." /></label><label className="field full-field location-link-field" data-link-platform="tripadvisor">Tripadvisor URL<input name="tripadvisorUrl" type="url" defaultValue={locationFormValues.tripadvisorUrl ?? editing?.tripadvisorUrl ?? ""} placeholder="https://www.tripadvisor.com/..." /></label><label className="field full-field location-link-field" data-link-platform="agoda">Agoda URL<input name="agodaUrl" type="url" defaultValue={locationFormValues.agodaUrl ?? editing?.agodaUrl ?? ""} placeholder="https://www.agoda.com/..." /></label><label className="field full-field location-link-field" data-link-platform="booking">Booking.com URL<input name="bookingUrl" type="url" defaultValue={locationFormValues.bookingUrl ?? editing?.bookingUrl ?? ""} placeholder="https://www.booking.com/hotel/..." /></label><label className="field full-field location-link-field" data-link-platform="tripcom">Trip.com URL<input name="tripcomUrl" type="url" defaultValue={locationFormValues.tripcomUrl ?? editing?.tripcomUrl ?? ""} placeholder="https://www.trip.com/hotels/detail/..." /></label><label className="field full-field location-link-field" data-link-platform="expedia">Expedia URL<input name="expediaUrl" type="url" defaultValue={locationFormValues.expediaUrl ?? editing?.expediaUrl ?? ""} placeholder="https://www.expedia.com.vn/..." /></label><label className="field full-field location-link-field" data-link-platform="traveloka">Traveloka URL<input name="travelokaUrl" type="url" defaultValue={locationFormValues.travelokaUrl ?? editing?.travelokaUrl ?? ""} placeholder="https://www.traveloka.com/vi-vn/hotel/detail?..." /></label><label className="field full-field location-link-field" data-link-platform="grabfood">GrabFood URL<input name="grabfoodUrl" type="url" defaultValue={locationFormValues.grabfoodUrl ?? editing?.grabfoodUrl ?? ""} placeholder="https://food.grab.com/..." /></label><label className="field full-field location-link-field" data-link-platform="shopeefood">ShopeeFood URL<input name="shopeefoodUrl" type="url" defaultValue={locationFormValues.shopeefoodUrl ?? editing?.shopeefoodUrl ?? ""} placeholder="https://shopeefood.vn/..." /></label></div><div className="modal-footer"><button type="button" className="button button-outline" onClick={closeModal}>Hủy</button><button className="button button-primary" disabled={saving}>{saving && <LoaderCircle size={15} className="spin" />}{editing ? "Lưu thay đổi" : "Thêm cơ sở"}</button></div></form> : <form data-draft-modal="snapshot" onSubmit={saveSnapshot} onInput={(event) => saveFormDraft(event, "snapshot")} onChange={(event) => saveFormDraft(event, "snapshot")}><input type="hidden" name="platform" value={snapshotPlatform} /><input type="hidden" name="source" value="manual" />{snapshotPlatform === "expedia" && <label className="field full-field">Nhập từ file Markdown Expedia<input type="file" accept=".md,text/markdown,text/plain" onChange={async (event) => { const file = event.currentTarget.files?.[0]; const form = event.currentTarget.form; if (!file || !form) return; try { const imported = parseExpediaMarkdown(await file.text()); (form.elements.namedItem("rating") as HTMLInputElement).value = String(imported.rating);  (form.elements.namedItem("reviewCount") as HTMLInputElement).value = String(imported.reviewCount); (form.elements.namedItem("countLabel") as HTMLInputElement).value = "nhận xét"; (form.elements.namedItem("source") as HTMLInputElement).value = "import"; const normalize = (value: string) => value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim(); const location = locations.find((item) => normalize(item.name) === normalize(imported.propertyName)); if (location) (form.elements.namedItem("locationId") as HTMLSelectElement).value = location.id; form.dispatchEvent(new Event("change", { bubbles: true })); setError(""); setNotice(`Đã đọc ${imported.rating.toFixed(1)}/10, ${moneyless(imported.reviewCount)} nhận xét${location ? ` cho ${location.name}` : ` cho ${imported.propertyName || "khách sạn"}; hãy chọn đúng cơ sở`}.`); } catch (error) { setError(error instanceof Error ? error.message : String(error)); } }} /></label>}<div className="form-grid"><label className="field full-field">Cơ sở<select name="locationId" required defaultValue={snapshotFormValues.locationId ?? dashboardLocation?.id ?? locations[0]?.id}>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label><label className="field">Điểm đánh giá<input name="rating" type="number" min="0" defaultValue={snapshotFormValues.rating ?? ""} max={DEFAULT_RATING_SCALE[snapshotPlatform]} step="0.1" placeholder={["agoda", "booking", "tripcom", "expedia", "traveloka"].includes(snapshotPlatform) ? "Ví dụ: 9.5" : "Ví dụ: 4.7"} /></label><label className="field">Số nhận xét<input name="reviewCount" type="number" min="0" defaultValue={snapshotFormValues.reviewCount ?? ""} step="1" placeholder={["agoda", "booking", "tripcom", "expedia", "traveloka"].includes(snapshotPlatform) ? "Ví dụ: 375" : "Ví dụ: 1284"} /></label><label className="field">Nhãn số lượng<input name="countLabel" defaultValue={snapshotFormValues.countLabel ?? (snapshotPlatform === "expedia" ? "nh\u1eadn x\u00e9t" : "\u0111\u00e1nh gi\u00e1")} /></label></div><p className="form-hint">Có thể để trống một chỉ số nếu nền tảng không hiển thị chỉ số đó.</p><div className="modal-footer"><button type="button" className="button button-outline" onClick={closeModal}>Hủy</button><button className="button button-primary" disabled={saving}>{saving && <LoaderCircle size={15} className="spin" />}Lưu snapshot</button></div></form>}
+        {modal === "location" ? <form data-draft-modal="location" onSubmit={saveLocation} onInput={(event) => saveFormDraft(event, "location")} onChange={(event) => saveFormDraft(event, "location")}><div className="form-grid location-links-grid" data-location-type={locationFormType}><label className="field full-field">Tên cơ sở<input name="name" required maxLength={160} defaultValue={locationFormValues.name ?? editing?.name ?? ""} placeholder="Ví dụ: Mộc Nhiên Coffee Quận 1" /></label><label className="field">Khu vực / địa chỉ<input name="area" maxLength={180} defaultValue={locationFormValues.area ?? editing?.area ?? ""} placeholder="Quận 1 · TP. Hồ Chí Minh" /></label><label className="field">Loại hình<select name="type" value={locationFormType} onChange={(event) => setLocationFormType(event.target.value as LocationType)}><option value="hotel">Khách sạn</option><option value="cafe">Cafe</option><option value="mart">Mart 24h</option></select></label><label className="field full-field location-link-field" data-link-platform="google">Google Maps URL<input name="googleUrl" type="url" defaultValue={locationFormValues.googleUrl ?? editing?.googleUrl ?? ""} placeholder="https://maps.google.com/..." /></label><label className="field full-field location-link-field" data-link-platform="tripadvisor">Tripadvisor URL<input name="tripadvisorUrl" type="url" defaultValue={locationFormValues.tripadvisorUrl ?? editing?.tripadvisorUrl ?? ""} placeholder="https://www.tripadvisor.com/..." /></label><label className="field full-field location-link-field" data-link-platform="agoda">Agoda URL<input name="agodaUrl" type="url" defaultValue={locationFormValues.agodaUrl ?? editing?.agodaUrl ?? ""} placeholder="https://www.agoda.com/..." /></label><label className="field full-field location-link-field" data-link-platform="booking">Booking.com URL<input name="bookingUrl" type="url" defaultValue={locationFormValues.bookingUrl ?? editing?.bookingUrl ?? ""} placeholder="https://www.booking.com/hotel/..." /></label><label className="field full-field location-link-field" data-link-platform="tripcom">Trip.com URL<input name="tripcomUrl" type="url" defaultValue={locationFormValues.tripcomUrl ?? editing?.tripcomUrl ?? ""} placeholder="https://www.trip.com/hotels/detail/..." /></label><label className="field full-field location-link-field" data-link-platform="expedia">Expedia URL<input name="expediaUrl" type="url" defaultValue={locationFormValues.expediaUrl ?? editing?.expediaUrl ?? ""} placeholder="https://www.expedia.com.vn/..." /></label><label className="field full-field location-link-field" data-link-platform="traveloka">Traveloka URL<input name="travelokaUrl" type="url" defaultValue={locationFormValues.travelokaUrl ?? editing?.travelokaUrl ?? ""} placeholder="https://www.traveloka.com/vi-vn/hotel/detail?..." /></label><label className="field full-field location-link-field" data-link-platform="grabfood">GrabFood URL<input name="grabfoodUrl" type="url" defaultValue={locationFormValues.grabfoodUrl ?? editing?.grabfoodUrl ?? ""} placeholder="https://food.grab.com/..." /></label><label className="field location-link-field" data-link-platform="grabfood">Tài khoản Grab merchant<input name="grabUser" autoComplete="off" maxLength={200} value={grabAccount.username} onChange={(event) => setGrabAccount((account) => ({ ...account, username: event.target.value }))} placeholder="Để trống để xóa tài khoản" /></label><label className="field location-link-field" data-link-platform="grabfood">Mật khẩu Grab<input name="grabPassword" type="password" autoComplete="new-password" maxLength={200} placeholder={grabAccount.hasPassword ? "Để trống để giữ mật khẩu cũ" : "Mật khẩu"} /></label><label className="field full-field location-link-field" data-link-platform="shopeefood">ShopeeFood URL<input name="shopeefoodUrl" type="url" defaultValue={locationFormValues.shopeefoodUrl ?? editing?.shopeefoodUrl ?? ""} placeholder="https://shopeefood.vn/..." /></label></div><div className="modal-footer"><button type="button" className="button button-outline" onClick={closeModal}>Hủy</button><button className="button button-primary" disabled={saving}>{saving && <LoaderCircle size={15} className="spin" />}{editing ? "Lưu thay đổi" : "Thêm cơ sở"}</button></div></form> : <form data-draft-modal="snapshot" onSubmit={saveSnapshot} onInput={(event) => saveFormDraft(event, "snapshot")} onChange={(event) => saveFormDraft(event, "snapshot")}><input type="hidden" name="platform" value={snapshotPlatform} /><input type="hidden" name="source" value="manual" />{snapshotPlatform === "expedia" && <label className="field full-field">Nhập từ file Markdown Expedia<input type="file" accept=".md,text/markdown,text/plain" onChange={async (event) => { const file = event.currentTarget.files?.[0]; const form = event.currentTarget.form; if (!file || !form) return; try { const imported = parseExpediaMarkdown(await file.text()); (form.elements.namedItem("rating") as HTMLInputElement).value = String(imported.rating);  (form.elements.namedItem("reviewCount") as HTMLInputElement).value = String(imported.reviewCount); (form.elements.namedItem("countLabel") as HTMLInputElement).value = "nhận xét"; (form.elements.namedItem("source") as HTMLInputElement).value = "import"; const normalize = (value: string) => value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim(); const location = locations.find((item) => normalize(item.name) === normalize(imported.propertyName)); if (location) (form.elements.namedItem("locationId") as HTMLSelectElement).value = location.id; form.dispatchEvent(new Event("change", { bubbles: true })); setError(""); setNotice(`Đã đọc ${imported.rating.toFixed(1)}/10, ${moneyless(imported.reviewCount)} nhận xét${location ? ` cho ${location.name}` : ` cho ${imported.propertyName || "khách sạn"}; hãy chọn đúng cơ sở`}.`); } catch (error) { setError(error instanceof Error ? error.message : String(error)); } }} /></label>}<div className="form-grid"><label className="field full-field">Cơ sở<select name="locationId" required defaultValue={snapshotFormValues.locationId ?? dashboardLocation?.id ?? locations[0]?.id}>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label><label className="field">Điểm đánh giá<input name="rating" type="number" min="0" defaultValue={snapshotFormValues.rating ?? ""} max={DEFAULT_RATING_SCALE[snapshotPlatform]} step="0.1" placeholder={["agoda", "booking", "tripcom", "expedia", "traveloka"].includes(snapshotPlatform) ? "Ví dụ: 9.5" : "Ví dụ: 4.7"} /></label><label className="field">Số nhận xét<input name="reviewCount" type="number" min="0" defaultValue={snapshotFormValues.reviewCount ?? ""} step="1" placeholder={["agoda", "booking", "tripcom", "expedia", "traveloka"].includes(snapshotPlatform) ? "Ví dụ: 375" : "Ví dụ: 1284"} /></label><label className="field">Nhãn số lượng<input name="countLabel" defaultValue={snapshotFormValues.countLabel ?? (snapshotPlatform === "expedia" ? "nh\u1eadn x\u00e9t" : "\u0111\u00e1nh gi\u00e1")} /></label></div><p className="form-hint">Có thể để trống một chỉ số nếu nền tảng không hiển thị chỉ số đó.</p><div className="modal-footer"><button type="button" className="button button-outline" onClick={closeModal}>Hủy</button><button className="button button-primary" disabled={saving}>{saving && <LoaderCircle size={15} className="spin" />}Lưu snapshot</button></div></form>}
       </section></div>}
     </div>
   );
@@ -1842,7 +1941,9 @@ function RatingCell({ metric, platform }: { metric: Metric | null; platform: Pla
               ? "score-tripcom"
               : platform === "expedia"
                 ? "score-expedia"
-                : "score-traveloka";
+                : platform === "traveloka"
+                  ? "score-traveloka"
+                  : "score-grabfood";
   return (
     <div className="rating-cell-content"><span className={`score-pill ${scoreClass}`}>
       <Star size={13} fill="currentColor" />{metric.rating.toFixed(1).replace(".", ",")}

@@ -1,3 +1,6 @@
+import { extractTripadvisorNotice } from "./tripadvisor-notice";
+import { decodeHtmlText, extractRankLabel } from "./tripadvisor-rank";
+
 export interface TripadvisorTarget {
   id: string;
   name: string;
@@ -14,6 +17,7 @@ export interface TripadvisorResult {
   count: number | null;
   countRaw: string | null;
   rankLabel: string | null;
+  tripadvisorNotice: string | null;
   capturedAt: string;
   success: boolean;
   error?: string;
@@ -39,18 +43,6 @@ function parseCount(value: unknown): number | null {
       ? Number(value.trim().replace(/[,\s.]/g, ""))
       : Number.NaN;
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function decodeHtmlText(value: string) {
-  return value
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number(decimal)))
-    .replace(/&#x([\da-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)));
 }
 
 function extractJsonLd(html: string): Record<string, unknown>[] {
@@ -91,25 +83,6 @@ function extractAttributeText(html: string, automationId: string): string | null
   const match = html.match(new RegExp(`<[^>]+data-automation=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/`, "i"));
   if (!match) return null;
   return decodeHtmlText(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
-}
-
-function extractRankLabel(value: string): string | null {
-  const text = decodeHtmlText(value).replace(/\s+/g, " ").trim();
-  const patterns = [
-    /Số\s*#?\s*\d[\d.,]*\s+(?:trên|trong)\s+\d[\d.,]*\s+[^|<>]{1,100}/iu,
-    /Ranked\s+#?\s*\d[\d.,]*\s+of\s+\d[\d.,]*\s+[^|<>]{1,100}/i,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const cleaned = match[0]
-      .split(/\s+(?:truy cập|gửi|gửi|send|visit|website|điện thoại|phone|call|email)\b/i)[0]
-      .replace(/\s+\+?\d[\d\s().-]{6,}$/u, "")
-      .trim()
-      .replace(/[.,;:]+$/, "");
-    if (cleaned) return cleaned;
-  }
-  return null;
 }
 
 function parseRankLabel(html: string): string | null {
@@ -177,6 +150,7 @@ function parseTripadvisorMarkdown(markdown: string) {
     count: parseCount(countText),
     countRaw: countText,
     rankLabel,
+    tripadvisorNotice: extractTripadvisorNotice(markdown),
   };
 }
 
@@ -191,6 +165,7 @@ function errorResult(target: TripadvisorTarget, error: string, status?: number):
     count: null,
     countRaw: null,
     rankLabel: null,
+    tripadvisorNotice: null,
     capturedAt: new Date().toISOString(),
     success: false,
     error,
@@ -238,6 +213,7 @@ async function scrapeTripadvisorTarget(target: TripadvisorTarget, apiKey: string
       name: target.name,
       url: response.headers.get("Zr-Final-Url") || target.tripadvisorUrl,
       ...parsed,
+      tripadvisorNotice: markdownParsed.tripadvisorNotice,
       rating: parsed.ratingValue == null ? null : parsed.ratingValue.toFixed(1).replace(".", ","),
       capturedAt: new Date().toISOString(),
       success,

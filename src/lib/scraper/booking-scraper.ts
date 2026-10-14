@@ -1,4 +1,5 @@
-import puppeteer, { type Browser } from "puppeteer";
+import { type Browser } from "puppeteer";
+import { launchBrowser } from "./launch-browser";
 
 export interface BookingTarget {
   id: string;
@@ -272,7 +273,7 @@ export async function runBookingScraper(
 
   console.log(`\n🚀 Khởi chạy cào Booking cho ${targets.length} cơ sở... (headless: ${headless})`);
 
-  const browser = await puppeteer.launch({
+  const browser = await launchBrowser({
     headless: headless,
     args: [
       "--no-sandbox",

@@ -5,9 +5,10 @@ export type Platform =
   | "booking"
   | "expedia"
   | "tripcom"
-  | "traveloka";
+  | "traveloka"
+  | "grabfood";
 
-export type LocationLinkPlatform = Platform | "grabfood" | "shopeefood";
+export type LocationLinkPlatform = Platform | "shopeefood";
 
 export type LocationType =
   | "hotel"
@@ -25,6 +26,7 @@ export type Metric = {
   countLabel: string;
   capturedAt: string;
   tripadvisorRank?: string | null;
+  tripadvisorNotice?: string | null;
 };
 
 export type LocationRecord = {
@@ -48,6 +50,7 @@ export type LocationRecord = {
   tripcom: Metric | null;
   expedia?: Metric | null;
   traveloka?: Metric | null;
+  grabfood?: Metric | null;
 };
 
 export type LocationInput = Pick<

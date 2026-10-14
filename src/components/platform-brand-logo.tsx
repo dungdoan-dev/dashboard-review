@@ -42,6 +42,11 @@ export function PlatformBrandLogo({ platform }: { platform: Platform }) {
       return <svg viewBox="0 0 24 24" aria-hidden="true">
         <path fill="#1686d9" d="M21.9 3.1c-.2-.8-1-1.2-1.8-.9L2.5 8.6c-1.2.4-1.3 2.1-.1 2.7l6.2 2.9 2.9 6.2c.6 1.2 2.3 1.1 2.7-.1l6.4-17.2ZM10.1 13.9l8-7.8-5.6 10.8-2.4-3Z" />
       </svg>;
+    case "grabfood":
+      return <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" fill="#00b14f" />
+        <path fill="#fff" d="M12.4 6.5c-2.9 0-5.2 2.3-5.2 5.2s2.3 5.2 5.2 5.2c1.6 0 2.9-.6 3.9-1.7v-3.4h-4.1v1.8h2c-.5.8-1.1 1.2-1.8 1.2-1.7 0-3-1.4-3-3.3s1.3-3.3 3-3.3c.9 0 1.6.4 2.2 1.1l1.4-1.3a5 5 0 0 0-3.6-1.5Z" />
+      </svg>;
     default:
       return null;
   }

@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Clock3, LoaderCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, Clock3, FlaskConical, LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { LocationRecord } from "@/lib/types";
 
 type Run = { location_id: string; report_date: string; status: string; message: string | null; started_at: string };
+
+type TestResult = { name: string; allOk: boolean; results: Array<{ platform: string; ok: boolean; rating?: number | null; count?: number | null; rank?: string | null; error?: string; seconds: number }> };
+const sourceLabels: Record<string, string> = { google: "Google Maps", tripadvisor: "Tripadvisor", agoda: "Agoda", booking: "Booking.com", expedia: "Expedia", tripcom: "Trip.com", traveloka: "Traveloka" };
 
 export function AutomaticSyncSettings({ userId, locations }: { userId: string | null; locations: LocationRecord[] }) {
   const hotels = useMemo(() => locations.filter((location) => location.type === "hotel"), [locations]);
@@ -16,6 +19,10 @@ export function AutomaticSyncSettings({ userId, locations }: { userId: string | 
   const [loading, setLoading] = useState(Boolean(userId));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [testId, setTestId] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [testError, setTestError] = useState("");
 
   useEffect(() => {
     if (!userId) return;
@@ -56,6 +63,23 @@ export function AutomaticSyncSettings({ userId, locations }: { userId: string | 
     setMessage(error ? error.message : "Đã lưu lịch đồng bộ.");
   }
 
+  async function runTest() {
+    if (!testId) return;
+    setTesting(true);
+    setTestResult(null);
+    setTestError("");
+    try {
+      const response = await fetch("/api/hotel-sync/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locationId: testId }) });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data) setTestError(data?.message ?? `Lỗi HTTP ${response.status}`);
+      else setTestResult(data);
+    } catch (error) {
+      setTestError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTesting(false);
+    }
+  }
+
   function move(index: number, direction: -1 | 1) {
     const next = [...validQueue];
     [next[index], next[index + direction]] = [next[index + direction], next[index]];
@@ -71,6 +95,12 @@ export function AutomaticSyncSettings({ userId, locations }: { userId: string | 
         {validQueue.map((id, index) => <div className="automatic-sync-row" key={id}><span className="automatic-sync-number">{index + 1}</span><span>{hotels.find((hotel) => hotel.id === id)?.name}</span><div className="automatic-sync-actions"><button type="button" className="icon-button" aria-label={`Đưa ${hotels.find((hotel) => hotel.id === id)?.name} lên`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button type="button" className="icon-button" aria-label={`Đưa ${hotels.find((hotel) => hotel.id === id)?.name} xuống`} disabled={index === validQueue.length - 1} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button type="button" className="button button-outline" onClick={() => setQueue(validQueue.filter((item) => item !== id))}>Bỏ</button></div></div>)}
         {available.length > 0 && <label className="field">Thêm khách sạn<select value="" onChange={(event) => { if (event.target.value) setQueue([...validQueue, event.target.value]); }}><option value="">Chọn cơ sở…</option>{available.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select></label>}
         {!hotels.length && <p>Chưa có cơ sở loại khách sạn.</p>}
+      </div>
+      <div className="automatic-sync-test"><strong>Chạy thử</strong><p>Cào lần lượt các nguồn của một khách sạn giống lịch tự động để xem lỗi ngay. Chỉ hiển thị kết quả, không lưu số liệu và không chốt sổ. Có thể mất vài phút.</p>
+        <div className="automatic-sync-test-controls"><select aria-label="Chọn khách sạn để chạy thử" value={testId} onChange={(event) => setTestId(event.target.value)}><option value="">Chọn khách sạn…</option>{hotels.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select>
+          <button type="button" className="button button-outline" onClick={() => void runTest()} disabled={!testId || testing}>{testing ? <LoaderCircle size={16} className="spin" /> : <FlaskConical size={16} />}{testing ? "Đang chạy thử…" : "Chạy thử"}</button></div>
+        {testError && <p role="alert" className="automatic-sync-test-error">{testError}</p>}
+        {testResult && <div className="automatic-sync-test-result" role="status"><strong>{testResult.name} · {testResult.allOk ? "Tất cả nguồn thành công" : "Có nguồn lỗi"}</strong>{testResult.results.map((item) => <div key={item.platform} className={item.ok ? "ok" : "fail"}><span>{item.ok ? "✓" : "✗"} {sourceLabels[item.platform] ?? item.platform}</span><span>{item.ok ? [item.rating != null ? `điểm ${item.rating}` : null, item.count != null ? `${item.count} đánh giá` : null, item.rank].filter(Boolean).join(" · ") : item.error} · {item.seconds}s</span></div>)}</div>}
       </div>
       <div className="automatic-sync-footer"><button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>{saving && <LoaderCircle size={16} className="spin" />}Lưu lịch đồng bộ</button>{message && <span role="status">{message}</span>}</div>
       {runs.length > 0 && <div className="automatic-sync-history"><strong>Lần chạy gần đây</strong>{runs.slice(0, 5).map((run, index) => <div key={`${run.location_id}-${run.report_date}-${index}`}><span>{hotels.find((hotel) => hotel.id === run.location_id)?.name ?? "Cơ sở đã xóa"} · {run.report_date}</span><span>{run.status === "success" ? "Đã chốt" : run.status === "failed" ? "Lỗi" : "Đang chạy"}{run.message ? ` · ${run.message}` : ""}</span></div>)}</div>}

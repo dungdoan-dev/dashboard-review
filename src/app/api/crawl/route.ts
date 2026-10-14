@@ -6,7 +6,10 @@ import { runBookingScraper, type BookingTarget } from "@/lib/scraper/booking-scr
 import { runTripcomScraper, type TripcomTarget } from "@/lib/scraper/tripcom-scraper";
 import { runExpediaScraper, type ExpediaTarget } from "@/lib/scraper/expedia-scraper";
 import { runTravelokaScraper, type TravelokaTarget } from "@/lib/scraper/traveloka-scraper";
+import { runGrabfoodScraper, type GrabfoodTarget } from "@/lib/scraper/grabfood-scraper";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { decryptSecret } from "@/lib/grab-credentials";
 import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
 import type { Platform } from "@/lib/types";
 
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const headless = true;
     const platform =
-      (body.platform as "google" | "tripadvisor" | "agoda" | "booking" | "tripcom" | "expedia" | "traveloka" | "all") ||
+      (body.platform as "google" | "tripadvisor" | "agoda" | "booking" | "tripcom" | "expedia" | "traveloka" | "grabfood" | "all") ||
       "google";
     const specificLocationId = body.locationId as string | undefined;
 
@@ -78,6 +81,7 @@ export async function POST(request: NextRequest) {
     let tripcomTargets: TripcomTarget[] = [];
     let expediaTargets: ExpediaTarget[] = [];
     let travelokaTargets: TravelokaTarget[] = [];
+    const grabfoodTargets: GrabfoodTarget[] = [];
 
     if (supabase && user) {
       // Đã đăng nhập Supabase -> Lấy cơ sở từ database của user
@@ -169,6 +173,29 @@ export async function POST(request: NextRequest) {
           return isPlatformUrl(travelokaUrl, "traveloka") ? [{ id: row.id, name: row.name, travelokaUrl }] : [];
         });
       }
+
+      if (platform === "grabfood" || platform === "all") {
+        // GrabFood đọc từ portal merchant bằng tài khoản đã lưu (mật khẩu giải mã phía server).
+        const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (serviceUrl && serviceKey && rows.length) {
+          const { data: accounts, error: accountsError } = await createServiceClient(serviceUrl, serviceKey)
+            .from("grab_merchant_accounts")
+            .select("location_id,username,password_encrypted")
+            .in("location_id", rows.map((row) => row.id));
+          if (accountsError) {
+            return NextResponse.json({ error: "database_error", message: accountsError.message }, { status: 500 });
+          }
+          const names = new Map(rows.map((row) => [row.id, row.name]));
+          for (const account of accounts ?? []) {
+            try {
+              grabfoodTargets.push({ id: account.location_id, name: names.get(account.location_id) ?? "", username: account.username, password: decryptSecret(account.password_encrypted) });
+            } catch (error) {
+              return NextResponse.json({ error: "grab_credentials", message: error instanceof Error ? error.message : "Không giải mã được mật khẩu Grab." }, { status: 500 });
+            }
+          }
+        }
+      }
     } else {
       // Chế độ Demo hoặc Client gửi targets lên
       if ((platform === "google" || platform === "all") && Array.isArray(body.googleTargets)) {
@@ -251,7 +278,8 @@ export async function POST(request: NextRequest) {
       bookingTargets.length +
       tripcomTargets.length +
       expediaTargets.length +
-      travelokaTargets.length;
+      travelokaTargets.length +
+      grabfoodTargets.length;
     if (totalToScrape === 0) {
       const platformName =
         platform === "tripcom"
@@ -268,11 +296,13 @@ export async function POST(request: NextRequest) {
                     ? "Expedia"
                     : platform === "traveloka"
                       ? "Traveloka"
-                      : "nền tảng";
+                      : platform === "grabfood"
+                        ? "GrabFood"
+                        : "nền tảng";
       return NextResponse.json(
         {
           error: "no_valid_targets",
-          message: `Không tìm thấy cơ sở nào có liên kết ${platformName} hợp lệ để cào dữ liệu.`,
+          message: platform === "grabfood" ? "Chưa có cơ sở nào lưu tài khoản Grab merchant (nhập trong form sửa cơ sở)." : `Không tìm thấy cơ sở nào có liên kết ${platformName} hợp lệ để cào dữ liệu.`,
         },
         { status: 400 },
       );
@@ -281,7 +311,7 @@ export async function POST(request: NextRequest) {
     isCrawlerActive = true;
 
     const allResults: Array<{
-      platform: "google" | "tripadvisor" | "agoda" | "booking" | "tripcom" | "expedia" | "traveloka";
+      platform: "google" | "tripadvisor" | "agoda" | "booking" | "tripcom" | "expedia" | "traveloka" | "grabfood";
       id: string;
       name: string;
       url: string;
@@ -291,6 +321,7 @@ export async function POST(request: NextRequest) {
       count: number | null;
       countRaw: string | null;
       rankLabel?: string | null;
+      tripadvisorNotice?: string | null;
       capturedAt: string;
       success: boolean;
       error?: string;
@@ -307,6 +338,7 @@ export async function POST(request: NextRequest) {
       source: "api";
       captured_at: string;
       tripadvisor_rank?: string | null;
+      tripadvisor_notice?: string | null;
     }> = [];
 
     // 1. Chạy Google Scraper
@@ -342,6 +374,7 @@ export async function POST(request: NextRequest) {
             rating_value: item.ratingValue,
             review_count: item.count,
             tripadvisor_rank: item.rankLabel,
+            tripadvisor_notice: item.tripadvisorNotice,
             count_label: "đánh giá",
             source: "api",
             captured_at: item.capturedAt,
@@ -438,6 +471,25 @@ export async function POST(request: NextRequest) {
             location_id: item.id,
             platform: "traveloka",
             rating_scale: DEFAULT_RATING_SCALE.traveloka,
+            rating_value: item.ratingValue,
+            review_count: item.count,
+            count_label: "đánh giá",
+            source: "api",
+            captured_at: item.capturedAt,
+          });
+        }
+      }
+    }
+
+    if (grabfoodTargets.length > 0) {
+      const output = await runGrabfoodScraper(grabfoodTargets);
+      for (const item of output.results) {
+        allResults.push({ platform: "grabfood", ...item });
+        if (supabase && user && item.success) {
+          pendingSnapshots.push({
+            location_id: item.id,
+            platform: "grabfood",
+            rating_scale: DEFAULT_RATING_SCALE.grabfood,
             rating_value: item.ratingValue,
             review_count: item.count,
             count_label: "đánh giá",

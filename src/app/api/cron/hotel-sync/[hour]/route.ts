@@ -1,43 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
-import type { Platform } from "@/lib/types";
-import { runScraper } from "@/lib/scraper/gmaps-scraper";
-import { runTripadvisorScraper } from "@/lib/scraper/tripadvisor-scraper";
-import { runAgodaScraper } from "@/lib/scraper/agoda-scraper";
-import { runBookingScraper } from "@/lib/scraper/booking-scraper";
-import { runTripcomScraper } from "@/lib/scraper/tripcom-scraper";
-import { runExpediaScraper } from "@/lib/scraper/expedia-scraper";
-import { runTravelokaScraper } from "@/lib/scraper/traveloka-scraper";
+import { hotelPlatforms as platforms, scrape, validUrl, type HotelPlatform as Platform } from "@/lib/hotel-sync";
 
 export const maxDuration = 300;
-
-const platforms: Platform[] = ["google", "tripadvisor", "agoda", "booking", "expedia", "tripcom", "traveloka"];
-const platformDomains: Record<Platform, string[]> = {
-  google: ["google.com", "google.com.vn", "goo.gl"],
-  tripadvisor: ["tripadvisor.com", "tripadvisor.com.vn"],
-  agoda: ["agoda.com"], booking: ["booking.com"], expedia: ["expedia.com", "expedia.com.vn"],
-  tripcom: ["trip.com"], traveloka: ["traveloka.com"],
-};
-type Result = { success: boolean; ratingValue: number | null; count: number | null; capturedAt: string; error?: string; rankLabel?: string | null };
-
-function validUrl(platform: Platform, value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && platformDomains[platform].some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
-  } catch { return false; }
-}
-
-async function scrape(platform: Platform, id: string, name: string, url: string): Promise<Result> {
-  switch (platform) {
-    case "google": return (await runScraper([{ id, name, googleUrl: url }], { headless: true })).results[0];
-    case "tripadvisor": return (await runTripadvisorScraper([{ id, name, tripadvisorUrl: url }])).results[0];
-    case "agoda": return (await runAgodaScraper([{ id, name, agodaUrl: url }])).results[0];
-    case "booking": return (await runBookingScraper([{ id, name, bookingUrl: url }], { headless: true })).results[0];
-    case "expedia": return (await runExpediaScraper([{ id, name, expediaUrl: url }])).results[0];
-    case "tripcom": return (await runTripcomScraper([{ id, name, tripcomUrl: url }], { headless: true })).results[0];
-    case "traveloka": return (await runTravelokaScraper([{ id, name, travelokaUrl: url }])).results[0];
-  }
-}
 
 function vietnamTime() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -113,6 +78,7 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
             rating_value: result.ratingValue, review_count: result.count,
             count_label: platform === "expedia" ? "nhận xét" : "đánh giá",
             tripadvisor_rank: platform === "tripadvisor" ? result.rankLabel ?? null : null,
+            tripadvisor_notice: platform === "tripadvisor" ? result.tripadvisorNotice ?? null : null,
           };
           metrics.push({ ...base, source: "api", captured_at: result.capturedAt });
           reports.push({ ...base, report_date: now.date, finalized_at: new Date().toISOString(), finalized_by: setting.owner_id });

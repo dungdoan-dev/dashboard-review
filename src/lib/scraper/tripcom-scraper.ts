@@ -1,4 +1,5 @@
-import puppeteer, { type Browser } from "puppeteer";
+import { type Browser } from "puppeteer";
+import { launchBrowser } from "./launch-browser";
 
 export interface TripcomTarget {
   id: string;
@@ -300,7 +301,7 @@ export async function runTripcomScraper(
     `\n🚀 Khởi chạy cào Trip.com cho ${targets.length} cơ sở... (headless: ${headless})`,
   );
 
-  const browser = await puppeteer.launch({
+  const browser = await launchBrowser({
     headless: headless,
     args: [
       "--no-sandbox",

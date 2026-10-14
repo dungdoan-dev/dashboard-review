@@ -66,6 +66,8 @@ a { color: inherit; text-decoration: none; }
 .location-picker > span { flex: 0 0 auto; color: #6d7f9a; font-size: 10px; }
 .location-picker select { width: 100%; min-width: 0; appearance: none; border: 0; outline: 0; background: transparent; color: #244a8f; font-size: 11px; font-weight: 700; }
 .location-picker > svg:last-child { flex: 0 0 auto; color: #6e84a9; }
+.location-picker.type-picker { min-width: 200px; flex: 0 0 auto; }
+.dashboard-topbar .location-picker:not(.type-picker) { min-width: min(300px,35vw); }
 .topbar-date { padding-top: 7px; padding-bottom: 7px; }
 .live-mark,.footer-dot { width: 7px; height: 7px; border-radius: 50%; background: #4fb589; box-shadow: 0 0 0 3px #4fb5891a; }
 .button { display: inline-flex; min-height: 37px; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid transparent; border-radius: 9px; font-size: 11px; font-weight: 700; transition: transform .15s ease, background .15s ease, border .15s ease; }
@@ -187,6 +189,7 @@ tbody tr:hover { background: #fbfcfe; }
 .score-booking { color: #003b95; border-color: #c7d9fc; background: #eef4ff; }
 .score-tripcom { color: #1a6fe8; border-color: #cde1fe; background: #f2f7ff; }
 .score-expedia { color: #1668e8; border-color: #cfe0ff; background: #f1f6ff; }
+.score-grabfood { color: #00873a; border-color: #c8ecd6; background: #f0faf4; }
 .score-traveloka { color: #1686d9; border-color: #cbeafa; background: #f0faff; }
 .review-count { color: #75859a; font-size: 9px; }
 .no-metric { color: #a3adba; font-size: 9px; }
@@ -213,13 +216,9 @@ tbody tr:hover { background: #fbfcfe; }
 .modal-header p { margin: 0; color: #8795a8; font-size: 10px; }
 .modal-error { padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #f2d3d0; border-radius: 8px; background: #fff5f3; color: #9f4139; font-size: 10px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 19px 23px 14px; }
-.location-links-grid[data-location-type="cafe"] [data-link-platform="agoda"],
-.location-links-grid[data-location-type="cafe"] [data-link-platform="booking"],
-.location-links-grid[data-location-type="cafe"] [data-link-platform="tripcom"],
-.location-links-grid[data-location-type="cafe"] [data-link-platform="expedia"],
-.location-links-grid[data-location-type="cafe"] [data-link-platform="traveloka"],
-.location-links-grid:not([data-location-type="cafe"]) [data-link-platform="grabfood"],
-.location-links-grid:not([data-location-type="cafe"]) [data-link-platform="shopeefood"] { display: none; }
+.location-links-grid:is([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="agoda"], [data-link-platform="booking"], [data-link-platform="tripcom"], [data-link-platform="expedia"], [data-link-platform="traveloka"]),
+.location-links-grid:not([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="grabfood"], [data-link-platform="shopeefood"]),
+.location-links-grid[data-location-type="mart"] [data-link-platform="shopeefood"] { display: none; }
 .field { display: grid; align-content: start; gap: 6px; color: #586b84; font-size: 10px; font-weight: 700; }
 .full-field { grid-column: 1/-1; }
 .field input,.field select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #e1e7ef; border-radius: 8px; outline: 0; background: #fff; color: #405570; font-size: 11px; font-weight: 500; }
@@ -286,6 +285,7 @@ tbody tr:hover { background: #fbfcfe; }
   .dashboard-topbar { min-height: 60px; gap: 10px; padding: 8px 14px; }
   .topbar-title { display: none; }
   .location-picker { min-width: 0; flex: 1; }
+  .location-picker.type-picker, .dashboard-topbar .location-picker:not(.type-picker) { min-width: 0; }
   .location-picker > span { display: none; }
   .topbar-date { min-height: 36px; gap: 5px; padding: 6px 8px; font-size: 9px; }
   .dashboard-add-location { align-self: flex-start; }
@@ -367,6 +367,10 @@ tbody tr:hover { background: #fbfcfe; }
 .compare-table-scroll th,.compare-table-scroll td { padding: 12px; border-bottom: 1px solid #e8edf5; text-align: left; }
 .compare-table-scroll thead th { color: #52657f; background: #f7f9fc; font-weight: 700; }
 .compare-table-scroll tbody th { color: #203653; font-weight: 700; }
+.compare-change-up { color: #087b58; font-weight: 700; }
+.compare-change-down { color: #c3424b; font-weight: 700; }
+.compare-change-flat { color: #56677f; font-weight: 650; }
+.compare-no-change { color: #94a0b1; }
 .compare-limit-note { color: #71819a; font-size: 11px; }
 .daily-analytics-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
 .daily-analytics-heading h1 { margin: 6px 0 4px; color: #203653; font: 750 21px/1.25 'Manrope',sans-serif; letter-spacing: -.4px; }
@@ -734,6 +738,11 @@ tbody tr:hover { background: #fbfcfe; }
 .rank-improved { color: #168a68 !important; }
 .rank-declined { color: #bd5c54 !important; }
 .rank-chart-card,.rank-history-card { margin-top: 14px; }
+.tripadvisor-notice-card { margin-top: 14px; }
+.tripadvisor-notice-list { display: grid; gap: 12px; }
+.tripadvisor-notice-item { padding: 14px 16px; border: 1px solid #e3eaf3; border-left: 3px solid #168a68; border-radius: 9px; background: #f9fbfc; }
+.tripadvisor-notice-item h4 { margin: 0 0 7px; color: #31516a; font-size: 12px; }
+.tripadvisor-notice-item p { margin: 0; color: #40566c; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .rank-history-scroll { width: 100%; overflow: auto; padding-top: 10px; }
 .rank-history-table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; }
 .rank-history-table th { padding: 10px 12px; color: #8492a5; background: #f8fafd; border-bottom: 1px solid #e9edf3; font-size: 9px; font-weight: 700; white-space: nowrap; }
@@ -750,3 +759,35 @@ tbody tr:hover { background: #fbfcfe; }
   .rank-chart-card,.rank-history-card { padding: 13px; }
   .rank-history-table { min-width: 560px; }
 }
+
+/* Tổng quan: mỗi nền tảng là một thẻ dọc, số liệu xếp thành từng dòng nhãn - giá trị */
+.platform-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; margin-top: 16px; }
+.locations-section .platform-detail-grid .platform-table-section { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: 0 2px 5px #1b2b450a; }
+.locations-section .platform-detail-grid .platform-table-heading { margin: 0 0 4px; flex-wrap: wrap; }
+.locations-section .platform-detail-grid .platform-table-actions { width: 100%; flex-wrap: wrap; }
+.locations-section .platform-detail-grid .platform-table-actions .button { flex: 1 1 110px; justify-content: center; }
+.platform-detail-list { display: grid; margin: 0; }
+.platform-detail-list > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-top: 1px solid #edf0f4; }
+.platform-detail-list dt { color: #6d7f9a; font-size: 12px; font-weight: 600; }
+.platform-detail-list dd { margin: 0; color: #233a5a; font-size: 14px; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+.platform-detail-list dd a { color: #285ca9; font-size: 12px; font-weight: 600; }
+.platform-detail-list .pd-score .score-pill { padding: 6px 12px; font-size: 18px; }
+.platform-detail-list .pd-score .rating-cell-content { justify-items: end; }
+.platform-detail-list .pd-notice { flex-direction: column; align-items: flex-start; }
+.platform-detail-list .pd-notice dd { font-size: 12px; font-weight: 500; text-align: left; }
+.locations-section .platform-detail-grid .empty-table { grid-column: 1 / -1; }
+.platform-detail-list .review-count { color: #233a5a; font-size: 16px; font-weight: 700; }
+.platform-detail-list .no-metric { color: #8795a8; font-size: 14px; }
+
+/* Cài đặt: nút Chạy thử đồng bộ */
+.automatic-sync-test { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 15px; }
+.automatic-sync-test p { margin: 0; color: #6d7f9a; font-size: 12px; }
+.automatic-sync-test-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.automatic-sync-test-controls select { flex: 1 1 220px; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid #e1e7ef; border-radius: 8px; background: #fff; color: #405570; font-size: 12px; }
+.automatic-sync-test-error { color: #9f4139; font-weight: 600; }
+.automatic-sync-test-result { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfe; font-size: 13px; }
+.automatic-sync-test-result > div { display: flex; justify-content: space-between; gap: 12px; }
+.automatic-sync-test-result .ok > span:first-child { color: #247b5b; font-weight: 700; }
+.automatic-sync-test-result .fail > span:first-child { color: #9f4139; font-weight: 700; }
+.automatic-sync-test-result .fail > span:last-child { color: #9f4139; text-align: right; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .automatic-sync-test-result > div { flex-direction: column; gap: 2px; } .automatic-sync-test-result .fail > span:last-child { text-align: left; } }

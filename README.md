@@ -1,5 +1,15 @@
 # Reviewdesk
 
+## Cafe và Mart 24h (GrabFood)
+
+Chạy `supabase/migrations/20261014020000_grabfood_metrics.sql` và `20261014040000_grabfood_daily_reports.sql` (cho phép chốt báo cáo ngày có GrabFood) cho database hiện có. Header có 2 bộ lọc: Loại hình (Khách sạn / Cafe / Mart 24h) rồi Cơ sở của loại đó; nền tảng trong bảng và báo cáo theo loại (Khách sạn: các OTA; Cafe: Google, Tripadvisor, GrabFood; Mart 24h: Google, Tripadvisor, GrabFood). Cơ sở loại Cafe và Mart 24h dùng Google Maps, Tripadvisor và GrabFood; bảng GrabFood chỉ hiện với hai loại này. Điểm GrabFood thang 5, lấy từ API công khai của food.grab.com bằng mã cửa hàng cuối URL (không cần token). Báo cáo ngày chưa gồm GrabFood.
+
+Đánh giá GrabFood lấy từ portal merchant (merchant.grab.com). Chạy `supabase/migrations/20261014030000_grab_merchant_accounts.sql`, đặt `GRAB_CREDENTIALS_KEY` (chuỗi ngẫu nhiên ≥16 ký tự, chỉ ở server/`.env`; đổi khóa sẽ làm mật khẩu đã lưu không giải mã được), `SUPABASE_SERVICE_ROLE_KEY`. Nút Cập nhật ở bảng GrabFood cũng dùng tài khoản này (chạy Chrome ngầm trên máy chủ Next.js, nên chỉ hoạt động khi tự host, không phải Vercel). Trong form sửa cơ sở loại Cafe hoặc Mart 24h, nhập tài khoản và mật khẩu Grab: mật khẩu được mã hóa AES-256-GCM ở server, không bao giờ gửi lại về trình duyệt. Trên máy có Chrome chạy `npm run scrape:grab:all` (cần Node ≥ 22.18): mỗi cơ sở dùng tài khoản và profile riêng, chạy ngầm và lưu snapshot. Nếu Grab đòi OTP, chạy `npm run scrape:grab:login -- --all` để đăng nhập tay từng cơ sở một lần.
+
+## Thông báo Tripadvisor
+
+Chạy `supabase/migrations/20261014010000_tripadvisor_notice.sql` trong Supabase SQL Editor cho database hiện có. Lần đồng bộ Tripadvisor tiếp theo sẽ lưu nội dung “Thư từ Tripadvisor” nếu Markdown có mục này. Chốt sổ lại ngày cần xem để nội dung xuất hiện trong mục “Báo cáo từ Tripadvisor” của trang xếp hạng; báo cáo đã chốt trước khi thêm trường này không tự có lại nội dung cũ.
+
 ## Đồng bộ khách sạn tự động trên Vercel
 
 1. Chạy `supabase/migrations/20261014000000_automatic_hotel_sync.sql` trong Supabase SQL Editor cho database hiện có. Khi tạo database mới, `supabase/schema.sql` đã chứa các bảng này.

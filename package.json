@@ -22,9 +22,13 @@
     "scrape:tripcom": "node scraper/tripcom-scraper.mjs",
     "scrape:tripcom:headless": "node scraper/tripcom-scraper.mjs --headless",
     "scrape:tripcom:save": "node scraper/tripcom-scraper.mjs --save",
+    "scrape:grab:all": "node scraper/grab-merchant-scraper.mjs --all --save",
+    "scrape:grab": "node scraper/grab-merchant-scraper.mjs",
+    "scrape:grab:login": "node scraper/grab-merchant-scraper.mjs --login",
     "scrape:all": "node scraper/gmaps-scraper.mjs && node scraper/tripadvisor-scraper.mjs && node scraper/agoda-scraper.mjs && node scraper/booking-scraper.mjs && node scraper/tripcom-scraper.mjs"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^153.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.3",
     "lucide-react": "^1.55.0",

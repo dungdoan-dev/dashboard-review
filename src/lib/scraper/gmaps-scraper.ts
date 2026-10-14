@@ -1,4 +1,5 @@
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import { type Browser, type Page } from "puppeteer";
+import { launchBrowser } from "./launch-browser";
 
 export interface ScrapeTarget {
   id: string;
@@ -215,7 +216,7 @@ export async function runScraper(
 
   let browser: Browser | null = null;
   try {
-    browser = await puppeteer.launch({
+    browser = await launchBrowser({
       headless,
       args: [
         "--no-sandbox",

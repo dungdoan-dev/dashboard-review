@@ -37,25 +37,27 @@ create table if not exists public.metric_snapshots (
   captured_at timestamptz not null default now(),
   source text not null default 'manual',
   tripadvisor_rank text,
+  tripadvisor_notice text,
   constraint metric_has_value check (rating_value is not null or review_count is not null)
 );
 
 create table if not exists public.daily_report_snapshots (
   id bigint generated always as identity primary key,
   location_id uuid not null references public.locations(id) on delete cascade,
-  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka')),
+  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood')),
   report_date date not null default ((now() at time zone 'Asia/Ho_Chi_Minh')::date),
   rating_scale numeric(4,1) not null check (rating_scale > 0),
   rating_value numeric(4,2),
   review_count bigint check (review_count is null or review_count >= 0),
   count_label text not null default 'reviews',
   tripadvisor_rank text,
+  tripadvisor_notice text,
   finalized_at timestamptz not null default now(),
   finalized_by uuid default auth.uid() references auth.users(id) on delete set null,
   constraint daily_report_has_value check (rating_value is not null or review_count is not null),
   constraint daily_report_rating_value_check check (rating_value is null or (rating_value >= 0 and rating_value <= rating_scale)),
   constraint daily_report_platform_rating_scale_check check (
-    (platform in ('google', 'tripadvisor') and rating_scale = 5)
+    (platform in ('google', 'tripadvisor', 'grabfood') and rating_scale = 5)
     or (platform in ('agoda', 'booking', 'tripcom', 'traveloka') and rating_scale = 10)
     or (platform = 'expedia' and rating_scale in (5, 10))
   ),
@@ -71,10 +73,18 @@ alter table public.daily_report_snapshots add column if not exists tripadvisor_r
 alter table public.daily_report_snapshots drop constraint if exists daily_report_tripadvisor_rank_platform_check;
 alter table public.daily_report_snapshots add constraint daily_report_tripadvisor_rank_platform_check
   check (tripadvisor_rank is null or platform = 'tripadvisor');
+alter table public.metric_snapshots add column if not exists tripadvisor_notice text;
+alter table public.metric_snapshots drop constraint if exists metric_snapshots_tripadvisor_notice_platform_check;
+alter table public.metric_snapshots add constraint metric_snapshots_tripadvisor_notice_platform_check
+  check (tripadvisor_notice is null or (platform = 'tripadvisor' and char_length(tripadvisor_notice) <= 10000));
+alter table public.daily_report_snapshots add column if not exists tripadvisor_notice text;
+alter table public.daily_report_snapshots drop constraint if exists daily_report_tripadvisor_notice_platform_check;
+alter table public.daily_report_snapshots add constraint daily_report_tripadvisor_notice_platform_check
+  check (tripadvisor_notice is null or (platform = 'tripadvisor' and char_length(tripadvisor_notice) <= 10000));
 alter table public.metric_snapshots alter column rating_scale drop default;
 alter table public.metric_snapshots drop constraint if exists metric_snapshots_platform_check;
 alter table public.metric_snapshots add constraint metric_snapshots_platform_check
-  check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka'));
+  check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood'));
 alter table public.metric_snapshots drop constraint if exists metric_snapshots_source_check;
 alter table public.metric_snapshots add constraint metric_snapshots_source_check
   check (source in ('manual', 'api', 'import', 'crawler'));
@@ -95,13 +105,14 @@ from (
     ('agoda', 10::numeric),
     ('booking', 10::numeric),
     ('tripcom', 10::numeric),
-    ('traveloka', 10::numeric)
+    ('traveloka', 10::numeric),
+    ('grabfood', 5::numeric)
 ) as target(platform, scale)
 where metric_snapshots.platform = target.platform
   and metric_snapshots.rating_scale <> target.scale;
 alter table public.metric_snapshots add constraint metric_snapshots_platform_rating_scale_check
   check (
-    (platform in ('google', 'tripadvisor') and rating_scale = 5)
+    (platform in ('google', 'tripadvisor', 'grabfood') and rating_scale = 5)
     or (platform in ('agoda', 'booking', 'tripcom', 'traveloka') and rating_scale = 10)
     or (platform = 'expedia' and rating_scale in (5, 10))
   );
@@ -119,7 +130,7 @@ create or replace view public.latest_metric_snapshots
 with (security_invoker = true)
 as
 select distinct on (location_id, platform)
-  id, location_id, platform, rating_scale, rating_value, review_count, count_label, captured_at, source, tripadvisor_rank
+  id, location_id, platform, rating_scale, rating_value, review_count, count_label, captured_at, source, tripadvisor_rank, tripadvisor_notice
 from public.metric_snapshots
 order by location_id, platform, captured_at desc, id desc;
 revoke all on public.latest_metric_snapshots from public, anon;
@@ -288,3 +299,13 @@ $$;
 
 revoke all on function public.save_automatic_sync_settings(boolean, integer, uuid[]) from public;
 grant execute on function public.save_automatic_sync_settings(boolean, integer, uuid[]) to authenticated;
+
+-- Per-location Grab merchant login, encrypted by the server; service role only.
+create table if not exists public.grab_merchant_accounts (
+  location_id uuid primary key references public.locations(id) on delete cascade,
+  username text not null check (char_length(trim(username)) between 1 and 200),
+  password_encrypted text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.grab_merchant_accounts enable row level security;
+revoke all on public.grab_merchant_accounts from anon, authenticated;
