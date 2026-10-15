@@ -13,6 +13,7 @@ import {
   Clock3,
   Compass,
   Database,
+  FileBarChart,
   LayoutDashboard,
   Link2,
   LoaderCircle,
@@ -43,6 +44,7 @@ import { PlatformBrandLogo } from "@/components/platform-brand-logo";
 import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
 import { NotificationBell } from "@/components/notification-bell";
 import { OverviewScoreboard } from "@/components/overview-scoreboard";
+import { SummaryReport } from "@/components/summary-report";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
   LocationInput,
@@ -87,6 +89,7 @@ const typePlatformOrder: Record<LocationFilterType, Platform[]> = {
   mart: ["google", "tripadvisor", "grabfood"],
   entertainment: ["google", "tripadvisor"],
 };
+const summaryColors: Record<LocationFilterType, string> = { hotel: "#2a78d6", cafe: "#eb6834", mart: "#1baf7a", entertainment: "#6250d6" };
 const allReportPlatforms: Platform[] = [...typePlatformOrder.hotel, "grabfood"];
 function filterTypeOf(type: LocationType): LocationFilterType {
   return type === "cafe" || type === "restaurant" ? "cafe" : type === "mart" || type === "other" ? "mart" : type === "entertainment" ? "entertainment" : "hotel";
@@ -218,9 +221,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isReportDataPage = isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage;
   const isSettingsPage = pathname === "/settings";
   const isDetailPage = pathname === "/detail";
-  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage;
+  const isSummaryPage = pathname === "/summary";
+  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
-  const needsLiveMetrics = pathname === "/" || isDetailPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
+  const needsLiveMetrics = pathname === "/" || isDetailPage || isSummaryPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
@@ -598,6 +602,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }, [modal]);
 
   const allHotelsSelected = isDailyAnalyticsPage && selectedType === "hotel" && selectedLocationId === "all-hotels";
+  const summarySections = useMemo(() => filterTypeOptions.map(([type, label]) => ({
+    type, label, color: summaryColors[type], platforms: typePlatformOrder[type],
+    locations: locations.filter((location) => filterTypeOf(location.type) === type),
+  })), [locations]);
   const typeLocations = useMemo(() => locations.filter((location) => filterTypeOf(location.type) === selectedType), [locations, selectedType]);
   const hotelLocations = useMemo(() => locations.filter((location) => location.type === "hotel"), [locations]);
   const comparisonLocations = useMemo(() => isComparePage
@@ -1545,6 +1553,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         <nav className="side-nav" aria-label="Điều hướng chính">
           <span className="nav-label">KHÔNG GIAN LÀM VIỆC</span>
           <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
+          <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
           <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
           <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
@@ -1559,8 +1568,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
-          <div className="topbar-title"><span className="topbar-overline">{isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
-          {<><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
+          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          {!isSummaryPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
           {supabaseConfigured && <NotificationBell userId={user?.id ?? null} />}
         </header>
@@ -1576,6 +1585,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {platformFilter}
           <OverviewScoreboard locations={typeLocations} platforms={selectedReportPlatforms} scale={reportScale} userId={supabaseConfigured ? user?.id ?? null : null} selectedId={dashboardLocation?.id ?? null} typeLabel={filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""} onSelect={(id) => { setSelectedLocationId(id); router.push("/detail"); }} />
           </>}
+
+          {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
 
           {isDetailPage && <>
           {detailTabs}
@@ -1828,7 +1839,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           {isTripadvisorRankPage && <TripadvisorRankReportPage locationName={dashboardLocation?.name ?? null} rows={tripadvisorRankRows} loading={timelineLoading} error={timelineError} />}
 
-          {!isReportDataPage && !isSettingsPage && <>
+          {!isReportDataPage && !isSettingsPage && !isSummaryPage && <>
         <section className="locations-section" id="locations">
             <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Mỗi thẻ là một nền tảng, chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
             <div className="platform-detail-grid">
