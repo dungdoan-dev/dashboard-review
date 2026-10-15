@@ -97,8 +97,16 @@
       "schedule": "0 16 * * *"
     },
     {
-      "path": "/api/cron/bluejay",
-      "schedule": "5 1,9,17 * * *"
+      "path": "/api/cron/bluejay/0",
+      "schedule": "5 17 * * *"
+    },
+    {
+      "path": "/api/cron/bluejay/8",
+      "schedule": "5 1 * * *"
+    },
+    {
+      "path": "/api/cron/bluejay/16",
+      "schedule": "5 9 * * *"
     }
   ]
 }
