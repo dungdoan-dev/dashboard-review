@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Gauge, TrendingDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CalendarDays, Gauge, TrendingDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, parseDmy } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
@@ -34,6 +34,7 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
   const [sort, setSort] = useState<Sort>("attention");
   const [baseline, setBaseline] = useState<Baseline>({});
   const [dateInput, setDateInput] = useState("");
+  const pickerRef = useRef<HTMLInputElement>(null);
   const [compareDate, setCompareDate] = useState(""); // rỗng = lần chốt gần nhất trước hôm nay
   const idsKey = useMemo(() => locations.map((location) => location.id).sort().join(","), [locations]);
   const platformsKey = platforms.join(",");
@@ -92,6 +93,8 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
         <p>Số liệu mới nhất vừa lấy (chưa chốt sổ), điểm quy đổi về thang {scale}. Thay đổi nằm ngay dưới từng nền tảng, so với {compareDate ? `số chốt tới ngày ${fmtDate(compareDate)}` : "lần chốt gần nhất trước hôm nay"}.</p></div>
       <div className="scoreboard-dates"><span>Ngày mốc: <strong>{baselineText}</strong></span><span>Ngày so sánh: <strong>{currentText}</strong></span></div>
       <label className="scoreboard-sort"><span>So sánh với ngày</span><input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" size={10} value={dateInput} onChange={(event) => { setDateInput(event.target.value); const iso = parseDmy(event.target.value); setCompareDate(iso && iso < vnToday() ? iso : ""); }} aria-label="Ngày làm mốc so sánh (dd/mm/yyyy)" />
+        <button type="button" className="date-picker-button" aria-label="Mở lịch chọn ngày" onClick={() => pickerRef.current?.showPicker()}><CalendarDays size={15} /></button>
+        <input ref={pickerRef} className="date-picker-native" type="date" tabIndex={-1} aria-hidden="true" max={daysBefore(vnToday(), 1)} value={compareDate} onChange={(event) => { const iso = event.target.value; setCompareDate(iso); setDateInput(iso ? fmtDate(iso) : ""); }} />
         {compareDate && <button type="button" onClick={() => { setCompareDate(""); setDateInput(""); }}>Gần nhất</button>}</label>
       <label className="scoreboard-sort"><span>Sắp xếp</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Sắp xếp bảng điểm">
         <option value="attention">Điểm thấp nhất trước</option><option value="best">Điểm cao nhất trước</option>
