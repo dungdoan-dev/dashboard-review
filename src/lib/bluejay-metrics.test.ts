@@ -1,0 +1,132 @@
+// Ported from the sample project's tests (D:\blue-jay test/metrics.test.js, test/excel.test.js). Run: npm test
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as XLSX from "xlsx";
+import { addDays, apiDate, averageRate, combine, hotelRecord, inApiWindow, isExcludedRoom, isoWeek, lastFullWeek, mondayOf, nightsIn, occupancyDaily, occupancyTotals, rate, reservationStats, serviceStats, statusCounts, summarize, type HotelRecord, type Reservation, type WeeklyReport } from "./bluejay-metrics.ts";
+import { workbookFor } from "./bluejay-excel.ts";
+
+let seq = 0;
+const day = (RoomOccupied: number, TotalRoom: number) => ({ Date: `${++seq}/10/2026`, RoomOccupied, TotalRoom });
+const report = (rts: { RoomTypeName: string; DailyDetails: { Date: string; RoomOccupied: number; TotalRoom: number }[] }[]) => ({ data: { GrandTotal: { RoomTypes: rts } } });
+
+test("week math", () => {
+  assert.equal(isoWeek("2026-10-05"), 41);
+  assert.equal(addDays("2026-10-05", 6), "2026-10-11");
+  assert.equal(apiDate("2026-10-05"), "2026-10-5");
+  assert.equal(mondayOf("2026-10-11"), "2026-10-05");
+  assert.equal(lastFullWeek(new Date("2026-10-12T09:00:00Z")), "2026-10-05"); // Monday 16:00 VN
+  assert.equal(lastFullWeek(new Date("2026-10-15T03:00:00Z")), "2026-10-05"); // Thursday
+});
+
+test("API window, Vietnam time", () => {
+  assert.equal(inApiWindow(new Date("2026-10-15T09:00:00Z")), true); // 16:00 VN
+  assert.equal(inApiWindow(new Date("2026-10-15T03:33:00Z")), false); // 10:33 VN
+  assert.equal(inApiWindow(new Date("2026-10-15T01:30:00Z")), true); // 08:30 VN is the last allowed minute
+  assert.equal(inApiWindow(new Date("2026-10-15T01:31:00Z")), false);
+  assert.equal(inApiWindow(new Date("2026-10-14T17:30:00Z")), true); // 00:30 VN
+});
+
+test("occupancy excludes M-Standard; blocked rooms stay in the denominator", () => {
+  const t = occupancyTotals(report([
+    { RoomTypeName: "Deluxe", DailyDetails: [day(5, 10), day(3, 10)] },
+    { RoomTypeName: "M - STANDARD BED ROOM", DailyDetails: [day(9, 9)] },
+  ]));
+  assert.deepEqual(t, { occ: 8, total: 20 });
+  assert.equal(rate(t), 8 / 20);
+  assert.equal(rate({ occ: 0, total: 0 }), 0);
+  assert.equal(isExcludedRoom("Mini Standard"), false);
+  assert.throws(() => occupancyTotals({ data: {} })); // missing report is an error, not zero
+});
+
+const W = ["2026-10-05", "2026-10-11"] as const;
+const booking = (o: Reservation = {}): Reservation => ({ bookingCode: "x", roomType: "Deluxe", status: "Đã trả phòng", checkInTime: "2026-10-05", checkOutTime: "2026-10-07", night: 2, roomPrice: 2000000, ...o });
+
+test("nights inside the week: checkout day is not a night, edges are clipped", () => {
+  assert.equal(nightsIn(booking(), ...W), 2);
+  assert.equal(nightsIn(booking({ checkInTime: "2026-10-03", checkOutTime: "2026-10-06" }), ...W), 1);
+  assert.equal(nightsIn(booking({ checkInTime: "2026-10-10", checkOutTime: "2026-10-14" }), ...W), 2);
+  assert.equal(nightsIn(booking({ checkInTime: "2026-10-12", checkOutTime: "2026-10-13" }), ...W), 0);
+  assert.equal(nightsIn(booking({ checkInTime: "" }), ...W), 0);
+});
+
+test("ADR is per night inside the week and skips cancelled, no-show, duplicates, M-Standard, unknown prices", () => {
+  const a = booking();
+  const straddle = booking({ checkInTime: "2026-10-10", checkOutTime: "2026-10-14", night: 4, roomPrice: 4000000 });
+  assert.equal(averageRate([a, a, straddle], ...W), (2000000 + 2000000) / 4);
+  assert.equal(averageRate([booking({ status: "Đã huỷ" }), booking({ status: "Không đến" }), booking({ roomType: "M-Standard" }), booking({ roomPrice: null })], ...W), 0);
+});
+
+test("daily occupancy merges room types per date and converts dd/mm/yyyy", () => {
+  const d = occupancyDaily(report([
+    { RoomTypeName: "A", DailyDetails: [{ Date: "05/10/2026", RoomOccupied: 2, TotalRoom: 5 }] },
+    { RoomTypeName: "B", DailyDetails: [{ Date: "05/10/2026", RoomOccupied: 1, TotalRoom: 3 }] },
+  ]));
+  assert.deepEqual(d, [{ date: "2026-10-05", occupied: 3, total: 8 }]);
+});
+
+test("reservation stats: distinct bookings, folding, in-week room revenue", () => {
+  const row = (o: Reservation) => booking({ servicePrice: 0, totalPrice: 0, payment: 0, balance: 0, ...o });
+  const rows = [
+    row({ bookingCode: "A", roomType: "Deluxe", source: "Agoda", night: 2, roomPrice: 200, servicePrice: 10 }),
+    row({ bookingCode: "A", roomType: "Suite", source: "Agoda", night: 2, roomPrice: 100 }),
+    row({ bookingCode: "", roomType: "Deluxe", source: "", status: "Đã nhận phòng", night: 2, roomPrice: 50 }),
+    row({ bookingCode: "C", source: "Agoda", status: "Đã huỷ", roomPrice: 999 }),
+  ];
+  const s = reservationStats(rows, ...W);
+  assert.equal(s.bookings, 1);
+  assert.equal(s.roomPrice, 350);
+  assert.equal(s.servicePrice, 10);
+  assert.deepEqual(s.bySource.map((g) => [g.name, g.bookings, g.nights, g.value]), [["Agoda", 1, 4, 300], ["Không rõ", 1, 2, 50]]);
+  assert.deepEqual(statusCounts(rows).map((g) => g.name).sort(), ["Đã huỷ", "Đã nhận phòng", "Đã trả phòng"]);
+  const many = Array.from({ length: 12 }, (_, i) => row({ bookingCode: `b${i}`, source: `s${i}`, night: 2, roomPrice: 200 - i }));
+  const folded = reservationStats(many, ...W).bySource;
+  assert.equal(folded.length, 7);
+  assert.equal(folded.at(-1)?.name, "Khác");
+});
+
+test("services and weighted chain summary", () => {
+  assert.deepEqual(serviceStats({ data: [{ GroupService: "Ăn", TotalQuantity: 2, TotalPriceSale: 50 }, { GroupService: "Khác", TotalQuantity: 1, TotalPriceSale: 80 }] }).groups.map((g) => g.name), ["Khác", "Ăn"]);
+  assert.throws(() => serviceStats({}));
+  const rec = (occ: number, total: number, roomSum: number, nightSum: number) => ({ weeks: [{ occ, total }, { occ: 0, total }, { occ: 0, total }], roomSum, nightSum });
+  const s = summarize([rec(50, 100, 1000, 10), rec(10, 10, 100, 1)]);
+  assert.equal(s.rate, 60 / 110); // weighted, not (50% + 100%) / 2
+  assert.equal(s.adr, 1100 / 11);
+});
+
+test("merged groups keep \"Khác\" last and fold past the cap", () => {
+  const rec = (names: string[]) => ({ stats: { bookings: 0, roomPrice: 0, servicePrice: 0, totalPrice: 0, payment: 0, balance: 0, bySource: names.map((name, i) => ({ name, bookings: 1, nights: 1, value: name === "Khác" ? 1000 : 10 + i })), byRoomType: [] }, statuses: [], services: { groups: [], total: 0 } });
+  assert.equal(combine([rec(["a", "Khác"])]).bySource.at(-1)?.name, "Khác");
+  const big = combine([rec(Array.from({ length: 12 }, (_, i) => `s${i}`))]).bySource;
+  assert.equal(big.length, 8);
+  assert.equal(big.at(-1)?.name, "Khác");
+});
+
+const hotel = (id: number, name: string, occ: number): HotelRecord => hotelRecord({
+  id, name,
+  weeks: [{ occ, total: 100 }, { occ: 10, total: 100 }, { occ: 5, total: 100 }],
+  days: [{ date: "2026-10-05", occupied: occ, total: 100 }],
+  reservations: [{ bookingCode: "A", roomType: "Deluxe", source: "Agoda", status: "Đã trả phòng", checkInTime: "2026-10-05", checkOutTime: "2026-10-07", night: 2, roomPrice: 2000000 }],
+  from: "2026-10-05", to: "2026-10-11",
+  services: { data: [{ GroupService: "Ăn", TotalQuantity: 1.5, TotalPriceSale: 50 }] },
+});
+const weekly: WeeklyReport = { v: 3, monday: "2026-10-05", end: "2026-10-11", weekNo: 41, fetchedAt: "2026-10-15T09:00:00Z", hotels: [hotel(1, "A", 40), hotel(2, "B", 60)] };
+
+test("workbook has one sheet per table, numbers stay numbers", () => {
+  const wb = XLSX.read(workbookFor(weekly), { type: "buffer", cellNF: true });
+  assert.deepEqual(wb.SheetNames, ["Tổng hợp", "Công suất theo ngày", "Tiền phòng theo nguồn", "Tiền phòng theo hạng phòng", "Đặt phòng theo trạng thái", "Dịch vụ theo nhóm"]);
+  const s = wb.Sheets["Tổng hợp"];
+  assert.deepEqual(["A2", "B2", "C2", "D2"].map((a) => s[a].v), ["Đơn vị", "A", "B", "Toàn chuỗi"]);
+  assert.equal(s.B3.v, 0.4); // occupancy kept as a fraction
+  assert.equal(s.B3.z, "0.00%");
+  assert.equal(s.D3.v, 0.5); // chain is weighted: (40 + 60) / 200
+  assert.equal(s.B5.v, 1000000); // ADR
+  assert.equal(wb.Sheets["Dịch vụ theo nhóm"].B3.v, 3); // 1.5 per hotel, fractions kept
+});
+
+test("single-hotel scope limits the daily sheet; the summary title carries no hotel name", () => {
+  const wb = XLSX.read(workbookFor(weekly, 2), { type: "buffer" });
+  const daily = wb.Sheets["Công suất theo ngày"];
+  assert.deepEqual([daily.A2.v, daily.B2.v, daily.C2], ["Ngày", "B", undefined]);
+  assert.match(String(daily.A1.v), /- B$/);
+  assert.doesNotMatch(String(wb.Sheets["Tổng hợp"].A1.v), /- B$/);
+});

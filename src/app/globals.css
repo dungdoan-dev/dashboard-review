@@ -33,12 +33,7 @@ a { color: inherit; text-decoration: none; }
 .brand { display: inline-flex; width: fit-content; align-items: center; gap: 9px; margin: 0 0 26px 7px; color: var(--navy); font: 800 20px/1 'Inter', sans-serif; letter-spacing: -.7px; }
 .brand-mark { display: grid; width: 31px; height: 31px; place-items: center; color: #fff; background: var(--blue); border-radius: 10px; box-shadow: 0 4px 10px #1e40af2e; }
 .brand-period { color: #ed9b3a; }
-.workspace-card { display: flex; align-items: center; gap: 10px; padding: 11px 10px; margin-bottom: 25px; border: 1px solid var(--line); border-radius: 11px; }
-.workspace-avatar,.profile-avatar { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; color: #244a9a; background: #e9efff; border-radius: 9px; font-weight: 700; font-size: 12px; }
-.workspace-info { display: grid; flex: 1; min-width: 0; gap: 1px; }
-.workspace-info strong { overflow: hidden; color: #273b58; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-info span { color: var(--faint); font-size: 11px; }
-.workspace-card > svg { color: #5f6f86; }
+.profile-avatar { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; color: #244a9a; background: #e9efff; border-radius: 9px; font-weight: 700; font-size: 12px; }
 .side-nav { display: grid; gap: 4px; }
 .nav-label { margin: 2px 10px 8px; color: #5f6f86; font-size: 11px; font-weight: 700; letter-spacing: 1.05px; }
 .nav-label-spaced { margin-top: 25px; }
@@ -47,11 +42,6 @@ a { color: inherit; text-decoration: none; }
 .nav-link.active { color: var(--blue); background: var(--blue-soft); }
 .nav-count { display: grid; min-width: 22px; height: 21px; place-items: center; padding: 0 5px; margin-left: auto; color: #5974ae; background: #fff; border-radius: 6px; font-size: 12px; }
 .sidebar-bottom { display: grid; gap: 12px; margin-top: auto; }
-.plan-card { padding: 14px 13px; border: 1px solid #e7ebf3; border-radius: 12px; background: linear-gradient(140deg,#f8faff,#f3f6fc); }
-.plan-icon { display: grid; width: 28px; height: 28px; place-items: center; margin-bottom: 9px; color: #5874b5; background: #e8eefb; border-radius: 8px; }
-.plan-card strong { display: block; color: #324662; font-size: 11px; }
-.plan-card p { margin: 4px 0 9px; color: #5f6f86; font-size: 12px; line-height: 1.55; }
-.plan-card a { display: inline-flex; align-items: center; gap: 3px; color: #4166ad; font-size: 12px; font-weight: 700; }
 .profile-row { display: flex; align-items: center; gap: 9px; padding: 9px 3px 2px; border: 0; border-top: 1px solid var(--line); background: transparent; color: #5f6f86; text-align: left; }
 .profile-avatar { width: 31px; height: 31px; color: #66764b; background: #eef3e5; border-radius: 50%; }
 .profile-meta { display: grid; flex: 1; min-width: 0; gap: 1px; }
@@ -281,7 +271,9 @@ tbody tr:hover { background: #fbfcfe; }
   .dashboard-topbar { padding: 0 18px; }
 }
 @media (max-width: 700px) {
-  .sidebar { display: none; }
+  .sidebar { width: min(280px, 85vw); transform: translateX(-100%); visibility: hidden; transition: transform .2s ease, visibility .2s; box-shadow: 0 0 40px #10233f33; }
+  .sidebar.open { transform: none; visibility: visible; }
+  .sidebar-backdrop { position: fixed; z-index: 9; inset: 0; border: 0; background: #10233f66; }
   .main-area { margin-left: 0; }
   .content-wrap { padding: 19px 14px 24px; }
   .dashboard-topbar { min-height: 60px; gap: 10px; padding: 8px 14px; }
@@ -938,3 +930,29 @@ tbody tr:hover { background: #fbfcfe; }
 .summary-report .summary-table tbody th small { margin-top: 2px; color: #6d7f9a; font-size: 12px; font-weight: 500; }
 .summary-report .summary-table td { color: #233a5a; }
 .summary-report .summary-kpi span, .summary-report .summary-insights ul { color: #46586f; }
+.summary-controls button:focus-visible { outline: 2px solid #285ca9; outline-offset: 2px; }
+.summary-controls { flex-wrap: wrap; }
+.summary-controls button:disabled { opacity: .55; cursor: not-allowed; }
+/* Settings: collapsible panels (details/summary); the four automatic-sync panels share a name, so they act as an accordion. */
+.settings-panel > summary { position: relative; padding-right: 40px; list-style: none; cursor: pointer; }
+.settings-panel > summary::-webkit-details-marker { display: none; }
+.settings-panel > summary::after { content: ""; position: absolute; top: 14px; right: 12px; width: 9px; height: 9px; border-right: 2px solid #7990b4; border-bottom: 2px solid #7990b4; transform: rotate(45deg); transition: transform .15s ease; }
+.settings-panel[open] > summary::after { top: 18px; transform: rotate(-135deg); }
+.settings-panel > summary:focus-visible { outline: 2px solid #285ca9; outline-offset: 4px; border-radius: 8px; }
+.settings-panel:not([open]) > summary, .settings-panel:not([open]) > summary p { margin-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .settings-panel > summary::after { transition: none; } }
+/* Sidebar scrolls on short screens; the menu button only shows when the sidebar becomes a drawer (<= 700px). */
+.sidebar { overflow-y: auto; }
+.nav-toggle { display: none; flex: 0 0 auto; }
+@media (max-width: 700px) { .nav-toggle { display: inline-grid; width: 38px; height: 38px; border-color: #dce5f3; } }
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none !important; } }
+/* Responsive: grid children must be allowed to shrink below their content (charts, tables) or the page scrolls sideways. */
+.summary-report, .summary-section { grid-template-columns: minmax(0, 1fr); }
+.summary-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); }
+/* Absolutely positioned children (e.g. .sr-only table headers) must stay inside the scroll box, not stretch the page. */
+.table-scroll, .summary-table-scroll { position: relative; }
+.report-dashboard-head > *, .report-dashboard-actions { min-width: 0; max-width: 100%; }
+.automatic-sync-history .fail { color: #a53b35; }
+.automatic-sync-history > div > span:last-child { text-align: right; }
+@media (max-width: 600px) { .automatic-sync-history > div > span:last-child { text-align: left; } }
