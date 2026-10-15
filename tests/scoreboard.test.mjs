@@ -28,3 +28,10 @@ test("latest is the newest capture across sources", () => {
   const row = computeScoreRow(location({ google: metric(4, 5, 1, "2026-10-12T00:00:00Z"), tripadvisor: metric(4, 5, 1, "2026-10-13T00:00:00Z") }), ["google", "tripadvisor"], 5, {});
   assert.equal(row.latest, "2026-10-13T00:00:00Z");
 });
+
+test("each platform cell carries its own change", () => {
+  const baseline = { "L1|google": { score: 4.0, count: 90 }, "L1|booking": { score: 4.5, count: 40 } };
+  const row = computeScoreRow(location({ google: metric(4.5, 5, 100), booking: metric(9, 10, 50) }), ["google", "booking"], 5, baseline);
+  assert.deepEqual([row.cells.google.dScore, row.cells.google.dCount], [0.5, 10]);
+  assert.deepEqual([row.cells.booking.dScore, row.cells.booking.dCount], [0, 10]);
+});

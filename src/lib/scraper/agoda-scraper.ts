@@ -147,8 +147,7 @@ async function scrapeAgodaTarget(target: AgodaTarget, apiToken: string): Promise
     const count = firstParsed([
       rating?.reviewCount,
       rating?.count,
-      combinedRating?.reviewCount,
-      combinedRating?.count,
+      // combined = Agoda + nguồn đối tác (368), không phải số đánh giá trên Agoda (151) nên không dùng làm dự phòng.
       ratings?.reviewCount,
       ratings?.count,
       item.reviewCount,

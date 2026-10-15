@@ -1,7 +1,7 @@
 import type { LocationRecord, Platform } from "./types";
 
-export type Baseline = Record<string, { score: number; count: number | null }>;
-export type Cell = { score: number | null; count: number | null };
+export type Baseline = Record<string, { score: number; count: number | null; date?: string }>;
+export type Cell = { score: number | null; count: number | null; dScore: number | null; dCount: number | null };
 export type ScoreRow = {
   location: LocationRecord;
   cells: Partial<Record<Platform, Cell>>;
@@ -30,11 +30,16 @@ export function computeScoreRow(location: LocationRecord, platforms: Platform[],
   for (const platform of platforms) {
     const metric = location[platform];
     const score = metric?.rating == null ? null : normalize(metric.rating, metric.ratingScale, scale);
-    cells[platform] = { score, count: metric?.reviewCount ?? null };
+    const before = baseline[`${location.id}|${platform}`];
+    const count = metric?.reviewCount ?? null;
+    cells[platform] = {
+      score, count,
+      dScore: score != null && before ? score - before.score : null,
+      dCount: count != null && before?.count != null ? count - before.count : null,
+    };
     if (score != null) scores.push(score);
     if (metric?.reviewCount != null) total = (total ?? 0) + metric.reviewCount;
     if (metric?.capturedAt && (!latest || metric.capturedAt > latest)) latest = metric.capturedAt;
-    const before = baseline[`${location.id}|${platform}`];
     if (score != null && before) common.push({ now: score, before: before.score, nowCount: metric?.reviewCount ?? null, beforeCount: before.count });
   }
   const countPairs = common.filter((item) => item.nowCount != null && item.beforeCount != null);

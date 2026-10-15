@@ -862,6 +862,8 @@ tbody tr:hover { background: #fbfcfe; }
 .scoreboard .delta.up { color: #247b5b; }
 .scoreboard .delta.down { color: #c0392b; }
 .scoreboard .delta.flat { color: #8795a8; font-weight: 500; }
+.scoreboard-dates { display: grid; gap: 2px; color: #6d7f9a; font-size: 11px; }
+.scoreboard-dates strong { color: #354a67; }
 .scoreboard .age { color: #586b84; font-size: 12px; white-space: nowrap; }
 .scoreboard .age.stale { color: #b7791f; font-weight: 700; }
 
@@ -871,3 +873,5 @@ tbody tr:hover { background: #fbfcfe; }
 .detail-tabs a:hover { color: #285ca9; }
 .detail-tabs a[aria-current="page"] { border-bottom-color: #285ca9; color: #285ca9; }
 .detail-tabs a:focus-visible { outline: 2px solid #3568c8; outline-offset: -2px; }
+.scoreboard-sort input[type="date"] { border: 0; outline: 0; background: transparent; color: #354a67; font: 600 12px 'Inter',sans-serif; }
+.scoreboard-sort button { border: 0; background: transparent; color: #285ca9; font: 600 11px 'Inter',sans-serif; cursor: pointer; }
