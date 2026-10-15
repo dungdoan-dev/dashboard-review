@@ -1,6 +1,7 @@
 "use client";
 
 import type { LocationRecord, Platform } from "@/lib/types";
+import { fmtDate } from "@/lib/format-date";
 
 type ComparisonRow = Record<string, string | number | null>;
 type Snapshot = {
@@ -15,12 +16,6 @@ function previousDate(date: string) {
   const previous = new Date(`${date}T00:00:00Z`);
   previous.setUTCDate(previous.getUTCDate() - 1);
   return previous.toISOString().slice(0, 10);
-}
-
-function formatDate(date: string) {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString("vi-VN", {
-    day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC",
-  });
 }
 
 function sameCoverage(
@@ -73,7 +68,7 @@ export function DailyComparisonChanges({ locations, scoreRows, reviewRows, snaps
 
   return <article className="report-card compare-table-card"><header><div><h3>Tăng giảm giữa các ngày</h3><p>So với ngày lịch liền trước. Dấu — nghĩa là thiếu ngày trước hoặc hai ngày không có cùng nguồn đã chốt.</p></div></header>
     <div className="compare-table-scroll"><table><thead><tr><th>Ngày</th><th>Cơ sở</th><th>Điểm / {ratingScale}</th><th>Thay đổi điểm</th><th>Lượt đánh giá</th><th>Thay đổi lượt</th></tr></thead><tbody>
-      {rows.map((row) => <tr key={`${row.date}-${row.location.id}`}><td>{formatDate(row.date)}</td><th scope="row">{row.location.name}</th><td>{row.score == null ? "—" : row.score.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td><Change current={row.score} previous={row.priorScore} kind="score" /></td><td>{row.review == null ? "—" : row.review.toLocaleString("vi-VN")}</td><td><Change current={row.review} previous={row.priorReview} kind="reviews" /></td></tr>)}
+      {rows.map((row) => <tr key={`${row.date}-${row.location.id}`}><td>{fmtDate(row.date)}</td><th scope="row">{row.location.name}</th><td>{row.score == null ? "—" : row.score.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td><Change current={row.score} previous={row.priorScore} kind="score" /></td><td>{row.review == null ? "—" : row.review.toLocaleString("vi-VN")}</td><td><Change current={row.review} previous={row.priorReview} kind="reviews" /></td></tr>)}
     </tbody></table></div>
   </article>;
 }

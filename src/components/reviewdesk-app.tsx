@@ -54,6 +54,7 @@ import type {
   SnapshotInput,
 } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
+import { fmtDate, fmtDateTime } from "@/lib/format-date";
 
 const typeLabels: Record<LocationType, string> = {
   hotel: "Khách sạn",
@@ -166,7 +167,6 @@ type DailyReportSnapshot = {
 const formDraftStorageKey = "reviewdesk-open-form-draft";
 
 const moneyless = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
-const dateText = new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 function reportDateInVietnam() {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
@@ -553,7 +553,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      setTodayLabel(new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date()));
+      setTodayLabel(`${new Intl.DateTimeFormat("vi-VN", { weekday: "long", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date())}, ${fmtDate(new Date().toISOString())}`);
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -1172,7 +1172,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         };
         setTimelineSnapshots((items) => [...items.filter((item) => !(item.locationId === snapshot.locationId && item.platform === platform && item.reportDate === reportDate)), snapshot]);
       }
-      setNotice(`Đã chốt ${platformLabels[platform]} cho ${dashboardLocation.name} ngày ${new Date(`${reportDate}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" })}.`);
+      setNotice(`Đã chốt ${platformLabels[platform]} cho ${dashboardLocation.name} ngày ${fmtDate(reportDate)}.`);
     } catch (finalizeError) {
       setError(finalizeError instanceof Error ? finalizeError.message : String(finalizeError));
     } finally {
@@ -1232,7 +1232,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         const reportKeys = new Set(reportRows.map((row) => `${row.locationId}:${row.platform}:${row.reportDate}`));
         setTimelineSnapshots((items) => [...items.filter((item) => !reportKeys.has(`${item.locationId}:${item.platform}:${item.reportDate}`)), ...reportRows]);
       }
-      setNotice(`Đã chốt ${reportRows.length} nền tảng cho ${dashboardLocation.name} ngày ${new Date(`${reportDate}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" })}.`);
+      setNotice(`Đã chốt ${reportRows.length} nền tảng cho ${dashboardLocation.name} ngày ${fmtDate(reportDate)}.`);
     } catch (finalizeError) {
       setError(finalizeError instanceof Error ? finalizeError.message : String(finalizeError));
     } finally {
@@ -1586,7 +1586,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <StatCard icon={<Star size={18} />} label="Điểm trung bình các kênh" value={reportData.averageScore == null ? "—" : reportData.averageScore.toFixed(1).replace(".", ",")} suffix={`/ ${reportScale}`} meta={dashboardLocation ? `Chuẩn hóa trên ${dashboardLocation.name}` : "Chưa có dữ liệu điểm"} tone="blue" />
             <StatCard icon={<TrendingUp size={18} />} label="Tổng lượt đánh giá" value={moneyless(reportData.reviewTotal)} meta="Cộng snapshot mới nhất trên các kênh đã chọn" tone="green" />
             <StatCard icon={<Link2 size={18} />} label="Kênh có dữ liệu" value={`${reportData.platformCoverage}`} suffix={`/ ${reportData.selectedPlatforms.length}`} meta="Các nền tảng có snapshot hiện tại" tone="violet" />
-            <StatCard icon={<Clock3 size={18} />} label="Cập nhật gần nhất" value={reportData.latestCapture ? dateText.format(new Date(reportData.latestCapture)) : "—"} meta={dashboardLocation?.name ?? "Chưa chọn cơ sở"} tone="amber" />
+            <StatCard icon={<Clock3 size={18} />} label="Cập nhật gần nhất" value={reportData.latestCapture ? fmtDateTime(reportData.latestCapture) : "—"} meta={dashboardLocation?.name ?? "Chưa chọn cơ sở"} tone="amber" />
           </section>
 
 
@@ -1657,7 +1657,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 <button className="icon-button" type="button" onClick={() => setHistoricalReportPreview(null)} aria-label="Hủy xem trước file nhập"><X size={17} /></button>
               </header>
               <div className="historical-import-summary">
-                <div><span>Khoảng ngày</span><strong>{historicalReportSummary.firstDate && new Date(`${historicalReportSummary.firstDate}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })} – {historicalReportSummary.lastDate && new Date(`${historicalReportSummary.lastDate}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong></div>
+                <div><span>Khoảng ngày</span><strong>{historicalReportSummary.firstDate && fmtDate(historicalReportSummary.firstDate)} – {historicalReportSummary.lastDate && fmtDate(historicalReportSummary.lastDate)}</strong></div>
                 <div><span>Chi nhánh</span><strong>{historicalReportPreview.branches.length}</strong></div>
                 <div><span>Nền tảng</span><strong>{historicalReportSummary.platforms}</strong></div>
                 <div><span>Điểm sao đọc được</span><strong>{historicalReportSummary.ratings.toLocaleString("vi-VN")}</strong></div>
@@ -1688,7 +1688,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                       <tr><th className="timeline-date">NGÀY</th>{selectedReportPlatforms.map((platform) => <th key={platform}>{platformLabels[platform]}</th>)}</tr>
                     </thead><tbody>
                       {timelineRows.map((row) => <tr key={row.date}>
-                        <th className="timeline-date-value"><time dateTime={row.date}>{new Date(`${row.date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })}</time><small className="timeline-date-coverage">Đã chốt {selectedReportPlatforms.filter((platform) => row.metrics[platform]).length}/{selectedReportPlatforms.length} nguồn</small></th>
+                        <th className="timeline-date-value"><time dateTime={row.date}>{fmtDate(row.date)}</time><small className="timeline-date-coverage">Đã chốt {selectedReportPlatforms.filter((platform) => row.metrics[platform]).length}/{selectedReportPlatforms.length} nguồn</small></th>
                         {selectedReportPlatforms.map((platform) => {
                           const metric = row.metrics[platform];
                           const normalizedScore = metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale;
@@ -1721,9 +1721,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                       <ResponsiveContainer width="100%" height={390}>
                         <BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
                           <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                          <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                          <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
                           <YAxis domain={[0, reportScale]} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={38} />
-                          <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
+                          <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
                           <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
                           {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
                         </BarChart>
@@ -1736,9 +1736,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                       <ResponsiveContainer width="100%" height={390}>
                         <BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
                           <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                          <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                          <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
                           <YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={58} />
-                          <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt đánh giá` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
+                          <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt đánh giá` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
                           <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
                           {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
                         </BarChart>
@@ -1749,9 +1749,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 : dailyAnalyticsRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu đã chốt</strong><span>Chốt dữ liệu hôm nay từ trang tổng quan, sau đó báo cáo sẽ xuất hiện tại đây.</span></div></div>
                   : <>
                     <div className="analytics-summary-grid">
-                      <article className="analytics-summary-card"><span>Ngày có số liệu đã chốt</span><strong>{dailyAnalyticsRows.length.toLocaleString("vi-VN")}</strong><small>{new Date(`${dailyAnalyticsRows[0].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })} – {new Date(`${dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</small></article>
+                      <article className="analytics-summary-card"><span>Ngày có số liệu đã chốt</span><strong>{dailyAnalyticsRows.length.toLocaleString("vi-VN")}</strong><small>{fmtDate(dailyAnalyticsRows[0].date)} – {fmtDate(dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date)}</small></article>
                       <article className="analytics-summary-card"><span>Nền tảng có dữ liệu</span><strong>{dailyAnalyticsPlatforms.length}</strong><small>Trong {selectedReportPlatforms.length} nền tảng được chọn</small></article>
-                      <article className="analytics-summary-card"><span>Lần chốt gần nhất</span><strong>{new Date(`${dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</strong><small>{dashboardLocation?.name}</small></article>
+                      <article className="analytics-summary-card"><span>Lần chốt gần nhất</span><strong>{fmtDate(dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date)}</strong><small>{dashboardLocation?.name}</small></article>
                     </div>
                     <div className="analytics-platform-grid">
                       {dailyAnalyticsPlatforms.map((platform) => {
@@ -1761,7 +1761,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                         return <article className="analytics-platform-card" key={platform}>
                           <header><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} /><strong>{platformLabels[platform]}</strong></header>
                           <div className="analytics-platform-values"><div><span>Điểm chuẩn hóa</span><strong>{score == null ? "—" : `${score.toFixed(1).replace(".", ",")} / ${reportScale}`}</strong></div><div><span>Lượt đánh giá</span><strong>{metric?.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong></div></div>
-                          <footer>Chốt ngày {recent?.date ? new Date(`${recent.date}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }) : "—"}{metric?.rating != null ? ` · gốc ${metric.rating.toFixed(1).replace(".", ",")}/${metric.ratingScale}` : ""}</footer>
+                          <footer>Chốt ngày {recent?.date ? fmtDate(recent.date) : "—"}{metric?.rating != null ? ` · gốc ${metric.rating.toFixed(1).replace(".", ",")}/${metric.ratingScale}` : ""}</footer>
                         </article>;
                       })}
                     </div>
@@ -1772,9 +1772,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                           <ResponsiveContainer width="100%" height={340}>
                             <LineChart data={dailyAnalyticsChartData} margin={{ top: 12, right: 18, bottom: 8, left: 8 }}>
                               <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                              <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                              <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
                               <YAxis domain={[dailyAnalyticsScoreDomain.min, dailyAnalyticsScoreDomain.max]} tickFormatter={(value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} width={48} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
-                              <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
+                              <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
                               <Legend verticalAlign="bottom" height={34} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#5f7086" }} formatter={(value) => platformLabels[value as Platform] ?? String(value)} />
                               {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="linear" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
                             </LineChart>
@@ -1788,9 +1788,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                         <ResponsiveContainer width="100%" height={340}>
                           <LineChart data={dailyAnalyticsReviewChartData} margin={{ top: 12, right: 18, bottom: 8, left: 8 }}>
                             <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                            <XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
+                            <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
                             <YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} \u0111\u00e1nh gi\u00e1` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
+                            <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} \u0111\u00e1nh gi\u00e1` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
                             <Legend verticalAlign="bottom" height={34} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#5f7086" }} formatter={(value) => platformLabels[value as Platform] ?? String(value)} />
                             {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="linear" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
                           </LineChart>
@@ -1815,13 +1815,13 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             {platformFilter}
             {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải báo cáo đã chốt…</div> : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được báo cáo: {timelineError}</div> : hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho lựa chọn này.</div> : <>
               <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{reportPlatforms.length} nguồn đang chọn</span></div>
-              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
-              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "UTC" })} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => new Date(`${String(value)}T12:00:00Z`).toLocaleDateString("vi-VN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" })} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
               <DailyComparisonChanges locations={comparisonLocations} scoreRows={hotelComparisonData.scoreRows} reviewRows={hotelComparisonData.reviewRows} snapshots={timelineSnapshots} platforms={selectedReportPlatforms} ratingScale={reportScale} />
               <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><div className="compare-table-scroll"><table><thead><tr><th>Cơ sở</th><th>Điểm / {reportScale}</th><th>Ngày chốt điểm</th><th>Lượt đánh giá</th><th>Ngày chốt lượt</th></tr></thead><tbody>{comparisonLocations.map((location) => {
                 const scoreRow = [...hotelComparisonData.scoreRows].reverse().find((row) => row[location.id] != null);
                 const reviewRow = [...hotelComparisonData.reviewRows].reverse().find((row) => row[location.id] != null);
-                return <tr key={location.id}><th scope="row">{location.name}</th><td>{typeof scoreRow?.[location.id] === "number" ? `${(scoreRow[location.id] as number).toFixed(1).replace(".", ",")}` : "—"}</td><td>{scoreRow ? new Date(`${scoreRow.date}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" }) : "—"}</td><td>{typeof reviewRow?.[location.id] === "number" ? moneyless(reviewRow[location.id] as number) : "—"}</td><td>{reviewRow ? new Date(`${reviewRow.date}T12:00:00Z`).toLocaleDateString("vi-VN", { timeZone: "UTC" }) : "—"}</td></tr>;
+                return <tr key={location.id}><th scope="row">{location.name}</th><td>{typeof scoreRow?.[location.id] === "number" ? `${(scoreRow[location.id] as number).toFixed(1).replace(".", ",")}` : "—"}</td><td>{scoreRow ? fmtDate(String(scoreRow.date)) : "—"}</td><td>{typeof reviewRow?.[location.id] === "number" ? moneyless(reviewRow[location.id] as number) : "—"}</td><td>{reviewRow ? fmtDate(String(reviewRow.date)) : "—"}</td></tr>;
               })}</tbody></table></div></article>
             </>}
           </section>}
@@ -1846,7 +1846,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                     <div className="pd-score"><dt>Điểm {isScale10 ? "(thang 10)" : "(thang 5)"}</dt><dd><RatingCell metric={metric} platform={platform} /></dd></div>
                     {platform === "tripadvisor" && <div><dt>Xếp hạng</dt><dd>{metric?.tripadvisorRank || "—"}</dd></div>}
                     <div><dt>Số đánh giá</dt><dd><ReviewCountCell metric={metric} /></dd></div>
-                    <div><dt>Cập nhật</dt><dd>{metric?.capturedAt ? dateText.format(new Date(metric.capturedAt)) : "Chưa có dữ liệu"}</dd></div>
+                    <div><dt>Cập nhật</dt><dd>{metric?.capturedAt ? fmtDateTime(metric.capturedAt) : "Chưa có dữ liệu"}</dd></div>
                     {platform === "tripadvisor" && metric?.tripadvisorNotice && <div className="pd-notice"><dt>Thư từ Tripadvisor</dt><dd>{metric.tripadvisorNotice}</dd></div>}
                     <div><dt>Nguồn</dt><dd>{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer">Mở liên kết</a> : platform === "grabfood" ? "Tài khoản merchant" : "Chưa có liên kết"}</dd></div>
                   </dl>;

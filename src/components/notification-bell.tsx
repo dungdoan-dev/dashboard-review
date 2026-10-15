@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, CircleAlert, Info, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fmtDateTime } from "@/lib/format-date";
 
 type Notice = { id: number; level: "error" | "warning" | "info"; title: string; message: string; created_at: string; read_at: string | null };
 
-const time = new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 const icons = { error: <CircleAlert size={16} />, warning: <AlertTriangle size={16} />, info: <Info size={16} /> };
 
 /** Chuông thông báo ở header: lỗi và cảnh báo từ đồng bộ tự động và cào thủ công (bảng notifications). */
@@ -72,7 +72,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
         {items.map((item) => <li key={item.id} className={`notification-item ${item.level} ${item.read_at ? "read" : "unread"}`}>
           <button type="button" onClick={() => !item.read_at && void markRead(item.id)}>
             <span className="notification-icon">{icons[item.level]}</span>
-            <span className="notification-body"><strong>{item.title}</strong>{item.message && <small>{item.message}</small>}<time dateTime={item.created_at}>{time.format(new Date(item.created_at))}</time></span>
+            <span className="notification-body"><strong>{item.title}</strong>{item.message && <small>{item.message}</small>}<time dateTime={item.created_at}>{fmtDateTime(item.created_at)}</time></span>
           </button>
         </li>)}
       </ul>}

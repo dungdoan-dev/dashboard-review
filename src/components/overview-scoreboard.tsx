@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Gauge, TrendingDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fmtDate, parseDmy } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import { computeScoreRow, normalize, type Baseline, type ScoreRow } from "@/lib/scoreboard";
 import type { LocationRecord, Platform } from "@/lib/types";
@@ -14,7 +15,6 @@ const EPSILON = 0.05;
 
 const vnToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 const daysBefore = (date: string, days: number) => new Date(new Date(`${date}T00:00:00Z`).getTime() - days * DAY).toISOString().slice(0, 10);
-const dmy = (date: string) => date.split("-").reverse().slice(0, 2).join("/");
 const num = (value: number, digits = 1) => value.toFixed(digits).replace(".", ",");
 const signed = (value: number, digits = 1) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${num(Math.abs(value), digits)}`;
 const trend = (value: number, epsilon: number) => (value > epsilon ? "up" : value < -epsilon ? "down" : "flat");
@@ -33,6 +33,7 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
 }) {
   const [sort, setSort] = useState<Sort>("attention");
   const [baseline, setBaseline] = useState<Baseline>({});
+  const [dateInput, setDateInput] = useState("");
   const [compareDate, setCompareDate] = useState(""); // rỗng = lần chốt gần nhất trước hôm nay
   const idsKey = useMemo(() => locations.map((location) => location.id).sort().join(","), [locations]);
   const platformsKey = platforms.join(",");
@@ -73,9 +74,9 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
   }), [rows, sort]);
 
   const baselineDates = [...new Set(Object.values(baseline).map((item) => item.date).filter((date): date is string => !!date))].sort();
-  const baselineText = baselineDates.length === 0 ? "chưa có mốc" : baselineDates.length === 1 ? dmy(baselineDates[0]) : `${dmy(baselineDates[0])} – ${dmy(baselineDates[baselineDates.length - 1])}`;
+  const baselineText = baselineDates.length === 0 ? "chưa có mốc" : baselineDates.length === 1 ? fmtDate(baselineDates[0]) : `${fmtDate(baselineDates[0])} – ${fmtDate(baselineDates[baselineDates.length - 1])}`;
   const latestCapture = rows.reduce<string | null>((max, row) => (row.latest && (!max || row.latest > max) ? row.latest : max), null);
-  const currentText = latestCapture ? dmy(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(latestCapture))) : dmy(vnToday());
+  const currentText = latestCapture ? fmtDate(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(latestCapture))) : fmtDate(vnToday());
   const withScore = rows.filter((row) => row.avg != null);
   const lowest = withScore.length > 1 ? withScore.reduce((min, row) => (row.avg! < min.avg! ? row : min)) : null;
   const drops = rows.flatMap((row) => platforms.map((platform) => ({ row, platform, d: row.cells[platform]?.dScore ?? null })))
@@ -88,10 +89,10 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
     <header className="scoreboard-head">
       <div><div className="section-kicker"><Gauge size={14} /> BẢNG ĐIỂM · {typeLabel.toUpperCase()}</div>
         <h2 id="scoreboard-title">Tất cả cơ sở {typeLabel} ({rows.length})</h2>
-        <p>Số liệu mới nhất vừa lấy (chưa chốt sổ), điểm quy đổi về thang {scale}. Thay đổi nằm ngay dưới từng nền tảng, so với {compareDate ? `số chốt tới ngày ${compareDate.split("-").reverse().join("/")}` : "lần chốt gần nhất trước hôm nay"}.</p></div>
+        <p>Số liệu mới nhất vừa lấy (chưa chốt sổ), điểm quy đổi về thang {scale}. Thay đổi nằm ngay dưới từng nền tảng, so với {compareDate ? `số chốt tới ngày ${fmtDate(compareDate)}` : "lần chốt gần nhất trước hôm nay"}.</p></div>
       <div className="scoreboard-dates"><span>Ngày mốc: <strong>{baselineText}</strong></span><span>Ngày so sánh: <strong>{currentText}</strong></span></div>
-      <label className="scoreboard-sort"><span>So sánh với ngày</span><input type="date" value={compareDate} max={daysBefore(vnToday(), 1)} onChange={(event) => setCompareDate(event.target.value)} aria-label="Ngày làm mốc so sánh" />
-        {compareDate && <button type="button" onClick={() => setCompareDate("")}>Gần nhất</button>}</label>
+      <label className="scoreboard-sort"><span>So sánh với ngày</span><input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" size={10} value={dateInput} onChange={(event) => { setDateInput(event.target.value); const iso = parseDmy(event.target.value); setCompareDate(iso && iso < vnToday() ? iso : ""); }} aria-label="Ngày làm mốc so sánh (dd/mm/yyyy)" />
+        {compareDate && <button type="button" onClick={() => { setCompareDate(""); setDateInput(""); }}>Gần nhất</button>}</label>
       <label className="scoreboard-sort"><span>Sắp xếp</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Sắp xếp bảng điểm">
         <option value="attention">Điểm thấp nhất trước</option><option value="best">Điểm cao nhất trước</option>
         <option value="reviews">Nhiều đánh giá nhất</option><option value="name">Tên A–Z</option></select></label>

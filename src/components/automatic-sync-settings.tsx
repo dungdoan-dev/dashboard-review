@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Clock3, FlaskConical, LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { LocationRecord } from "@/lib/types";
+import { fmtDate } from "@/lib/format-date";
 
 export type SyncLocationType = "hotel" | "cafe" | "mart" | "entertainment";
 const typeText: Record<SyncLocationType, { title: string; noun: string }> = {
@@ -114,7 +115,7 @@ export function AutomaticSyncSettings({ userId, locations, locationType = "hotel
         {testResult && <div className="automatic-sync-test-result" role="status"><strong>{testResult.name} · {testResult.allOk ? "Tất cả nguồn thành công" : "Có nguồn lỗi"}</strong>{testResult.results.map((item) => <div key={item.platform} className={item.ok ? "ok" : "fail"}><span>{item.ok ? "✓" : "✗"} {sourceLabels[item.platform] ?? item.platform}</span><span>{item.ok ? [item.rating != null ? `điểm ${item.rating}` : null, item.count != null ? `${item.count} đánh giá` : null, item.rank].filter(Boolean).join(" · ") : item.error} · {item.seconds}s</span></div>)}</div>}
       </div>
       <div className="automatic-sync-footer"><button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>{saving && <LoaderCircle size={16} className="spin" />}Lưu lịch đồng bộ</button>{message && <span role="status">{message}</span>}</div>
-      {typeRuns.length > 0 && <div className="automatic-sync-history"><strong>Lần chạy gần đây</strong>{typeRuns.slice(0, 5).map((run, index) => <div key={`${run.location_id}-${run.report_date}-${index}`}><span>{hotels.find((hotel) => hotel.id === run.location_id)?.name ?? "Cơ sở đã xóa"} · {run.report_date}</span><span>{run.status === "success" ? "Đã chốt" : run.status === "partial" ? "Chốt một phần" : run.status === "failed" ? "Lỗi" : "Đang chạy"}{run.message ? ` · ${run.message}` : ""}</span></div>)}</div>}
+      {typeRuns.length > 0 && <div className="automatic-sync-history"><strong>Lần chạy gần đây</strong>{typeRuns.slice(0, 5).map((run, index) => <div key={`${run.location_id}-${run.report_date}-${index}`}><span>{hotels.find((hotel) => hotel.id === run.location_id)?.name ?? "Cơ sở đã xóa"} · {fmtDate(run.report_date)}</span><span>{run.status === "success" ? "Đã chốt" : run.status === "partial" ? "Chốt một phần" : run.status === "failed" ? "Lỗi" : "Đang chạy"}{run.message ? ` · ${run.message}` : ""}</span></div>)}</div>}
     </div>}
   </section>;
 }
