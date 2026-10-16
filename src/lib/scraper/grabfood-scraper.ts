@@ -47,25 +47,63 @@ async function readFeedback(page: Page, waitMs: number) {
   return null;
 }
 
-async function clickContinue(page: Page) {
-  const clicked = await page.evaluate(() => {
-    const button = Array.from(document.querySelectorAll("button")).find((b) => /continue|tiếp tục/i.test(b.innerText) && !b.disabled);
-    button?.click();
-    return Boolean(button);
-  });
-  if (!clicked) throw new Error('Không thấy nút "Tiếp tục" trên trang đăng nhập.');
+const CONTINUE = "continue|tiếp tục";
+const REMOVE_ACCOUNT = "xóa tài khoản|remove (an )?account";
+
+/** Grab nhớ tài khoản đã đăng nhập và hiện màn "chào mừng quay lại" thay vì ô nhập tên: "same" nếu đúng tài khoản đang cấu hình. */
+export function welcomeScreenFor(pageText: string, user: string): "same" | "other" | null {
+  if (!/xóa tài khoản|remove (an )?account/i.test(pageText) || !/tiếp tục|continue/i.test(pageText)) return null;
+  return pageText.toLowerCase().includes(user.trim().toLowerCase()) ? "same" : "other";
 }
 
-/** Two steps on weblogin.grab.com: username -> Continue -> password -> Continue -> redirected to the merchant portal. OTP cannot be automated. */
-async function autoLogin(page: Page, user: string, password: string) {
-  await page.waitForSelector("#Username", { visible: true, timeout: 20_000 });
-  await page.type("#Username", user, { delay: 40 });
-  await clickContinue(page);
+async function clickButton(page: Page, pattern: string, what: string) {
+  const clicked = await page.evaluate((source) => {
+    const re = new RegExp(source, "i");
+    const button = Array.from(document.querySelectorAll<HTMLElement>("button, a, [role=button]")).find((el) => re.test(el.innerText) && !(el as HTMLButtonElement).disabled);
+    button?.click();
+    return Boolean(button);
+  }, pattern);
+  if (!clicked) throw new Error(`Không thấy nút "${what}" trên trang đăng nhập.`);
+}
+
+async function enterPassword(page: Page, password: string) {
   await page.waitForSelector("#password", { visible: true, timeout: 20_000 });
   await page.type("#password", password, { delay: 40 });
-  await clickContinue(page);
+  await clickButton(page, CONTINUE, "Tiếp tục");
   await page.waitForFunction(() => location.hostname === "merchant.grab.com", { timeout: 40_000 });
   await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+}
+
+/** Hướng 2: bấm "Xóa tài khoản" để quay lại bước nhập tên đăng nhập (có thể có hộp xác nhận). */
+async function removeSavedAccount(page: Page) {
+  await clickButton(page, REMOVE_ACCOUNT, "Xóa tài khoản");
+  const gone = () => page.waitForSelector("#Username", { visible: true, timeout: 8_000 }).then(() => true, () => false);
+  if (await gone()) return;
+  await clickButton(page, "^\\s*(xóa|remove|đồng ý|xác nhận|confirm|ok)\\s*$", "Xác nhận xóa"); // hộp xác nhận, nếu có
+}
+
+/**
+ * weblogin.grab.com: tên đăng nhập -> Tiếp tục -> mật khẩu -> Tiếp tục -> cổng merchant. OTP không tự động được.
+ * Nếu Grab đang nhớ một tài khoản: đúng tài khoản thì bấm Tiếp tục + nhập mật khẩu (hướng 1), thất bại hoặc khác tài khoản thì Xóa tài khoản rồi nhập lại từ đầu (hướng 2).
+ */
+async function autoLogin(page: Page, user: string, password: string) {
+  await page.waitForFunction(() => document.querySelector("#Username") || /xóa tài khoản|remove (an )?account/i.test(document.body.innerText), { timeout: 20_000 });
+  const welcome = welcomeScreenFor(await page.evaluate(() => document.body.innerText), user);
+  if (welcome === "same") {
+    try {
+      await clickButton(page, CONTINUE, "Tiếp tục");
+      return await enterPassword(page, password);
+    } catch (err) {
+      console.warn("Hướng 1 (Tiếp tục) lỗi, chuyển sang xóa tài khoản đã nhớ:", err instanceof Error ? err.message : err);
+      await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await page.waitForFunction(() => document.querySelector("#Username") || /xóa tài khoản|remove (an )?account/i.test(document.body.innerText), { timeout: 20_000 });
+    }
+  }
+  if (await page.$("#Username") === null) await removeSavedAccount(page);
+  await page.waitForSelector("#Username", { visible: true, timeout: 20_000 });
+  await page.type("#Username", user, { delay: 40 });
+  await clickButton(page, CONTINUE, "Tiếp tục");
+  await enterPassword(page, password);
 }
 
 /** Reads the merchant feedback score; each account keeps its own browser profile (saved session). */
