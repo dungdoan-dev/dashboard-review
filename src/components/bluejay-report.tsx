@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowDownToLine, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BluejayRevenue } from "@/components/bluejay-revenue";
 import { BLUEJAY_HOTELS, addDays, combine, isoWeek, summarize, vnDay, type WeeklyReport } from "@/lib/bluejay-metrics";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
@@ -220,6 +221,7 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
             </table>
           </div>
         </Card>
+        <BluejayRevenue monday={monday} scopeId={scopeId} />
         <p className="summary-note">Lấy lúc {new Date(report.fetchedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}. Pickup là công suất đã đặt trước tại thời điểm đó.</p>
       </>}
     </section>

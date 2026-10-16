@@ -956,3 +956,18 @@ tbody tr:hover { background: #fbfcfe; }
 .automatic-sync-history .fail { color: #a53b35; }
 .automatic-sync-history > div > span:last-child { text-align: right; }
 @media (max-width: 600px) { .automatic-sync-history > div > span:last-child { text-align: left; } }
+
+/* Báo cáo doanh thu theo đặt phòng (Blue Jay) */
+.bluejay-revenue { display: grid; gap: 16px; padding: 22px; border: 1px solid #e0e7f0; border-radius: 14px; background: #fff; }
+.bluejay-revenue h2 { margin: 0; font: 800 21px 'Inter',sans-serif; color: #233a5a; }
+.revenue-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 12px; }
+.revenue-filters input[type="search"], .revenue-filters select { height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 13px 'Inter',sans-serif; }
+.revenue-filters input[type="search"] { min-width: 260px; }
+.revenue-filters label { display: flex; align-items: center; gap: 6px; color: #46586f; font-size: 13px; }
+.bluejay-revenue .summary-table td, .bluejay-revenue .summary-table th { white-space: nowrap; font-size: 13px; }
+.bluejay-revenue .summary-table tbody th { color: #233a5a; font-weight: 700; }
+.revenue-cancelled { color: #8795a8; }
+.revenue-flag { display: inline-block; margin-right: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.revenue-flag.balance { background: #fdf3e0; color: #8a5a00; }
+.revenue-flag.overpaid, .revenue-flag.mismatch { background: #fdecea; color: #c0392b; }
+.revenue-flag.cancelled-paid { background: #e6effb; color: #285ca9; }

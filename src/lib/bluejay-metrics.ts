@@ -42,6 +42,7 @@ export type Reservation = {
   bookingCode?: string | null; roomType?: string | null; source?: string | null; status?: string | null;
   checkInTime?: string | null; checkOutTime?: string | null; night?: Amount;
   roomPrice?: Amount; servicePrice?: Amount; totalPrice?: Amount; payment?: Amount; balance?: Amount;
+  referenceCode?: string | null; roomName?: string | null; bookDate?: string | null; deposit?: Amount;
 };
 export type OccupancyResponse = { data?: { GrandTotal?: { RoomTypes?: { RoomTypeName?: string; DailyDetails?: { Date: string; RoomOccupied?: Amount; TotalRoom?: Amount }[] }[] } } };
 export type ServiceResponse = { data?: { GroupService?: string; TotalQuantity?: Amount; TotalPriceSale?: Amount }[] };
@@ -58,8 +59,8 @@ export type HotelRecord = {
 };
 export type WeeklyReport = { v: number; monday: string; end: string; weekNo: number; fetchedAt: string; hotels: HotelRecord[] };
 
-const n = (v: Amount) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const money = (v: Amount) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+export const n = (v: Amount) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+export const money = (v: Amount) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
 // Same rule as the PMS dashboard: M-Standard room types are not sellable inventory.
 export const isExcludedRoom = (name: unknown) => /^m(?:\s*[-_‐-―]\s*|\s+)standard(?:$|[^a-z0-9])/i.test(String(name || "").trim());
@@ -92,7 +93,7 @@ export const occupancyTotals = (report: OccupancyResponse): Totals =>
 // Occupancy = occupied / total room-nights. Blocked rooms are NOT taken out of the denominator (verified in the sample project).
 export const rate = ({ occ, total }: Totals) => (total > 0 ? occ / total : 0);
 
-const dedupe = (rows: Reservation[]) => {
+export const dedupe = (rows: Reservation[]) => {
   const seen = new Set<string>();
   return rows.filter((r) => {
     const key = JSON.stringify(r);

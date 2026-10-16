@@ -1,5 +1,6 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
+import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueWeek } from "./bluejay-revenue.ts";
 import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, isoWeek, lastFullWeek, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const BASE = "https://api-pms.bluejaypms.com/api/v2/";
@@ -90,11 +91,19 @@ export async function refreshReport(db: SupabaseClient, monday: string, deadline
   const week = (off: number) => ({ from: apiDate(addDays(monday, 7 * off)), to: apiDate(addDays(monday, 7 * off + 6)) });
 
   const hotels = [];
+  const revenue: HotelRevenue[] = [];
   for (const h of BLUEJAY_HOTELS) { // sequential: the provider is fragile and the window is short
     const occ: OccupancyResponse[] = [];
     for (const off of [0, 1, 2]) occ.push(await call(h.id, "report-room-occupancy", { dateType: 1, ...week(off) }) as OccupancyResponse);
     const reservations = await fetchAllReservations(db, h.id, { dateType: 3, ...week(0) }, check); // every status; filtered in code
     const services = await call(h.id, "extraservice-sumary", { ...week(0), serviceType: 0 }) as ServiceResponse;
+    // Service revenue per day for the revenue report (the week call above stays as is for the operations report).
+    const serviceDays = [];
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(monday, i);
+      serviceDays.push(serviceDay(date, await call(h.id, "extraservice-sumary", { from: apiDate(date), to: apiDate(date), serviceType: 0 }) as { data?: unknown }));
+    }
+    revenue.push({ id: h.id, name: h.name, bookings: revenueBookings(reservations, monday, weekEnd(monday)), services: serviceDays });
     hotels.push(hotelRecord({
       id: h.id, name: h.name,
       weeks: occ.map(occupancyTotals), days: occ.flatMap(occupancyDaily),
@@ -105,7 +114,17 @@ export async function refreshReport(db: SupabaseClient, monday: string, deadline
   // Written only after every hotel succeeded; the raw calls are already in bluejay_api_calls either way.
   const { error } = await db.from("bluejay_weekly_reports").upsert({ week_start: monday, report, fetched_at: report.fetchedAt });
   if (error) throw new Error(`Không lưu được báo cáo tuần: ${error.message}`);
+  const revenueWeek: RevenueWeek = { v: REVENUE_VERSION, monday, end: weekEnd(monday), fetchedAt: report.fetchedAt, hotels: revenue };
+  const { error: revenueError } = await db.from("bluejay_revenue_weeks").upsert({ week_start: monday, revenue: revenueWeek, fetched_at: report.fetchedAt });
+  if (revenueError) throw new Error(`Không lưu được báo cáo doanh thu tuần (đã chạy migration 20261016000000_bluejay_revenue.sql chưa?): ${revenueError.message}`);
   return report;
+}
+
+export async function readRevenue(db: SupabaseClient, monday: string): Promise<RevenueWeek | null> {
+  if (!isDate(monday)) return null;
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").eq("week_start", monday).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.revenue?.v === REVENUE_VERSION ? data.revenue : null;
 }
 
 export async function readReport(db: SupabaseClient, monday: string): Promise<WeeklyReport | null> {
@@ -122,11 +141,17 @@ export async function listReports(db: SupabaseClient, monday: string, limit = 12
   return (data ?? []).map((r) => r.report).filter((r) => r?.v === VERSION).reverse();
 }
 
-/** Mondays in [from, to] that already have a current-version report. */
+/** Mondays in [from, to] that already have a current-version operations report and revenue report. */
 export async function storedWeeks(db: SupabaseClient, from: string, to: string) {
-  const { data, error } = await db.from("bluejay_weekly_reports").select("week_start, v:report->v").gte("week_start", from).lte("week_start", to);
-  if (error) throw new Error(error.message);
-  return new Set((data ?? []).filter((r) => Number(r.v) === VERSION).map((r) => String(r.week_start)));
+  const [reports, revenue] = await Promise.all([
+    db.from("bluejay_weekly_reports").select("week_start, v:report->v").gte("week_start", from).lte("week_start", to),
+    db.from("bluejay_revenue_weeks").select("week_start, v:revenue->v").gte("week_start", from).lte("week_start", to),
+  ]);
+  if (reports.error) throw new Error(reports.error.message);
+  if (revenue.error) throw new Error(revenue.error.message);
+  const current = (rows: { week_start: unknown; v: unknown }[] | null, version: number) => new Set((rows ?? []).filter((r) => Number(r.v) === version).map((r) => String(r.week_start)));
+  const withRevenue = current(revenue.data, REVENUE_VERSION);
+  return new Set([...current(reports.data, VERSION)].filter((week) => withRevenue.has(week)));
 }
 
 export type SyncTrigger = "cron" | "manual" | "script";
