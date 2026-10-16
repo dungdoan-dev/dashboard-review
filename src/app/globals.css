@@ -854,7 +854,7 @@ tbody tr:hover { background: #fbfcfe; }
 .scoreboard .delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
 .scoreboard .delta.up { color: #247b5b; }
 .scoreboard .delta.down { color: #c0392b; }
-.scoreboard .delta.flat { color: #5f6f86; font-weight: 500; }
+.scoreboard .delta.flat { color: #a67c00; font-weight: 700; }
 .scoreboard-dates { display: grid; gap: 2px; color: #6d7f9a; font-size: 11px; }
 .scoreboard-dates strong { color: #354a67; }
 .scoreboard .age { color: #586b84; font-size: 12px; white-space: nowrap; }

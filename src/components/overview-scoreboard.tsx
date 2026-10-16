@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, Gauge, TrendingDown } from "lucide-react";
+import { AlertTriangle, CalendarDays, Gauge, MessageSquareQuote, Star, TrendingDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, parseDmy } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
@@ -114,8 +114,8 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
             <th scope="row"><button type="button" onClick={() => onSelect(row.location.id)} title="Xem chi tiết cơ sở này">{row.location.name}</button><small>{row.location.area}</small></th>
             <td>{row.avg == null ? <span className="muted">—</span> : <span className={`score ${tone(row.avg, scale)}`}>{num(row.avg)}</span>}</td>
             {platforms.map((platform) => { const cell = row.cells[platform]; return <td key={platform}>{cell?.score == null && cell?.count == null ? <span className="muted">—</span> : <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <small>{cell.count.toLocaleString("vi-VN")} đánh giá</small>}
-              {cell?.dScore != null && <small className={`delta ${trend(cell.dScore, EPSILON)}`}>{trend(cell.dScore, EPSILON) === "up" ? "▲" : trend(cell.dScore, EPSILON) === "down" ? "▼" : "•"} {Math.abs(cell.dScore) <= EPSILON ? "Không đổi" : `${signed(cell.dScore)} điểm`}</small>}
-              {cell?.dCount != null && <small className={`delta ${trend(cell.dCount, 0)}`}>{trend(cell.dCount, 0) === "up" ? "▲" : trend(cell.dCount, 0) === "down" ? "▼" : "•"} {cell.dCount === 0 ? "+0" : signed(cell.dCount, 0)} đánh giá</small>}
+              {cell?.dScore != null && <small className={`delta ${trend(cell.dScore, EPSILON)}`}><Star size={11} fill="currentColor" aria-hidden="true" />{Math.abs(cell.dScore) <= EPSILON ? "Không đổi" : `${signed(cell.dScore)} điểm`}</small>}
+              {cell?.dCount != null && <small className={`delta ${trend(cell.dCount, 0)}`}><MessageSquareQuote size={11} aria-hidden="true" />{cell.dCount === 0 ? "Không đổi" : `${signed(cell.dCount, 0)} đánh giá`}</small>}
               </div>}</td>; })}
             <td>{row.total == null ? <span className="muted">—</span> : <strong>{row.total.toLocaleString("vi-VN")}</strong>}</td>
             <td><span className={`age ${age.stale ? "stale" : ""}`}>{age.text}</span></td>
