@@ -317,7 +317,7 @@ function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek:
           <button type="button" onClick={onWeek}><ChevronLeft size={15} />Theo tuần</button>
         </div>
       </div>
-      <div className="range-picker">
+      <div className="bluejay-range-picker">
         <DateField label="Từ ngày" text={fromText} onText={setFromText} max={today} />
         <DateField label="Đến ngày" text={toText} onText={setToText} max={today} />
         <button type="button" className="range-apply" disabled={busy} onClick={submit}>{busy ? "Đang tính…" : "Xem báo cáo"}</button>

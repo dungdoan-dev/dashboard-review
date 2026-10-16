@@ -998,7 +998,7 @@ tbody tr:hover { background: #fbfcfe; }
 .shopee-done { display: flex; align-items: center; gap: 8px; padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #cfe9dc; border-radius: 8px; background: #f0faf4; color: #247b5b; font-size: 13px; }
 
 /* Báo cáo vận hành theo khoảng ngày */
-.range-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
+.bluejay-range-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
 .range-date { display: grid; gap: 4px; color: #46586f; font-size: 12px; font-weight: 700; }
 .range-date-field { position: relative; display: inline-flex; align-items: center; gap: 4px; }
 .range-date-field input[type="text"] { width: 130px; height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
@@ -1009,3 +1009,33 @@ tbody tr:hover { background: #fbfcfe; }
 .range-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .range-presets button { height: 32px; padding: 0 12px; border: 1px solid #dfe6f0; border-radius: 999px; background: #fff; color: #46586f; font: 600 12px 'Inter',sans-serif; cursor: pointer; }
 .range-presets button:hover { border-color: #285ca9; color: #285ca9; }
+
+/* Select hiện đại: danh sách thả xuống tùy biến được (Chrome/Edge 135+). Trình duyệt cũ giữ danh sách mặc định. */
+.location-picker, .analytics-range-picker, .select-box { transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.location-picker:hover, .analytics-range-picker:hover, .select-box:hover { border-color: #b9cdee; }
+.location-picker:focus-within, .analytics-range-picker:focus-within, .select-box:focus-within { border-color: #285ca9; box-shadow: 0 0 0 3px #285ca91f; }
+select { cursor: pointer; }
+@supports (appearance: base-select) {
+  select, select::picker(select) { appearance: base-select !important; }
+  select::picker-icon { display: none; } /* ứng dụng đã vẽ mũi tên riêng */
+  select::picker(select) {
+    box-sizing: border-box; min-width: anchor-size(width); max-height: min(340px, 60vh); margin-top: 6px; padding: 6px;
+    border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-shadow: 0 14px 36px #1b2b4530, 0 2px 6px #1b2b4514;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  select option {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+    color: #233a5a; font: 500 13px 'Inter',sans-serif; cursor: pointer; transition: background-color .1s;
+  }
+  select option:hover, select option:focus-visible { background: #eff4ff; outline: 0; }
+  select option:checked { background: #e6effb; color: #1f4f9e; font-weight: 700; }
+  select option::checkmark { order: 1; margin-left: auto; color: #285ca9; }
+  select option:disabled { color: #9aa8bb; cursor: default; }
+}
+@supports (appearance: base-select) {
+  /* Chữ đã chọn thẳng hàng với nhãn bên cạnh: bỏ đệm mặc định của nút select tùy biến */
+  .location-picker select, .analytics-range-picker select, .select-box select, .daily-report-location-picker select {
+    display: flex; align-items: center; height: 100%; padding: 0; margin: 0; line-height: 1.2;
+  }
+  select selectedcontent { display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
