@@ -350,3 +350,91 @@ create policy "Users delete own notifications" on public.notifications
 revoke all on public.notifications from anon, authenticated;
 grant select, insert, delete on public.notifications to authenticated;
 grant update (read_at) on public.notifications to authenticated;
+
+-- Blue Jay PMS (see migrations/20261015000000_bluejay_api_calls.sql).
+create table if not exists public.bluejay_api_calls (
+  id bigint generated always as identity primary key,
+  hotel_id integer not null,
+  endpoint text not null check (endpoint in (
+    'roomtype-list', 'roomdetail-list', 'source-category', 'source-list',
+    'reservation', 'extraservice-sumary', 'report-room-occupancy'
+  )),
+  params jsonb not null default '{}',          -- query string as sent, e.g. {"dateType":3,"from":"2026-10-6","to":"2026-10-12","page":2}
+  http_status smallint,                         -- null when the request never got a response (timeout, network)
+  ok boolean not null,                          -- false also for HTTP 200 bodies with "errors" (outside the time window)
+  error text check (char_length(error) <= 1000),
+  response jsonb,                               -- full body; null when there was none
+  duration_ms integer,
+  called_at timestamptz not null default now()
+);
+
+create index if not exists bluejay_api_calls_hotel_endpoint_idx
+  on public.bluejay_api_calls(hotel_id, endpoint, called_at desc);
+
+-- Server (service role) only, like grab_merchant_accounts. Admin check is in src/lib/bluejay.ts.
+alter table public.bluejay_api_calls enable row level security;
+revoke all on public.bluejay_api_calls from anon, authenticated;
+
+-- Computed weekly operations report (same shape as the sample project), rebuilt from the API on each refresh.
+create table if not exists public.bluejay_weekly_reports (
+  week_start date primary key check (extract(isodow from week_start) = 1),
+  report jsonb not null,
+  fetched_at timestamptz not null default now()
+);
+alter table public.bluejay_weekly_reports enable row level security;
+revoke all on public.bluejay_weekly_reports from anon, authenticated;
+
+-- Only accounts with app_metadata.role = "admin" may use the app (src/lib/admin.ts).
+-- A restrictive policy is ANDed with the existing owner policies, so a signed-in non-admin sees and changes nothing.
+-- app_metadata is only writable with the service role. Grant: update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}' where email = '...';
+-- Service-role tables (grab_merchant_accounts, bluejay_*) have no user access at all, so they need nothing here.
+drop policy if exists "admins only" on public.locations;
+create policy "admins only" on public.locations as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.location_platforms;
+create policy "admins only" on public.location_platforms as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.metric_snapshots;
+create policy "admins only" on public.metric_snapshots as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.daily_report_snapshots;
+create policy "admins only" on public.daily_report_snapshots as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.automatic_sync_settings;
+create policy "admins only" on public.automatic_sync_settings as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.automatic_sync_runs;
+create policy "admins only" on public.automatic_sync_runs as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins only" on public.notifications;
+create policy "admins only" on public.notifications as restrictive for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Blue Jay sync settings (single row) and a log of every week pulled, shown in Cài đặt like the automatic review sync.
+-- Server (service role) only; the settings page goes through /api/bluejay/sync, which checks the admin role.
+create table if not exists public.bluejay_sync_settings (
+  id smallint primary key default 1 check (id = 1),
+  enabled boolean not null default true,          -- cron pulls the last full week, then missing weeks of the backfill range
+  backfill_from date check (backfill_from is null or extract(isodow from backfill_from) = 1),
+  backfill_to date check (backfill_to is null or extract(isodow from backfill_to) = 1),
+  updated_at timestamptz not null default now(),
+  check (backfill_from is null or backfill_to is null or backfill_from <= backfill_to)
+);
+insert into public.bluejay_sync_settings (id) values (1) on conflict (id) do nothing;
+
+create table if not exists public.bluejay_sync_runs (
+  id bigint generated always as identity primary key,
+  week_start date not null,
+  trigger text not null check (trigger in ('cron', 'manual', 'script')),
+  status text not null check (status in ('running', 'success', 'failed')),
+  message text check (char_length(message) <= 1000),
+  api_calls integer,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+create index if not exists bluejay_sync_runs_started_idx on public.bluejay_sync_runs(started_at desc);
+
+alter table public.bluejay_sync_settings enable row level security;
+alter table public.bluejay_sync_runs enable row level security;
+revoke all on public.bluejay_sync_settings from anon, authenticated;
+revoke all on public.bluejay_sync_runs from anon, authenticated;

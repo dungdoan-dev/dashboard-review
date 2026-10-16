@@ -3,6 +3,7 @@
 import {
   Activity,
   BarChart3,
+  BedDouble,
   ArrowDownToLine,
   ArrowUpRight,
   Building2,
@@ -18,6 +19,7 @@ import {
   Link2,
   LoaderCircle,
   LogOut,
+  Menu,
   MapPin,
   Plus,
   RefreshCw,
@@ -37,6 +39,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
+import { isAdmin } from "@/lib/admin";
 import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
@@ -45,6 +48,9 @@ import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
 import { NotificationBell } from "@/components/notification-bell";
 import { OverviewScoreboard } from "@/components/overview-scoreboard";
 import { SummaryReport } from "@/components/summary-report";
+import { BluejayReport } from "@/components/bluejay-report";
+import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
+import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
   LocationInput,
@@ -222,7 +228,11 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isSettingsPage = pathname === "/settings";
   const isDetailPage = pathname === "/detail";
   const isSummaryPage = pathname === "/summary";
-  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage;
+  const isBluejayPage = pathname === "/bluejay";
+  const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
+  const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
+  const bluejayHotel = BLUEJAY_HOTELS.find((hotel) => hotel.id === bluejayHotelId) ?? null;
+  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isBluejayPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
   const needsLiveMetrics = pathname === "/" || isDetailPage || isSummaryPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
@@ -552,7 +562,24 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }, [supabaseConfigured]);
 
   useEffect(() => {
-    if (user) queueMicrotask(() => void loadLocations());
+    if (!user) return;
+    void (async () => {
+      const supabase = createClient();
+      // `user` and the access token may come from a session stored before the admin role was granted:
+      // ask the auth server, and refresh the token (RLS reads the role from it) before deciding or loading data.
+      const { data: claims } = await supabase.auth.getClaims();
+      if (!isAdmin(user) || !isAdmin(claims?.claims)) {
+        const { data: fresh } = await supabase.auth.getUser();
+        if (!isAdmin(fresh.user)) {
+          await supabase.auth.signOut();
+          setError("Tài khoản không có quyền truy cập. Chỉ tài khoản admin được đăng nhập.");
+          return;
+        }
+        await supabase.auth.refreshSession();
+        if (!isAdmin(user)) { setUser(fresh.user); return; } // re-runs this effect with the admin user
+      }
+      await loadLocations();
+    })();
   }, [user, loadLocations]);
 
   useEffect(() => {
@@ -1534,44 +1561,42 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     return <div className="center-state"><LoaderCircle className="spin" size={22} /><span>Đang kết nối không gian làm việc…</span></div>;
   }
 
-  if (supabaseConfigured && !user) {
+  if (supabaseConfigured && !isAdmin(user)) {
     return <AuthScreen error={error} onClearError={() => setError("")} />;
   }
 
   return (
     <div className="app-shell" onClick={navigateWithinDashboard}>
-      <aside className="sidebar">
+      {navOpen && <button className="sidebar-backdrop" type="button" aria-label="Đóng menu" onClick={() => setNavOpen(false)} />}
+      <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
         <Link className="brand" href="/" aria-label="Reviewdesk, về tổng quan">
           <span className="brand-mark"><Activity size={19} strokeWidth={2.4} /></span>
           <span>reviewdesk<span className="brand-period">.</span></span>
         </Link>
-        <div className="workspace-card">
-          <div className="workspace-avatar">{user?.email?.slice(0, 1).toUpperCase() || "RD"}</div>
-          <div className="workspace-info"><strong>{user ? user.email?.split("@")[0] : "Không gian demo"}</strong><span>{user ? "Workspace cá nhân" : "Dữ liệu minh họa"}</span></div>
-          <ChevronDown size={15} />
-        </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          <span className="nav-label">KHÔNG GIAN LÀM VIỆC</span>
+          <span className="nav-label">REVIEW</span>
           <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
           <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
           <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
           <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
+          <span className="nav-label nav-label-spaced">VẬN HÀNH</span>
+          <Link className={`nav-link ${isBluejayPage ? "active" : ""}`} href="/bluejay"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
           <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
           <button className="nav-link" type="button" onClick={exportCsv}><ArrowDownToLine size={17} /><span>Xuất dữ liệu</span></button>
           <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings"><Settings2 size={17} /><span>Cài đặt</span></Link>
         </nav>
         <div className="sidebar-bottom">
-          <div className="plan-card"><div className="plan-icon"><ShieldCheck size={16} /></div><strong>Dữ liệu của bạn luôn riêng tư</strong><p>Mỗi tài khoản chỉ xem và quản lý cơ sở của mình.</p><a href="#security">Tìm hiểu về bảo mật <ArrowUpRight size={13} /></a></div>
           <button className="profile-row" type="button" onClick={() => { if (supabaseConfigured) void logout(); }} disabled={!supabaseConfigured} aria-label={supabaseConfigured ? "Đăng xuất" : "Chế độ xem demo"}><span className="profile-avatar">{user?.email?.slice(0, 1).toUpperCase() || "D"}</span><span className="profile-meta"><strong>{user?.email || "Chế độ demo"}</strong><small>{supabaseConfigured ? "Tài khoản Supabase" : "Chưa kết nối Supabase"}</small></span>{supabaseConfigured ? <LogOut size={16} /> : <CircleHelp size={16} />}</button>
         </div>
       </aside>
 
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
-          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
-          {!isSummaryPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
+          <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
+          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isBluejayPage ? "VẬN HÀNH KHÁCH SẠN" : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
-          {supabaseConfigured && <NotificationBell userId={user?.id ?? null} />}
+          {supabaseConfigured && !isBluejayPage && <NotificationBell userId={user?.id ?? null} />}
         </header>
         <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isComparePage ? "compare-reports-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
           {!supabaseConfigured && <div className="demo-banner"><span className="demo-spark"><Database size={16} /></span><div><strong>Đang xem dữ liệu mẫu</strong><span>Kết nối Supabase để lưu dữ liệu riêng cho tài khoản của bạn.</span></div><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Cách kết nối <ArrowUpRight size={14} /></a></div>}
@@ -1585,6 +1610,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {platformFilter}
           <OverviewScoreboard locations={typeLocations} platforms={selectedReportPlatforms} scale={reportScale} userId={supabaseConfigured ? user?.id ?? null : null} selectedId={dashboardLocation?.id ?? null} typeLabel={filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""} onSelect={(id) => { setSelectedLocationId(id); router.push("/detail"); }} />
           </>}
+
+          {isBluejayPage && <BluejayReport scopeId={bluejayHotel?.id ?? null} />}
 
           {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
 
@@ -1839,7 +1866,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           {isTripadvisorRankPage && <TripadvisorRankReportPage locationName={dashboardLocation?.name ?? null} rows={tripadvisorRankRows} loading={timelineLoading} error={timelineError} />}
 
-          {!isReportDataPage && !isSettingsPage && !isSummaryPage && <>
+          {!isReportDataPage && !isSettingsPage && !isSummaryPage && !isBluejayPage && <>
         <section className="locations-section" id="locations">
             <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Mỗi thẻ là một nền tảng, chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
             <div className="platform-detail-grid">
@@ -1869,8 +1896,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </section>
           </>}
 
-          {isSettingsPage && <section className="report-settings-section" id="settings" aria-labelledby="report-settings-title">
-            <div className="report-settings-intro"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h2 id="report-settings-title">Cấu hình báo cáo</h2><p>Chọn thang điểm chuẩn hóa và các nền tảng được tính vào báo cáo. Tùy chọn được lưu trên trình duyệt này.</p></div>
+          {isSettingsPage && <details className="report-settings-section settings-panel" id="settings" aria-labelledby="report-settings-title" open>
+            <summary className="report-settings-intro"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h2 id="report-settings-title">Cấu hình báo cáo</h2><p>Chọn thang điểm chuẩn hóa và các nền tảng được tính vào báo cáo. Tùy chọn được lưu trên trình duyệt này.</p></summary>
             <div className="report-settings-controls">
               <fieldset className="report-setting-group"><legend>Thang điểm báo cáo</legend><div className="scale-options">
                 {[5, 10].map((scale) => <label className={`scale-option ${reportScale === scale ? "selected" : ""}`} key={scale}><input type="radio" name="report-scale" value={scale} checked={reportScale === scale} onChange={() => setReportScale(scale as 5 | 10)} /><span>{scale} điểm</span></label>)}
@@ -1879,19 +1906,20 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 {reportPlatformOrder.map((platform) => <label className="report-platform-option" key={platform}><input type="checkbox" checked={reportPlatforms.includes(platform)} onChange={() => changeReportPlatforms((current) => current.includes(platform) ? current.length > 1 ? current.filter((item) => item !== platform) : current : [...current, platform])} /><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}</label>)}
               </div><small>Tổng lượt đánh giá cộng số mới nhất của các nền tảng được chọn.</small></fieldset>
             </div>
-          </section>}
+          </details>}
 
           {isSettingsPage && <>
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="hotel" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="cafe" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="mart" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="entertainment" />
+            <BluejaySyncSettings />
           </>}
-          {isSettingsPage && <section className="location-settings-section" id="settings-locations" aria-labelledby="location-settings-title">
-            <header className="location-settings-heading">
+          {isSettingsPage && <details className="location-settings-section settings-panel" id="settings-locations" aria-labelledby="location-settings-title" open>
+            <summary className="location-settings-heading">
               <div><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT · CƠ SỞ</div><h2 id="location-settings-title">Cấu hình cơ sở</h2><p>Quản lý thông tin và liên kết nền tảng cho từng cơ sở.</p></div>
-              <button className="button button-primary" onClick={() => openLocationModal()}><Plus size={16} />Thêm cơ sở</button>
-            </header>
+              <button className="button button-primary" onClick={(event) => { event.preventDefault(); openLocationModal(); }}><Plus size={16} />Thêm cơ sở</button>
+            </summary>
             <div className="table-panel location-settings-panel">
               <div className="table-scroll"><table className="location-settings-table"><thead><tr><th>CƠ SỞ</th><th>LOẠI HÌNH</th><th>NỀN TẢNG ĐÃ KẾT NỐI</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>
                 {locations.map((location) => {
@@ -1917,7 +1945,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               </tbody></table></div>
               <div className="table-footer"><span><strong>{locations.length}</strong> cơ sở</span><span><span className="footer-dot" />{supabaseConfigured ? "Dữ liệu theo tài khoản" : "Dữ liệu demo trong trình duyệt"}</span></div>
             </div>
-          </section>}
+          </details>}
 
           <footer className="page-footer"><span>Reviewdesk · Theo dõi đánh giá đa nền tảng</span><span><ShieldCheck size={14} /> Dữ liệu theo tài khoản</span></footer>
         </div>
@@ -1968,7 +1996,6 @@ function ReviewCountCell({ metric }: { metric: Metric | null }) {
 }
 
 function AuthScreen({ error, onClearError }: { error: string; onClearError: () => void }) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -1976,8 +2003,7 @@ function AuthScreen({ error, onClearError }: { error: string; onClearError: () =
     try {
       const saved = window.sessionStorage.getItem("reviewdesk-auth-form-draft");
       if (!saved) return;
-      const draft = JSON.parse(saved) as { mode?: string; email?: string };
-      if (draft.mode === "signin" || draft.mode === "signup") setMode(draft.mode);
+      const draft = JSON.parse(saved) as { email?: string };
       if (typeof draft.email === "string") setEmail(draft.email);
     } catch {
       // Ignore unavailable or malformed session storage.
@@ -1992,10 +2018,8 @@ function AuthScreen({ error, onClearError }: { error: string; onClearError: () =
     const email = String(form.get("email"));
     const password = String(form.get("password"));
     const supabase = createClient();
-    const result = mode === "signin"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
-    if (!result.error && mode === "signin") {
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    if (!result.error) {
       try {
         window.sessionStorage.removeItem("reviewdesk-auth-form-draft");
       } catch {
@@ -2003,8 +2027,7 @@ function AuthScreen({ error, onClearError }: { error: string; onClearError: () =
       }
     }
     if (result.error) setMessage(result.error.message);
-    else if (mode === "signup" && !result.data.session) setMessage("Kiểm tra email để xác nhận tài khoản, sau đó quay lại đăng nhập.");
     setPending(false);
   }
-  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#"><span className="brand-mark"><Activity size={19} /></span><span>reviewdesk<span className="brand-period">.</span></span></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN LÝ ĐÁNH GIÁ AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi danh tiếng thương hiệu trên Google Maps và Tripadvisor trong cùng một không gian.</p><div className="auth-proof"><span><Check size={14} /> Dữ liệu được phân tách theo tài khoản</span><span><Check size={14} /> Lưu lịch sử theo từng snapshot</span></div></div><div className="auth-visual"><div className="auth-chart"><span style={{ height: "39%" }} /><span style={{ height: "55%" }} /><span style={{ height: "48%" }} /><span style={{ height: "72%" }} /><span style={{ height: "63%" }} /><span style={{ height: "86%" }} /><span style={{ height: "76%" }} /><span style={{ height: "100%" }} /></div><div className="auth-float-card"><span className="float-star"><Star size={14} fill="currentColor" /></span><strong>4,8 <small>/ 5</small></strong><span className="float-label">ĐIỂM TRUNG BÌNH</span></div></div><div className="auth-copyright">© 2026 Reviewdesk · Dữ liệu của bạn, quyền kiểm soát của bạn.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><span className="brand-mark"><Activity size={18} /></span>reviewdesk<span className="brand-period">.</span></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>{mode === "signin" ? "Chào mừng trở lại" : "Tạo tài khoản"}</h2><p className="auth-subtitle">{mode === "signin" ? "Đăng nhập để tiếp tục quản lý cơ sở của bạn." : "Đăng ký để bắt đầu theo dõi đánh giá."}</p><form className="auth-form" onSubmit={submit}><label className="field">Email<input type="email" name="email" required autoComplete="email" placeholder="ban@congty.com" value={email} onChange={(event) => { const nextEmail = event.target.value; setEmail(nextEmail); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ mode, email: nextEmail })); } catch { /* Keep the field usable without storage. */ } }} /></label><label className="field">Mật khẩu<input type="password" name="password" required minLength={8} autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Tối thiểu 8 ký tự" /></label>{(error || message) && <div className="auth-error" role="alert">{message || error}</div>}<button className="button button-primary auth-submit" disabled={pending}>{pending && <LoaderCircle className="spin" size={16} />}{mode === "signin" ? "Đăng nhập" : "Tạo tài khoản"}<ArrowUpRight size={16} /></button></form><div className="auth-switch">{mode === "signin" ? "Chưa có tài khoản?" : "Đã có tài khoản?"}<button onClick={() => { const nextMode = mode === "signin" ? "signup" : "signin"; setMode(nextMode); setMessage(""); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ mode: nextMode, email })); } catch { /* Keep mode switching usable without storage. */ } }}>{mode === "signin" ? "Đăng ký" : "Đăng nhập"}</button></div><div className="auth-security"><ShieldCheck size={16} /><span>Kết nối được bảo vệ bởi Supabase Auth và chính sách Row Level Security.</span></div></section></div></main>;
+  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#"><span className="brand-mark"><Activity size={19} /></span><span>reviewdesk<span className="brand-period">.</span></span></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN LÝ ĐÁNH GIÁ AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi danh tiếng thương hiệu trên Google Maps và Tripadvisor trong cùng một không gian.</p><div className="auth-proof"><span><Check size={14} /> Dữ liệu được phân tách theo tài khoản</span><span><Check size={14} /> Lưu lịch sử theo từng snapshot</span></div></div><div className="auth-visual"><div className="auth-chart"><span style={{ height: "39%" }} /><span style={{ height: "55%" }} /><span style={{ height: "48%" }} /><span style={{ height: "72%" }} /><span style={{ height: "63%" }} /><span style={{ height: "86%" }} /><span style={{ height: "76%" }} /><span style={{ height: "100%" }} /></div><div className="auth-float-card"><span className="float-star"><Star size={14} fill="currentColor" /></span><strong>4,8 <small>/ 5</small></strong><span className="float-label">ĐIỂM TRUNG BÌNH</span></div></div><div className="auth-copyright">© 2026 Reviewdesk · Dữ liệu của bạn, quyền kiểm soát của bạn.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><span className="brand-mark"><Activity size={18} /></span>reviewdesk<span className="brand-period">.</span></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>Chào mừng trở lại</h2><p className="auth-subtitle">Chỉ tài khoản admin được đăng nhập.</p><form className="auth-form" onSubmit={submit}><label className="field">Email<input type="email" name="email" required autoComplete="email" placeholder="ban@congty.com" value={email} onChange={(event) => { const nextEmail = event.target.value; setEmail(nextEmail); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ email: nextEmail })); } catch { /* Keep the field usable without storage. */ } }} /></label><label className="field">Mật khẩu<input type="password" name="password" required minLength={8} autoComplete="current-password" placeholder="Tối thiểu 8 ký tự" /></label>{(error || message) && <div className="auth-error" role="alert">{message || error}</div>}<button className="button button-primary auth-submit" disabled={pending}>{pending && <LoaderCircle className="spin" size={16} />}Đăng nhập<ArrowUpRight size={16} /></button></form><div className="auth-security"><ShieldCheck size={16} /><span>Kết nối được bảo vệ bởi Supabase Auth và chính sách Row Level Security.</span></div></section></div></main>;
 }

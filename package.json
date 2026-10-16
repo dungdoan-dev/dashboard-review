@@ -25,7 +25,9 @@
     "scrape:grab:all": "node scraper/grab-merchant-scraper.mjs --all --save",
     "scrape:grab": "node scraper/grab-merchant-scraper.mjs",
     "scrape:grab:login": "node scraper/grab-merchant-scraper.mjs --login",
-    "scrape:all": "node scraper/gmaps-scraper.mjs && node scraper/tripadvisor-scraper.mjs && node scraper/agoda-scraper.mjs && node scraper/booking-scraper.mjs && node scraper/tripcom-scraper.mjs"
+    "scrape:all": "node scraper/gmaps-scraper.mjs && node scraper/tripadvisor-scraper.mjs && node scraper/agoda-scraper.mjs && node scraper/booking-scraper.mjs && node scraper/tripcom-scraper.mjs",
+    "test": "node --test src/lib/bluejay-metrics.test.ts",
+    "bluejay:backfill": "node scraper/bluejay-backfill.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "^153.0.0",

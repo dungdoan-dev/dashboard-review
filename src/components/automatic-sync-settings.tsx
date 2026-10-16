@@ -98,8 +98,9 @@ export function AutomaticSyncSettings({ userId, locations, locationType = "hotel
 
   const typeRuns = runs.filter((run) => hotels.some((hotel) => hotel.id === run.location_id));
 
-  return <section className="automatic-sync-section" id={`settings-automatic-sync-${locationType}`} aria-labelledby={`automatic-sync-title-${locationType}`}>
-    <div className="automatic-sync-heading"><div className="section-kicker"><Clock3 size={14} /> CÀI ĐẶT · TỰ ĐỘNG</div><h2 id={`automatic-sync-title-${locationType}`}>{title}</h2><p>Chạy lần lượt theo hàng đợi. Nguồn nào lấy được số liệu thì được lưu và chốt sổ ngay; nguồn lỗi bị bỏ qua và báo ở chuông thông báo trên header.</p></div>
+  // One open at a time across the four location types (accordion via the shared details name).
+  return <details className="automatic-sync-section settings-panel" name="automatic-sync" id={`settings-automatic-sync-${locationType}`} aria-labelledby={`automatic-sync-title-${locationType}`}>
+    <summary className="automatic-sync-heading"><div className="section-kicker"><Clock3 size={14} /> CÀI ĐẶT · TỰ ĐỘNG</div><h2 id={`automatic-sync-title-${locationType}`}>{title}</h2><p>Chạy lần lượt theo hàng đợi. Nguồn nào lấy được số liệu thì được lưu và chốt sổ ngay; nguồn lỗi bị bỏ qua và báo ở chuông thông báo trên header.</p></summary>
     {!userId ? <p className="form-hint">Kết nối Supabase và đăng nhập để dùng lịch tự động.</p> : loading ? <p>Đang tải cấu hình…</p> : <div className="automatic-sync-controls">
       <label className="automatic-sync-toggle"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span>Bật đồng bộ tự động</span></label>
       <label className="field">Khung giờ chạy mỗi ngày (giờ Việt Nam)<select value={hour} onChange={(event) => setHour(Number(event.target.value))}>{Array.from({ length: 24 }, (_, value) => <option key={value} value={value}>{String(value).padStart(2, "0")}:00–{String((value + 1) % 24).padStart(2, "0")}:00</option>)}</select></label>
@@ -117,5 +118,5 @@ export function AutomaticSyncSettings({ userId, locations, locationType = "hotel
       <div className="automatic-sync-footer"><button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>{saving && <LoaderCircle size={16} className="spin" />}Lưu lịch đồng bộ</button>{message && <span role="status">{message}</span>}</div>
       {typeRuns.length > 0 && <div className="automatic-sync-history"><strong>Lần chạy gần đây</strong>{typeRuns.slice(0, 5).map((run, index) => <div key={`${run.location_id}-${run.report_date}-${index}`}><span>{hotels.find((hotel) => hotel.id === run.location_id)?.name ?? "Cơ sở đã xóa"} · {fmtDate(run.report_date)}</span><span>{run.status === "success" ? "Đã chốt" : run.status === "partial" ? "Chốt một phần" : run.status === "failed" ? "Lỗi" : "Đang chạy"}{run.message ? ` · ${run.message}` : ""}</span></div>)}</div>}
     </div>}
-  </section>;
+  </details>;
 }
