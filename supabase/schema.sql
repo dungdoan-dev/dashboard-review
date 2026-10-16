@@ -44,7 +44,7 @@ create table if not exists public.metric_snapshots (
 create table if not exists public.daily_report_snapshots (
   id bigint generated always as identity primary key,
   location_id uuid not null references public.locations(id) on delete cascade,
-  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood')),
+  platform text not null check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood', 'shopeefood')),
   report_date date not null default ((now() at time zone 'Asia/Ho_Chi_Minh')::date),
   rating_scale numeric(4,1) not null check (rating_scale > 0),
   rating_value numeric(4,2),
@@ -57,7 +57,7 @@ create table if not exists public.daily_report_snapshots (
   constraint daily_report_has_value check (rating_value is not null or review_count is not null),
   constraint daily_report_rating_value_check check (rating_value is null or (rating_value >= 0 and rating_value <= rating_scale)),
   constraint daily_report_platform_rating_scale_check check (
-    (platform in ('google', 'tripadvisor', 'grabfood') and rating_scale = 5)
+    (platform in ('google', 'tripadvisor', 'grabfood', 'shopeefood') and rating_scale = 5)
     or (platform in ('agoda', 'booking', 'tripcom', 'traveloka') and rating_scale = 10)
     or (platform = 'expedia' and rating_scale in (5, 10))
   ),
@@ -84,7 +84,7 @@ alter table public.daily_report_snapshots add constraint daily_report_tripadviso
 alter table public.metric_snapshots alter column rating_scale drop default;
 alter table public.metric_snapshots drop constraint if exists metric_snapshots_platform_check;
 alter table public.metric_snapshots add constraint metric_snapshots_platform_check
-  check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood'));
+  check (platform in ('google', 'tripadvisor', 'agoda', 'booking', 'expedia', 'tripcom', 'traveloka', 'grabfood', 'shopeefood'));
 alter table public.metric_snapshots drop constraint if exists metric_snapshots_source_check;
 alter table public.metric_snapshots add constraint metric_snapshots_source_check
   check (source in ('manual', 'api', 'import', 'crawler'));
@@ -112,7 +112,7 @@ where metric_snapshots.platform = target.platform
   and metric_snapshots.rating_scale <> target.scale;
 alter table public.metric_snapshots add constraint metric_snapshots_platform_rating_scale_check
   check (
-    (platform in ('google', 'tripadvisor', 'grabfood') and rating_scale = 5)
+    (platform in ('google', 'tripadvisor', 'grabfood', 'shopeefood') and rating_scale = 5)
     or (platform in ('agoda', 'booking', 'tripcom', 'traveloka') and rating_scale = 10)
     or (platform = 'expedia' and rating_scale in (5, 10))
   );
@@ -447,3 +447,20 @@ create table if not exists public.bluejay_revenue_weeks (
 );
 alter table public.bluejay_revenue_weeks enable row level security;
 revoke all on public.bluejay_revenue_weeks from anon, authenticated;
+
+-- Admins share one workspace (see migrations/20261016020000_admins_see_all.sql).
+drop policy if exists "admins manage all locations" on public.locations;
+create policy "admins manage all locations" on public.locations for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins manage all platform links" on public.location_platforms;
+create policy "admins manage all platform links" on public.location_platforms for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins manage all snapshots" on public.metric_snapshots;
+create policy "admins manage all snapshots" on public.metric_snapshots for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins manage all daily reports" on public.daily_report_snapshots;
+create policy "admins manage all daily reports" on public.daily_report_snapshots for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins manage all notifications" on public.notifications;
+create policy "admins manage all notifications" on public.notifications for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');

@@ -11,7 +11,7 @@ import { runExpediaScraper } from "@/lib/scraper/expedia-scraper";
 import { runTravelokaScraper } from "@/lib/scraper/traveloka-scraper";
 
 // Dùng chung cho cron đồng bộ tự động và nút "Chạy thử" trong Cài đặt; chỉ gồm nguồn khách sạn.
-export type HotelPlatform = Exclude<AnyPlatform, "grabfood">;
+export type HotelPlatform = Exclude<AnyPlatform, "grabfood" | "shopeefood">;
 type Platform = HotelPlatform;
 
 export const hotelPlatforms: Platform[] = ["google", "tripadvisor", "agoda", "booking", "expedia", "tripcom", "traveloka"];

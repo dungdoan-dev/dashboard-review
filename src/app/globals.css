@@ -181,6 +181,7 @@ tbody tr:hover { background: #fbfcfe; }
 .score-booking { color: #003b95; border-color: #c7d9fc; background: #eef4ff; }
 .score-tripcom { color: #1a6fe8; border-color: #cde1fe; background: #f2f7ff; }
 .score-expedia { color: #1668e8; border-color: #cfe0ff; background: #f1f6ff; }
+.score-shopeefood { color: #c2381c; border-color: #f5cfc5; background: #fff4f1; }
 .score-grabfood { color: #00873a; border-color: #c8ecd6; background: #f0faf4; }
 .score-traveloka { color: #1686d9; border-color: #cbeafa; background: #f0faff; }
 .review-count { color: #5f6f86; font-size: 11px; }
@@ -209,8 +210,8 @@ tbody tr:hover { background: #fbfcfe; }
 .modal-error { padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #f2d3d0; border-radius: 8px; background: #fff5f3; color: #9f4139; font-size: 12px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 19px 23px 14px; }
 .location-links-grid:is([data-location-type="cafe"], [data-location-type="mart"], [data-location-type="entertainment"]) :is([data-link-platform="agoda"], [data-link-platform="booking"], [data-link-platform="tripcom"], [data-link-platform="expedia"], [data-link-platform="traveloka"]),
-.location-links-grid:not([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="grabfood"], [data-link-platform="shopeefood"]),
-.location-links-grid[data-location-type="mart"] [data-link-platform="shopeefood"] { display: none; }
+.location-links-grid:not([data-location-type="cafe"], [data-location-type="mart"]) :is([data-link-platform="grabfood"], [data-link-platform="shopeefood"])
+  { display: none; }
 .field { display: grid; align-content: start; gap: 6px; color: #586b84; font-size: 12px; font-weight: 700; }
 .full-field { grid-column: 1/-1; }
 .field input,.field select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #e1e7ef; border-radius: 8px; outline: 0; background: #fff; color: #405570; font-size: 11px; font-weight: 500; }
@@ -413,7 +414,7 @@ tbody tr:hover { background: #fbfcfe; }
   .analytics-platform-grid { grid-template-columns: 1fr; }
   .analytics-chart-card { padding: 13px; }
 }
-.content-wrap.settings-page-active > :not(.settings-page-heading):not(.report-settings-section):not(.automatic-sync-section):not(.location-settings-section):not(.alert) { display: none; }
+.content-wrap.settings-page-active > :not(.settings-page-heading):not(.report-settings-section):not(.automatic-sync-section):not(.manual-import):not(.location-settings-section):not(.alert) { display: none; }
 .automatic-sync-section { margin-top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
 .automatic-sync-heading h2 { margin: 6px 0; font-size: 20px; color: #203653; }
 .automatic-sync-heading p, .automatic-sync-queue p { margin: 0 0 16px; color: #66758a; font-size: 13px; line-height: 1.5; }
@@ -971,3 +972,40 @@ tbody tr:hover { background: #fbfcfe; }
 .revenue-flag.balance { background: #fdf3e0; color: #8a5a00; }
 .revenue-flag.overpaid, .revenue-flag.mismatch { background: #fdecea; color: #c0392b; }
 .revenue-flag.cancelled-paid { background: #e6effb; color: #285ca9; }
+
+/* Nhập thủ công ShopeeFood (Cafe, Mart 24h): nút mở cửa sổ nhập hàng loạt */
+.manual-import { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
+.manual-import h3 { margin: 0 0 4px; color: #233a5a; font: 700 16px 'Inter',sans-serif; }
+.manual-import p { margin: 0; max-width: 560px; color: #586b84; font-size: 13px; }
+.manual-import-actions, .manual-import-bar { display: flex; flex-wrap: wrap; gap: 10px; }
+.manual-import-bar { margin-bottom: 14px; }
+.shopee-open { display: inline-flex; align-items: center; gap: 6px; }
+.shopee-modal { width: min(760px, 100%); }
+.shopee-body { display: grid; gap: 14px; padding: 16px 23px; }
+.shopee-date { display: flex; align-items: center; gap: 10px; color: #46586f; font-size: 13px; font-weight: 700; }
+.shopee-date-field { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.shopee-date-field input[type="text"] { width: 130px; }
+.shopee-date-field button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
+.shopee-date-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.shopee-body input { height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
+.shopee-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shopee-table th, .shopee-table td { padding: 8px 8px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: middle; font-size: 13px; letter-spacing: 0; text-transform: none; }
+.shopee-table thead th { color: #46586f; font-weight: 700; }
+.shopee-table tbody th { min-width: 180px; color: #233a5a; font-weight: 700; white-space: normal; }
+.shopee-table tbody th small { display: block; color: #6d7f9a; font-weight: 500; }
+.shopee-table td input { width: 110px; }
+.shopee-current { color: #6d7f9a; white-space: nowrap; }
+.shopee-done { display: flex; align-items: center; gap: 8px; padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #cfe9dc; border-radius: 8px; background: #f0faf4; color: #247b5b; font-size: 13px; }
+
+/* Báo cáo vận hành theo khoảng ngày */
+.range-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
+.range-date { display: grid; gap: 4px; color: #46586f; font-size: 12px; font-weight: 700; }
+.range-date-field { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.range-date-field input[type="text"] { width: 130px; height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
+.range-date-field button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
+.range-date-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.range-apply { height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #285ca9; color: #fff; font: 600 13px 'Inter',sans-serif; cursor: pointer; }
+.range-apply:disabled { opacity: .6; cursor: default; }
+.range-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.range-presets button { height: 32px; padding: 0 12px; border: 1px solid #dfe6f0; border-radius: 999px; background: #fff; color: #46586f; font: 600 12px 'Inter',sans-serif; cursor: pointer; }
+.range-presets button:hover { border-color: #285ca9; color: #285ca9; }

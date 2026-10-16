@@ -33,6 +33,12 @@ export function PlatformBrandLogo({ platform }: { platform: Platform }) {
         <path fill="#287dfa" d="M11.8 3.5h3.8v3.1h3.5v3.3h-3.5v5.7c0 1.5.6 2.1 1.9 2.1.6 0 1.1-.1 1.6-.3v3.4c-.8.3-1.8.5-2.8.5-3 0-4.5-1.6-4.5-4.7V9.9H9V6.6h2.8V3.5ZM4 7h3.7v14.1H4V7Z" />
         <circle cx="5.9" cy="3.3" r="2" fill="#13b8c7" />
       </svg>;
+    case "shopeefood":
+      return <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="5" fill="#ee4d2d" />
+        <path fill="#fff" d="M7.5 9h9l-.8 8.2a1.5 1.5 0 0 1-1.5 1.3H9.8a1.5 1.5 0 0 1-1.5-1.3L7.5 9Z" />
+        <path fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" d="M9.7 9V8a2.3 2.3 0 0 1 4.6 0v1" />
+      </svg>;
     case "expedia":
       return <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10.5" fill="#1668e8" />

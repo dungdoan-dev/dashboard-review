@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
-import { DEFAULT_RATING_SCALE } from "@/lib/platforms";
-import type { LocationRecord, Platform } from "@/lib/types";
+import { DEFAULT_RATING_SCALE } from "./platforms.ts"; // relative with .ts so the test can run it with plain Node
+import type { LocationRecord, Platform } from "./types.ts";
 
 export type HistoricalReportDraft = {
   sourceLocationName: string;
@@ -35,6 +35,10 @@ const platformAliases: Record<string, Platform> = {
   expedia: "expedia",
   tripcom: "tripcom",
   traveloka: "traveloka",
+  grabfood: "grabfood",
+  grab: "grabfood",
+  shopeefood: "shopeefood",
+  shopee: "shopeefood",
 };
 
 function normalizeLabel(value: string): string {
@@ -123,6 +127,7 @@ export function parseHistoricalReportWorkbook(
   data: ArrayBuffer,
   fileName: string,
   locations: Pick<LocationRecord, "id" | "name">[],
+  allowedPlatforms?: Platform[],
 ): HistoricalReportPreview {
   const workbook = XLSX.read(data);
   const sheetName = workbook.SheetNames[0];
@@ -192,6 +197,11 @@ export function parseHistoricalReportWorkbook(
       continue;
     }
     if (!fieldColumns.has("rating") && !fieldColumns.has("count")) continue;
+    // Import is per business type: a platform that type does not use (e.g. Booking in a Cafe file) is skipped.
+    if (allowedPlatforms && !allowedPlatforms.includes(platform)) {
+      warnings.add(`Bỏ qua nền tảng không thuộc loại hình này: ${group.platformLabel}.`);
+      continue;
+    }
 
     if (!branches.has(group.sourceLocationName)) {
       branches.set(group.sourceLocationName, {

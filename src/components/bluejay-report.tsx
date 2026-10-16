@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ArrowDownToLine, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BluejayRevenue } from "@/components/bluejay-revenue";
-import { BLUEJAY_HOTELS, addDays, combine, isoWeek, summarize, vnDay, type WeeklyReport } from "@/lib/bluejay-metrics";
+import { BluejayRevenue, RevenueView } from "@/components/bluejay-revenue";
+import { MAX_RANGE_DAYS, rangeSummary, type RangeData } from "@/lib/bluejay-range";
+import { fmtDate, parseDmy } from "@/lib/format-date";
+import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, vnDay, type WeeklyReport } from "@/lib/bluejay-metrics";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
 const AXIS = { fill: "#586b84", fontSize: 12 };
@@ -88,6 +90,7 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
   const [history, setHistory] = useState<WeeklyReport[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "refreshing">("loading");
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"week" | "range">("week");
 
   const apply = useCallback((r: WeekResponse) => {
     if (r.monday) setMonday(r.monday);
@@ -134,6 +137,8 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
   const bars = (list: { name: string; value: number }[]) => list.slice(0, 8).map((g) => ({ name: g.name, value: g.value }));
   const busy = status !== "ready";
 
+  if (mode === "range") return <BluejayRangeView scopeId={scopeId} onWeek={() => setMode("week")} />;
+
   return (
     <section className="summary-report">
       <div className="summary-hero">
@@ -142,6 +147,7 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
           <p>Dữ liệu Blue Jay PMS. Blue Jay chỉ trả lời trong 08:00–08:30, 16:00–16:59 và 00:00–00:59 (giờ VN).</p>
         </div>
         <div className="summary-controls">
+          <button type="button" onClick={() => setMode("range")}><CalendarDays size={15} />Khoảng ngày</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, -7))}><ChevronLeft size={15} />Tuần trước</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, 7))}>Tuần sau<ChevronRight size={15} /></button>
           <button type="button" disabled={!monday || busy} onClick={() => void refresh()}><RefreshCw size={15} className={status === "refreshing" ? "spin" : undefined} />{status === "refreshing" ? "Đang lấy dữ liệu…" : report ? "Cập nhật từ Blue Jay" : "Lấy dữ liệu từ Blue Jay"}</button>
@@ -223,6 +229,128 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
         </Card>
         <BluejayRevenue monday={monday} scopeId={scopeId} />
         <p className="summary-note">Lấy lúc {new Date(report.fetchedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}. Pickup là công suất đã đặt trước tại thời điểm đó.</p>
+      </>}
+    </section>
+  );
+}
+
+type RangeResponse = RangeData & { message?: string };
+type RangeState = { status: "loading" | "ready"; data: RangeData | null; error: string };
+
+async function fetchRange(from: string, to: string): Promise<RangeState> {
+  const res = await fetch(`/api/bluejay/range?from=${from}&to=${to}`, { cache: "no-store" }).catch(() => null);
+  if (!res) return { status: "ready", data: null, error: "Không kết nối được máy chủ." };
+  const body: RangeResponse = await res.json().catch(() => ({} as RangeResponse));
+  return res.ok ? { status: "ready", data: body, error: "" } : { status: "ready", data: null, error: body.message ?? `Lỗi ${res.status}` };
+}
+
+function DateField({ label, text, onText, max }: { label: string; text: string; onText: (value: string) => void; max: string }) {
+  const picker = useRef<HTMLInputElement>(null);
+  return <label className="range-date"><span>{label}</span>
+    <span className="range-date-field">
+      <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" value={text} onChange={(event) => onText(event.target.value)} aria-label={`${label} (dd/mm/yyyy)`} />
+      <button type="button" onClick={() => picker.current?.showPicker()} aria-label={`Mở lịch chọn ${label.toLowerCase()}`}><CalendarDays size={15} /></button>
+      <input ref={picker} className="range-date-native" type="date" tabIndex={-1} aria-hidden="true" max={max} value={parseDmy(text) ?? ""} onChange={(event) => onText(event.target.value ? fmtDate(event.target.value) : "")} />
+    </span></label>;
+}
+
+/** Any date range (up to MAX_RANGE_DAYS days) from the weeks already stored. */
+function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek: () => void }) {
+  const today = todayVN();
+  const lastMonday = addDays(mondayOf(today), -7);
+  const [fromText, setFromText] = useState(fmtDate(lastMonday));
+  const [toText, setToText] = useState(fmtDate(addDays(lastMonday, 6)));
+  const [state, setState] = useState<RangeState>({ status: "loading", data: null, error: "" });
+
+  const load = useCallback((from: string, to: string) => {
+    setState({ status: "loading", data: null, error: "" });
+    void fetchRange(from, to).then(setState);
+  }, []);
+
+  useEffect(() => {
+    let active = true; // the state already starts as "loading"
+    void fetchRange(lastMonday, addDays(lastMonday, 6)).then((next) => { if (active) setState(next); });
+    return () => { active = false; };
+  }, [lastMonday]);
+
+  function apply(from: string, to: string) {
+    setFromText(fmtDate(from)); setToText(fmtDate(to));
+    load(from, to);
+  }
+  function submit() {
+    const from = parseDmy(fromText), to = parseDmy(toText);
+    if (!from || !to) return setState((s) => ({ ...s, error: "Nhập ngày đúng dạng dd/mm/yyyy." }));
+    if (from > to) return setState((s) => ({ ...s, error: "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc." }));
+    if (to > today) return setState((s) => ({ ...s, error: "Ngày kết thúc không được sau hôm nay." }));
+    if (addDays(from, MAX_RANGE_DAYS) <= to) return setState((s) => ({ ...s, error: `Chọn tối đa ${MAX_RANGE_DAYS} ngày.` }));
+    load(from, to);
+  }
+
+  const yesterday = addDays(today, -1);
+  const monthStart = `${today.slice(0, 8)}01`;
+  const prevMonthEnd = addDays(monthStart, -1);
+  const presets: [string, string, string][] = [
+    ["Tuần trước", lastMonday, addDays(lastMonday, 6)],
+    ["7 ngày qua", addDays(yesterday, -6), yesterday],
+    ["30 ngày qua", addDays(yesterday, -29), yesterday],
+    ["Tháng này", monthStart, yesterday < monthStart ? monthStart : yesterday],
+    ["Tháng trước", `${prevMonthEnd.slice(0, 8)}01`, prevMonthEnd],
+  ];
+
+  const { data } = state;
+  const hotels = data ? data.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
+  const sum = data ? rangeSummary(hotels, data.dates.length) : null;
+  const series = hotels.map((h) => ({ key: `h${h.id}`, name: h.name, color: hotelColor(h.id) }));
+  const daily: Row[] = data ? data.dates.map((date, i) => ({ x: vnDay(date), ...Object.fromEntries(hotels.map((h) => [`h${h.id}`, h.days[i] && h.days[i]!.total > 0 ? h.days[i]!.occupied / h.days[i]!.total : null])) })) : [];
+  const missingReport = data?.weeks.filter((w) => !w.report) ?? [];
+  const missingRevenue = data?.weeks.filter((w) => w.report && !w.revenue) ?? [];
+  const busy = state.status === "loading";
+
+  return (
+    <section className="summary-report">
+      <div className="summary-hero">
+        <div>
+          <h1>Báo cáo vận hành theo khoảng ngày · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
+          <p>Tính từ các tuần đã lưu, không gọi Blue Jay. Chọn tối đa {MAX_RANGE_DAYS} ngày.</p>
+        </div>
+        <div className="summary-controls">
+          <button type="button" onClick={onWeek}><ChevronLeft size={15} />Theo tuần</button>
+        </div>
+      </div>
+      <div className="range-picker">
+        <DateField label="Từ ngày" text={fromText} onText={setFromText} max={today} />
+        <DateField label="Đến ngày" text={toText} onText={setToText} max={today} />
+        <button type="button" className="range-apply" disabled={busy} onClick={submit}>{busy ? "Đang tính…" : "Xem báo cáo"}</button>
+        <div className="range-presets">{presets.map(([label, from, to]) => <button type="button" key={label} disabled={busy} onClick={() => apply(from, to)}>{label}</button>)}</div>
+      </div>
+      {state.error && <div className="alert alert-error" role="alert"><span>{state.error}</span></div>}
+      {busy && <p className="summary-note">Đang tính báo cáo…</p>}
+
+      {data && sum && !busy && <>
+        {(missingReport.length > 0 || sum.missingDays > 0) && <p className="summary-note bad">Thiếu dữ liệu công suất {sum.missingDays} ngày{missingReport.length > 0 && `: chưa lấy tuần ${missingReport.map((w) => `${vnDay(w.monday)}`).join(", ")}`}. Các ngày này không được tính vào công suất; lấy bổ sung ở chế độ “Theo tuần” hoặc backfill trong Cài đặt.</p>}
+        {missingRevenue.length > 0 && <p className="summary-note">Tuần {missingRevenue.map((w) => vnDay(w.monday)).join(", ")} chưa có báo cáo doanh thu (tuần được lấy trước khi có báo cáo này). Tiền phòng, giá phòng TB và dịch vụ của các tuần đó chưa tính; bấm “Cập nhật từ Blue Jay” ở chế độ “Theo tuần” để bổ sung.</p>}
+        <div className="summary-kpis">
+          <Kpi label="Công suất" value={pct(sum.rate)} />
+          <Kpi label="Tổng số đêm lưu trú" value={num(sum.nights)} />
+          <Kpi label="Giá phòng TB (ADR)" value={num(sum.adr)} />
+          <Kpi label="RevPAR" value={num(sum.revpar)} />
+          <Kpi label="Tiền phòng" value={num(sum.room)} />
+          <Kpi label="Số ngày" value={String(data.dates.length)} />
+        </div>
+
+        <Card title="Công suất theo ngày" note="Mỗi điểm là công suất của một ngày; ngày thiếu dữ liệu để trống.">
+          <LineTrend data={daily} series={series} label="Công suất theo ngày" />
+          <Rows head={["Ngày", ...hotels.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...hotels.map((h) => (d[`h${h.id}`] == null ? "–" : pct(Number(d[`h${h.id}`]))))])} />
+        </Card>
+
+        {!scopeId && hotels.length > 1 && <Card title="Theo khách sạn">
+          <div className="summary-table summary-table-scroll"><table>
+            <thead><tr><th>Khách sạn</th><th>Công suất</th><th>Đêm lưu trú</th><th>Giá phòng TB</th><th>RevPAR</th><th>Tiền phòng</th></tr></thead>
+            <tbody>{hotels.map((h) => { const x = rangeSummary([h], data.dates.length); return <tr key={h.id}><th scope="row">{h.name}</th><td>{pct(x.rate)}</td><td>{num(x.nights)}</td><td>{num(x.adr)}</td><td>{num(x.revpar)}</td><td>{num(x.room)}</td></tr>; })}</tbody>
+          </table></div>
+        </Card>}
+
+        <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services }))} showHotel={!scopeId} period="kỳ" />
       </>}
     </section>
   );

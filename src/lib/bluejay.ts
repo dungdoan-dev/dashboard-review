@@ -1,7 +1,8 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
+import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
 import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueWeek } from "./bluejay-revenue.ts";
-import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, isoWeek, lastFullWeek, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
+import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const BASE = "https://api-pms.bluejaypms.com/api/v2/";
 const VERSION = 3; // same snapshot shape as the sample project; bump when it changes (older snapshots are ignored)
@@ -125,6 +126,24 @@ export async function readRevenue(db: SupabaseClient, monday: string): Promise<R
   const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").eq("week_start", monday).maybeSingle();
   if (error) throw new Error(error.message);
   return data?.revenue?.v === REVENUE_VERSION ? data.revenue : null;
+}
+
+/** Any date range from the stored weeks only (no call to Blue Jay). Weeks that were never pulled show up as gaps in the result. */
+export async function readRange(db: SupabaseClient, from: string, to: string) {
+  if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
+  if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
+  const first = mondayOf(from), last = mondayOf(to);
+  const [reports, revenue] = await Promise.all([
+    db.from("bluejay_weekly_reports").select("report").gte("week_start", first).lte("week_start", last),
+    db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", first).lte("week_start", last),
+  ]);
+  if (reports.error) throw new Error(reports.error.message);
+  if (revenue.error) throw new Error(revenue.error.message);
+  return rangeData(
+    (reports.data ?? []).map((r) => r.report).filter((r) => r?.v === VERSION),
+    (revenue.data ?? []).map((r) => r.revenue).filter((r) => r?.v === REVENUE_VERSION),
+    from, to,
+  );
 }
 
 export async function readReport(db: SupabaseClient, monday: string): Promise<WeeklyReport | null> {
