@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Check, LoaderCircle, Upload, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, LoaderCircle, Upload, X } from "lucide-react";
 import type { LocationRecord } from "@/lib/types";
 import { fmtDate, fmtDateTime, parseDmy } from "@/lib/format-date";
+import { DatePicker } from "@/components/date-picker";
 
 export type ShopeefoodRow = { locationId: string; rating: number; reviewCount: number };
 
@@ -25,7 +26,6 @@ export function ShopeefoodImportButton({ label, locations, onSave }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
-  const pickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -74,13 +74,8 @@ export function ShopeefoodImportButton({ label, locations, onSave }: {
         {done && <div className="shopee-done" role="status"><Check size={15} /> {done}</div>}
         <div className="shopee-body">
           <label className="shopee-date"><span>Ngày số liệu</span>
-            <span className="shopee-date-field">
-              <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" value={dateText} aria-label="Ngày số liệu (dd/mm/yyyy)"
-                onChange={(event) => { setDateText(event.target.value); setDate(parseDmy(event.target.value) ?? ""); }} />
-              <button type="button" onClick={() => pickerRef.current?.showPicker()} aria-label="Mở lịch chọn ngày"><CalendarDays size={15} /></button>
-              <input ref={pickerRef} className="shopee-date-native" type="date" tabIndex={-1} aria-hidden="true" max={vnToday()} value={date}
-                onChange={(event) => { setDate(event.target.value); setDateText(event.target.value ? fmtDate(event.target.value) : ""); }} />
-            </span></label>
+            <DatePicker label="Ngày số liệu" text={dateText} onText={(text) => { setDateText(text); setDate(parseDmy(text) ?? ""); }} max={vnToday()} />
+          </label>
           {locations.length === 0 ? <p className="summary-note">Chưa có cơ sở loại {label}. Thêm cơ sở trong Cài đặt.</p> : <table className="shopee-table">
             <thead><tr><th>Chi nhánh</th><th>Điểm (0–5)</th><th>Số đánh giá</th><th>Hiện có</th></tr></thead>
             <tbody>{locations.map((location) => {

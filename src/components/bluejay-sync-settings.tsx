@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { BedDouble, LoaderCircle, Play, RefreshCw } from "lucide-react";
 import { fmtDateTime } from "@/lib/format-date";
-import { addDays, isoWeek, vnDay } from "@/lib/bluejay-metrics";
+import { addDays, isoWeek } from "@/lib/bluejay-metrics";
+import { fmtDate } from "@/lib/format-date";
+import { IsoDatePicker } from "@/components/date-picker";
 
 type Run = { id: number; week_start: string; trigger: "cron" | "manual" | "script"; status: "running" | "success" | "failed"; message: string | null; api_calls: number | null; started_at: string; finished_at: string | null };
 type State = {
@@ -13,7 +15,7 @@ type State = {
 
 const TRIGGER = { cron: "Tự động", manual: "Chạy tay", script: "Script" } as const;
 const STATUS = { running: "Đang chạy", success: "Thành công", failed: "Lỗi" } as const;
-const weekLabel = (monday: string) => `Tuần ${isoWeek(monday)} (${vnDay(monday)}–${vnDay(addDays(monday, 6))})`;
+const weekLabel = (monday: string) => `Tuần ${isoWeek(monday)} (${fmtDate(monday)}–${fmtDate(addDays(monday, 6))})`;
 
 async function load(): Promise<State | { message: string }> {
   const res = await fetch("/api/bluejay/sync", { cache: "no-store" }).catch(() => null);
@@ -71,8 +73,8 @@ export function BluejaySyncSettings() {
     {!data ? <p>{message || "Đang tải cấu hình…"}</p> : <div className="automatic-sync-controls">
       <label className="automatic-sync-toggle"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span>Bật đồng bộ tự động</span></label>
       <div className="automatic-sync-queue"><strong>Lấy bù các tuần cũ</strong><p>Chọn một ngày bất kỳ trong tuần đầu và tuần cuối; hệ thống tính theo tuần (thứ Hai–Chủ nhật). Để trống cả hai nếu không cần lấy bù.</p>
-        <label className="field">Từ tuần<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
-        <label className="field">Đến tuần<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+        <div className="field"><span>Từ tuần</span><IsoDatePicker label="Từ tuần" value={from} onChange={setFrom} /></div>
+        <div className="field"><span>Đến tuần</span><IsoDatePicker label="Đến tuần" value={to} onChange={setTo} /></div>
         {data.backfill && <p>Đã có <strong>{data.backfill.stored}/{data.backfill.total}</strong> tuần trong khoảng đã lưu{data.settings?.backfill_from && data.settings.backfill_to ? ` (${weekLabel(data.settings.backfill_from)} → ${weekLabel(data.settings.backfill_to)})` : ""}.</p>}
         <p>Lượt chạy kế tiếp sẽ lấy <strong>{data.pending}</strong> tuần.</p>
       </div>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BluejayRevenue, RevenueView } from "@/components/bluejay-revenue";
 import { MAX_RANGE_DAYS, rangeSummary, type RangeData } from "@/lib/bluejay-range";
-import { fmtDate, parseDmy } from "@/lib/format-date";
-import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, vnDay, type WeeklyReport } from "@/lib/bluejay-metrics";
+import { fmtDate, fmtDateTime, parseDmy } from "@/lib/format-date";
+import { DatePicker } from "@/components/date-picker";
+import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, type WeeklyReport } from "@/lib/bluejay-metrics";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
 const AXIS = { fill: "#586b84", fontSize: 12 };
@@ -84,7 +85,9 @@ async function fetchWeek(week: string | null): Promise<WeekResponse> {
 }
 
 /** scopeId: one hotel (from /bluejay/<id> in the sidebar), or null for the whole chain. */
-export function BluejayReport({ scopeId }: { scopeId: number | null }) {
+export type BluejayView = "operations" | "revenue";
+
+export function BluejayReport({ scopeId, view }: { scopeId: number | null; view: BluejayView }) {
   const [monday, setMonday] = useState<string | null>(null); // null = server default (last full week)
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [history, setHistory] = useState<WeeklyReport[]>([]);
@@ -127,7 +130,7 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
   const barColor = scopeId ? hotelColor(scopeId) : "#6b7280";
   const series = recs.map((h) => ({ key: `h${h.id}`, name: h.name, color: hotelColor(h.id) }));
   const daily: Row[] = recs[0]?.days.map((d, i) => ({
-    x: vnDay(d.date),
+    x: fmtDate(d.date),
     ...Object.fromEntries(recs.map((h) => [`h${h.id}`, h.days[i]?.total > 0 ? h.days[i].occupied / h.days[i].total : null])),
   })) ?? [];
   const trend = (fn: (x: ReturnType<typeof summarize>) => number): Row[] => history.map((r) => ({
@@ -137,13 +140,13 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
   const bars = (list: { name: string; value: number }[]) => list.slice(0, 8).map((g) => ({ name: g.name, value: g.value }));
   const busy = status !== "ready";
 
-  if (mode === "range") return <BluejayRangeView scopeId={scopeId} onWeek={() => setMode("week")} />;
+  if (mode === "range") return <BluejayRangeView scopeId={scopeId} view={view} onWeek={() => setMode("week")} />;
 
   return (
     <section className="summary-report">
       <div className="summary-hero">
         <div>
-          <h1>{monday ? `Báo cáo vận hành tuần ${isoWeek(monday)} (${vnDay(monday)}–${vnDay(addDays(monday, 6))})` : "Báo cáo vận hành"} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
+          <h1>{monday ? `Báo cáo ${view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} tuần ${isoWeek(monday)} (${fmtDate(monday)}–${fmtDate(addDays(monday, 6))})` : view === "revenue" ? "Báo cáo doanh thu và thanh toán" : "Báo cáo vận hành"} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
           <p>Dữ liệu Blue Jay PMS. Blue Jay chỉ trả lời trong 08:00–08:30, 16:00–16:59 và 00:00–00:59 (giờ VN).</p>
         </div>
         <div className="summary-controls">
@@ -159,17 +162,18 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
       {status !== "loading" && !report && !error && <p className="summary-note">Chưa có dữ liệu cho tuần này. Bấm “Lấy dữ liệu từ Blue Jay” trong khung giờ API.</p>}
 
       {report && s && c && monday && <>
+        {view === "operations" && <>
         <div className="summary-kpis">
           <Kpi label="Công suất" value={pct(s.rate)} />
           <Kpi label="Tổng số đêm lưu trú" value={num(s.nights)} />
           <Kpi label="Giá phòng TB (ADR)" value={num(s.adr)} />
           <Kpi label="RevPAR" value={num(s.revpar)} />
-          <Kpi label={`Pickup ${vnDay(addDays(monday, 7))}–${vnDay(addDays(monday, 13))}`} value={pct(s.pickup1)} />
-          <Kpi label={`Pickup ${vnDay(addDays(monday, 14))}–${vnDay(addDays(monday, 20))}`} value={pct(s.pickup2)} />
+          <Kpi label={`Pickup ${fmtDate(addDays(monday, 7))}–${fmtDate(addDays(monday, 13))}`} value={pct(s.pickup1)} />
+          <Kpi label={`Pickup ${fmtDate(addDays(monday, 14))}–${fmtDate(addDays(monday, 20))}`} value={pct(s.pickup2)} />
         </div>
 
         <Card title="Công suất theo ngày" note="Tuần báo cáo và hai tuần tiếp theo (phần sau đường nét đứt là công suất đã đặt trước).">
-          <LineTrend data={daily} series={series} split={vnDay(addDays(monday, 6))} label="Công suất theo ngày" />
+          <LineTrend data={daily} series={series} split={fmtDate(addDays(monday, 6))} label="Công suất theo ngày" />
           <Rows head={["Ngày", ...recs.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...recs.map((h) => (d[`h${h.id}`] == null ? "–" : pct(Number(d[`h${h.id}`]))))])} />
         </Card>
 
@@ -227,8 +231,9 @@ export function BluejayReport({ scopeId }: { scopeId: number | null }) {
             </table>
           </div>
         </Card>
-        <BluejayRevenue monday={monday} scopeId={scopeId} />
-        <p className="summary-note">Lấy lúc {new Date(report.fetchedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}. Pickup là công suất đã đặt trước tại thời điểm đó.</p>
+        </>}
+        {view === "revenue" && <BluejayRevenue monday={monday} scopeId={scopeId} />}
+        {view === "operations" && <p className="summary-note">Lấy lúc {fmtDateTime(report.fetchedAt)}. Pickup là công suất đã đặt trước tại thời điểm đó.</p>}
       </>}
     </section>
   );
@@ -245,17 +250,11 @@ async function fetchRange(from: string, to: string): Promise<RangeState> {
 }
 
 function DateField({ label, text, onText, max }: { label: string; text: string; onText: (value: string) => void; max: string }) {
-  const picker = useRef<HTMLInputElement>(null);
-  return <label className="range-date"><span>{label}</span>
-    <span className="range-date-field">
-      <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" value={text} onChange={(event) => onText(event.target.value)} aria-label={`${label} (dd/mm/yyyy)`} />
-      <button type="button" onClick={() => picker.current?.showPicker()} aria-label={`Mở lịch chọn ${label.toLowerCase()}`}><CalendarDays size={15} /></button>
-      <input ref={picker} className="range-date-native" type="date" tabIndex={-1} aria-hidden="true" max={max} value={parseDmy(text) ?? ""} onChange={(event) => onText(event.target.value ? fmtDate(event.target.value) : "")} />
-    </span></label>;
+  return <div className="range-date"><span>{label}</span><DatePicker label={label} text={text} onText={onText} max={max} /></div>;
 }
 
 /** Any date range (up to MAX_RANGE_DAYS days) from the weeks already stored. */
-function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek: () => void }) {
+function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; view: BluejayView; onWeek: () => void }) {
   const today = todayVN();
   const lastMonday = addDays(mondayOf(today), -7);
   const [fromText, setFromText] = useState(fmtDate(lastMonday));
@@ -301,7 +300,7 @@ function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek:
   const hotels = data ? data.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
   const sum = data ? rangeSummary(hotels, data.dates.length) : null;
   const series = hotels.map((h) => ({ key: `h${h.id}`, name: h.name, color: hotelColor(h.id) }));
-  const daily: Row[] = data ? data.dates.map((date, i) => ({ x: vnDay(date), ...Object.fromEntries(hotels.map((h) => [`h${h.id}`, h.days[i] && h.days[i]!.total > 0 ? h.days[i]!.occupied / h.days[i]!.total : null])) })) : [];
+  const daily: Row[] = data ? data.dates.map((date, i) => ({ x: fmtDate(date), ...Object.fromEntries(hotels.map((h) => [`h${h.id}`, h.days[i] && h.days[i]!.total > 0 ? h.days[i]!.occupied / h.days[i]!.total : null])) })) : [];
   const missingReport = data?.weeks.filter((w) => !w.report) ?? [];
   const missingRevenue = data?.weeks.filter((w) => w.report && !w.revenue) ?? [];
   const busy = state.status === "loading";
@@ -310,7 +309,7 @@ function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek:
     <section className="summary-report">
       <div className="summary-hero">
         <div>
-          <h1>Báo cáo vận hành theo khoảng ngày · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
+          <h1>Báo cáo {view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} theo khoảng ngày · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
           <p>Tính từ các tuần đã lưu, không gọi Blue Jay. Chọn tối đa {MAX_RANGE_DAYS} ngày.</p>
         </div>
         <div className="summary-controls">
@@ -327,8 +326,9 @@ function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek:
       {busy && <p className="summary-note">Đang tính báo cáo…</p>}
 
       {data && sum && !busy && <>
-        {(missingReport.length > 0 || sum.missingDays > 0) && <p className="summary-note bad">Thiếu dữ liệu công suất {sum.missingDays} ngày{missingReport.length > 0 && `: chưa lấy tuần ${missingReport.map((w) => `${vnDay(w.monday)}`).join(", ")}`}. Các ngày này không được tính vào công suất; lấy bổ sung ở chế độ “Theo tuần” hoặc backfill trong Cài đặt.</p>}
-        {missingRevenue.length > 0 && <p className="summary-note">Tuần {missingRevenue.map((w) => vnDay(w.monday)).join(", ")} chưa có báo cáo doanh thu (tuần được lấy trước khi có báo cáo này). Tiền phòng, giá phòng TB và dịch vụ của các tuần đó chưa tính; bấm “Cập nhật từ Blue Jay” ở chế độ “Theo tuần” để bổ sung.</p>}
+        {(missingReport.length > 0 || sum.missingDays > 0) && <p className="summary-note bad">Thiếu dữ liệu công suất {sum.missingDays} ngày{missingReport.length > 0 && `: chưa lấy tuần ${missingReport.map((w) => `${fmtDate(w.monday)}`).join(", ")}`}. Các ngày này không được tính vào công suất; lấy bổ sung ở chế độ “Theo tuần” hoặc backfill trong Cài đặt.</p>}
+        {missingRevenue.length > 0 && <p className="summary-note">Tuần {missingRevenue.map((w) => fmtDate(w.monday)).join(", ")} chưa có báo cáo doanh thu (tuần được lấy trước khi có báo cáo này). Tiền phòng, giá phòng TB và dịch vụ của các tuần đó chưa tính; bấm “Cập nhật từ Blue Jay” ở chế độ “Theo tuần” để bổ sung.</p>}
+        {view === "operations" && <>
         <div className="summary-kpis">
           <Kpi label="Công suất" value={pct(sum.rate)} />
           <Kpi label="Tổng số đêm lưu trú" value={num(sum.nights)} />
@@ -350,7 +350,8 @@ function BluejayRangeView({ scopeId, onWeek }: { scopeId: number | null; onWeek:
           </table></div>
         </Card>}
 
-        <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services }))} showHotel={!scopeId} period="kỳ" />
+        </>}
+        {view === "revenue" && <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services }))} showHotel={!scopeId} period="kỳ" />}
       </>}
     </section>
   );

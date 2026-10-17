@@ -4,6 +4,13 @@ import {
   Activity,
   BarChart3,
   BedDouble,
+  Banknote,
+  Scale,
+  HandCoins,
+  BadgeCheck,
+  ThumbsUp,
+  Camera,
+  Megaphone,
   ArrowDownToLine,
   ArrowUpRight,
   Building2,
@@ -47,9 +54,17 @@ import { PlatformBrandLogo } from "@/components/platform-brand-logo";
 import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
 import { ShopeefoodImportButton, type ShopeefoodRow } from "@/components/shopeefood-import";
 import { NotificationBell } from "@/components/notification-bell";
+import { MissingReportsBell } from "@/components/missing-reports-bell";
 import { OverviewScoreboard } from "@/components/overview-scoreboard";
 import { SummaryReport } from "@/components/summary-report";
 import { BluejayReport } from "@/components/bluejay-report";
+import { BluejayReconcile } from "@/components/bluejay-reconcile";
+import { BluejayDebt } from "@/components/bluejay-debt";
+import { BluejayPaid } from "@/components/bluejay-paid";
+import { GoogleProfile } from "@/components/google-profile";
+import { FacebookPage } from "@/components/facebook-page";
+import { InstagramPage } from "@/components/instagram-page";
+import { FacebookAds } from "@/components/facebook-ads";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
@@ -231,11 +246,20 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isSettingsPage = pathname === "/settings";
   const isDetailPage = pathname === "/detail";
   const isSummaryPage = pathname === "/summary";
-  const isBluejayPage = pathname === "/bluejay";
+  const isBluejayRevenuePage = pathname === "/bluejay-revenue";
+  const isBluejayReconcilePage = pathname === "/bluejay-reconcile";
+  const isBluejayDebtPage = pathname === "/bluejay-debt";
+  const isBluejayPaidPage = pathname === "/bluejay-paid";
+  const isGoogleProfilePage = pathname === "/google-profile";
+  const isFacebookPage = pathname === "/facebook";
+  const isInstagramPage = pathname === "/instagram";
+  const isFacebookAdsPage = pathname === "/facebook-ads";
+  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage;
+  const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
   const bluejayHotel = BLUEJAY_HOTELS.find((hotel) => hotel.id === bluejayHotelId) ?? null;
-  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isBluejayPage;
+  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isBluejayPage && !isReachPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
   const needsLiveMetrics = pathname === "/" || isDetailPage || isSummaryPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
@@ -263,6 +287,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const historicalFileInput = useRef<HTMLInputElement>(null);
   const [finalizingPlatform, setFinalizingPlatform] = useState<Platform | null>(null);
   const [finalizingAll, setFinalizingAll] = useState(false);
+  const [grabBulk, setGrabBulk] = useState<{ action: "crawl" | "finalize"; progress: string } | null>(null);
   const [modal, setModal] = useState<"location" | "snapshot" | null>(null);
   const [snapshotPlatform, setSnapshotPlatform] = useState<Platform>("google");
   const [editing, setEditing] = useState<LocationRecord | null>(null);
@@ -1366,6 +1391,74 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     }
   }
 
+  const grabLocations = locations.filter((location) => ["cafe", "mart"].includes(filterTypeOf(location.type)));
+
+  /** Cào GrabFood lần lượt từng cơ sở Cafe/Mart 24h (mỗi cơ sở một yêu cầu để không vượt thời gian tối đa của server). */
+  async function crawlGrabfoodBulk() {
+    if (grabBulk || crawling || !grabLocations.length) return;
+    setError("");
+    setNotice("");
+    const failures: string[] = [];
+    let ok = 0;
+    try {
+      for (const [index, location] of grabLocations.entries()) {
+        setGrabBulk({ action: "crawl", progress: `${index + 1}/${grabLocations.length} · ${location.name}` });
+        try {
+          const res = await fetch("/api/crawl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platform: "grabfood", locationId: location.id }) });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success !== false) ok += 1;
+          else failures.push(`${location.name}: ${data.message || data.error || `HTTP ${res.status}`}`);
+        } catch (err) {
+          failures.push(`${location.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (supabaseConfigured && user) await loadLocations();
+      setNotice(`Đã cào GrabFood: ${ok}/${grabLocations.length} cơ sở thành công.`);
+      if (failures.length) setError(failures.join(" | "));
+    } finally {
+      setGrabBulk(null);
+    }
+  }
+
+  /** Chốt hôm nay số GrabFood mới nhất của tất cả cơ sở Cafe/Mart 24h đang có số liệu. */
+  async function finalizeGrabfoodBulk() {
+    if (grabBulk || crawling) return;
+    if (!supabaseConfigured || !user) {
+      setError("Cần đăng nhập để chốt dữ liệu hàng loạt.");
+      return;
+    }
+    const reportDate = reportDateInVietnam();
+    setGrabBulk({ action: "finalize", progress: "đang đọc số liệu mới nhất" });
+    setError("");
+    setNotice("");
+    try {
+      // Trang Cài đặt không tải số liệu mới nhất vào `locations`, nên đọc thẳng từ database.
+      const db = createClient();
+      const { data, error: readError } = await db.from("latest_metric_snapshots")
+        .select("location_id,rating_value,rating_scale,review_count,count_label")
+        .eq("platform", "grabfood").in("location_id", grabLocations.map((location) => location.id));
+      if (readError) throw readError;
+      const ready = (data ?? []).filter((row) => row.rating_value != null || row.review_count != null);
+      if (!ready.length) {
+        setError("Chưa có số liệu GrabFood nào để chốt. Hãy cào GrabFood trước.");
+        return;
+      }
+      const { error: finalizeError } = await db.from("daily_report_snapshots").upsert(ready.map((row) => ({
+        location_id: row.location_id, platform: "grabfood", report_date: reportDate,
+        rating_value: row.rating_value, rating_scale: row.rating_scale, review_count: row.review_count,
+        count_label: row.count_label, finalized_at: new Date().toISOString(), finalized_by: user.id,
+      })), { onConflict: "location_id,platform,report_date" });
+      if (finalizeError) throw finalizeError;
+      setTimelineRefresh((value) => value + 1);
+      const missing = grabLocations.length - ready.length;
+      setNotice(`Đã chốt GrabFood ${ready.length} cơ sở ngày ${fmtDate(reportDate)}.${missing ? ` ${missing} cơ sở chưa có số liệu nên bỏ qua.` : ""}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGrabBulk(null);
+    }
+  }
+
   async function triggerCrawl(
     platform: Platform | "all" = "all",
     targetLocationId?: string,
@@ -1672,7 +1765,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
           <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           <span className="nav-label nav-label-spaced">VẬN HÀNH</span>
-          <Link className={`nav-link ${isBluejayPage ? "active" : ""}`} href="/bluejay"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
+          <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
+          <Link className={`nav-link ${isBluejayRevenuePage ? "active" : ""}`} href="/bluejay-revenue"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
+          <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
+          <Link className={`nav-link ${isBluejayDebtPage ? "active" : ""}`} href="/bluejay-debt"><HandCoins size={17} /><span>Công nợ OTA</span></Link>
+          <Link className={`nav-link ${isBluejayPaidPage ? "active" : ""}`} href="/bluejay-paid"><BadgeCheck size={17} /><span>Đã thanh toán</span></Link>
+          <span className="nav-label nav-label-spaced">TIẾP CẬN</span>
+          <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile"><MapPin size={17} /><span>Google Maps</span></Link>
+          <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook"><ThumbsUp size={17} /><span>Facebook</span></Link>
+          <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram"><Camera size={17} /><span>Instagram</span></Link>
+          <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads"><Megaphone size={17} /><span>Facebook Ads</span></Link>
           <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
           <button className="nav-link" type="button" onClick={exportCsv}><ArrowDownToLine size={17} /><span>Xuất dữ liệu</span></button>
           <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings"><Settings2 size={17} /><span>Cài đặt</span></Link>
@@ -1685,9 +1787,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
-          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isBluejayPage ? "VẬN HÀNH KHÁCH SẠN" : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
+          {supabaseConfigured && !isBluejayPage && <MissingReportsBell userId={user?.id ?? null} locations={locations.flatMap((location) => { const type = filterTypeOf(location.type); return type === "entertainment" ? [] : [{ id: location.id, name: location.name, kind: type === "hotel" ? "hotel" as const : "fnb" as const }]; })} />}
           {supabaseConfigured && !isBluejayPage && <NotificationBell userId={user?.id ?? null} />}
         </header>
         <div className={`content-wrap ${isReportPage ? "daily-reports-active" : ""} ${isDailyAnalyticsPage ? "daily-analytics-active" : ""} ${isComparePage ? "compare-reports-active" : ""} ${isTripadvisorRankPage ? "tripadvisor-rank-active" : ""} ${isSettingsPage ? "settings-page-active" : ""}`}>
@@ -1700,13 +1803,22 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           {isSettingsPage && <section className="manual-import" aria-label="Nhập thủ công ShopeeFood"><div><h3>Nhập thủ công ShopeeFood</h3><p>ShopeeFood chưa có cách lấy tự động. Mở cửa sổ nhập để điền điểm và số đánh giá cho tất cả chi nhánh cùng lúc, chọn được ngày.</p></div><div className="manual-import-actions">{shopeefoodButtons}</div></section>}
 
+          {isSettingsPage && <section className="manual-import" aria-label="GrabFood hàng loạt"><div><h3>GrabFood hàng loạt</h3><p>Cào điểm và số đánh giá GrabFood cho {grabLocations.length} cơ sở Cafe và Mart 24h (lần lượt từng cơ sở, cần đã lưu tài khoản Grab), sau đó chốt hôm nay.{grabBulk ? ` Đang chạy: ${grabBulk.progress}` : ""}</p></div><div className="manual-import-actions">
+            <button type="button" className="button button-primary" onClick={() => void crawlGrabfoodBulk()} disabled={!!grabBulk || crawling || !grabLocations.length}>{grabBulk?.action === "crawl" ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}{grabBulk?.action === "crawl" ? "Đang cào…" : "Cào GrabFood hàng loạt"}</button>
+            <button type="button" className="button button-outline" onClick={() => void finalizeGrabfoodBulk()} disabled={!!grabBulk || crawling || !grabLocations.length}>{grabBulk?.action === "finalize" ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}Chốt GrabFood hôm nay</button>
+          </div></section>}
+
           {isOverviewPage && <>
           {(selectedType === "cafe" || selectedType === "mart") && <div className="manual-import-bar">{shopeefoodButtons.filter((button) => button.key === selectedType)}</div>}
           {platformFilter}
           <OverviewScoreboard locations={typeLocations} platforms={selectedReportPlatforms} scale={reportScale} userId={supabaseConfigured ? user?.id ?? null : null} selectedId={dashboardLocation?.id ?? null} typeLabel={filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""} onSelect={(id) => { setSelectedLocationId(id); router.push("/detail"); }} />
           </>}
 
-          {isBluejayPage && <BluejayReport scopeId={bluejayHotel?.id ?? null} />}
+          {isGoogleProfilePage && <GoogleProfile />}
+          {isFacebookPage && <FacebookPage />}
+          {isInstagramPage && <InstagramPage />}
+          {isFacebookAdsPage && <FacebookAds />}
+          {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
           {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
 
@@ -1964,7 +2076,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           {isTripadvisorRankPage && <TripadvisorRankReportPage locationName={dashboardLocation?.name ?? null} rows={tripadvisorRankRows} loading={timelineLoading} error={timelineError} />}
 
-          {!isReportDataPage && !isSettingsPage && !isSummaryPage && !isBluejayPage && <>
+          {!isReportDataPage && !isSettingsPage && !isSummaryPage && !isBluejayPage && !isReachPage && <>
         <section className="locations-section" id="locations">
             <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Mỗi thẻ là một nền tảng, chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
             <div className="platform-detail-grid">

@@ -24,7 +24,9 @@ export type ServiceItem = { name: string; unit: string; quantity: number; total:
 export type ServiceGroupDay = { name: string; quantity: number; total: number; items: ServiceItem[] };
 export type ServiceDay = { date: string; total: number; groups: ServiceGroupDay[] };
 export type HotelRevenue = { id: number; name: string; bookings: RevenueBooking[]; services: ServiceDay[] };
-export type RevenueWeek = { v: number; monday: string; end: string; fetchedAt: string; hotels: HotelRevenue[] };
+// paymentsAt: when refreshPayments last re-pulled this week's reservations (OTAs pay weeks later, so "payment / balance" goes stale); fetchedAt otherwise.
+export type RevenueWeek = { v: number; monday: string; end: string; fetchedAt: string; paymentsAt?: string; hotels: HotelRevenue[] };
+export const OTA_CHANNELS: readonly string[] = ["Agoda", "Booking", "Expedia", "Trip", "Traveloka"];
 
 /** The PMS names OTAs after the site ("Booking.com", "Ctrip"); the finance sheets use the short names. */
 export function channelOf(source: unknown) {

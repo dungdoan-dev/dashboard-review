@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { useReactToPrint } from "react-to-print";
 import { AlertTriangle, CheckCircle2, FileBarChart, Printer } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
@@ -52,6 +54,21 @@ function ChartCard({ title, unit, wide, children }: { title: string; unit?: stri
 
 export function SummaryReport({ sections, userId }: { sections: SummarySection[]; userId: string | null }) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
+  // In qua react-to-print: chỉ báo cáo được đưa vào khung in riêng (không kéo theo thanh bên, vùng cuộn của app).
+  // Biểu đồ là SVG chụp theo bề rộng lúc in, nên trước đó đặt bề rộng cố định vừa trang và tắt hiệu ứng vẽ dần.
+  const [printing, setPrinting] = useState(false);
+  const chartWidth = printing ? 640 : "100%";
+  const reportRef = useRef<HTMLDivElement>(null);
+  const print = useReactToPrint({
+    contentRef: reportRef,
+    documentTitle: "bao-cao-tong-hop-danh-gia",
+    pageStyle: "@page { size: A4; margin: 12mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+    onBeforePrint: async () => {
+      flushSync(() => setPrinting(true));
+      await new Promise((resolve) => setTimeout(resolve, 300)); // chờ biểu đồ vẽ lại ở bề rộng mới
+    },
+    onAfterPrint: () => setPrinting(false),
+  });
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const idsKey = useMemo(() => sections.flatMap((section) => section.locations.map((location) => location.id)).sort().join(","), [sections]);
@@ -85,7 +102,7 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
   const byType = data.filter((item) => item.summary.count > 0);
   const watchList = all.filter((row) => row.score != null && row.score < WATCH).sort((a, b) => a.score! - b.score!);
 
-  return <div className="summary-report">
+  return <div className="summary-report" ref={reportRef}>
     <header className="summary-hero">
       <div>
         <div className="section-kicker"><FileBarChart size={14} /> BÁO CÁO TỔNG HỢP</div>
@@ -95,7 +112,7 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
       <div className="summary-controls summary-no-print">
         <label><span>Kỳ báo cáo</span><select value={days} onChange={(event) => setDays(Number(event.target.value) as 7 | 30 | 90)} aria-label="Chọn kỳ báo cáo">
           <option value={7}>7 ngày qua</option><option value={30}>30 ngày qua</option><option value={90}>90 ngày qua</option></select></label>
-        <button type="button" onClick={() => window.print()}><Printer size={15} /> In / Lưu PDF</button>
+        <button type="button" onClick={() => void print()}><Printer size={15} /> In / Lưu PDF</button>
       </div>
     </header>
 
@@ -112,13 +129,13 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
       </div>
       <div className="summary-grid">
         <ChartCard title="Điểm trung bình theo loại hình" unit={`Thang ${SUMMARY_SCALE}`}>
-          <ResponsiveContainer width="100%" height={Math.max(160, byType.length * 56 + 30)}>
+          <ResponsiveContainer width={chartWidth} height={Math.max(160, byType.length * 56 + 30)}>
             <BarChart layout="vertical" data={byType.map((item) => ({ name: item.section.label, score: item.summary.avgScore, color: item.section.color }))} margin={{ left: 8, right: 44 }}>
               <CartesianGrid horizontal={false} stroke="#e8edf4" />
               <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
               <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
               <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE}` : "—", "Điểm trung bình"]} />
-              <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={26}>
+              <Bar isAnimationActive={!printing} dataKey="score" radius={[0, 4, 4, 0]} barSize={26}>
                 {byType.map((item) => <Cell key={item.section.type} fill={item.section.color} />)}
                 <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={13} fontWeight={700} />
               </Bar>
@@ -126,13 +143,13 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
           </ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Đánh giá mới theo loại hình" unit={`${days} ngày qua`}>
-          <ResponsiveContainer width="100%" height={Math.max(160, byType.length * 56 + 30)}>
+          <ResponsiveContainer width={chartWidth} height={Math.max(160, byType.length * 56 + 30)}>
             <BarChart layout="vertical" data={byType.map((item) => ({ name: item.section.label, gained: item.trend.gained, color: item.section.color }))} margin={{ left: 8, right: 44 }}>
               <CartesianGrid horizontal={false} stroke="#e8edf4" />
               <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
               <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? signed(value) : "—", "Đánh giá mới"]} />
-              <Bar dataKey="gained" radius={[0, 4, 4, 0]} barSize={26}>
+              <Bar isAnimationActive={!printing} dataKey="gained" radius={[0, 4, 4, 0]} barSize={26}>
                 {byType.map((item) => <Cell key={item.section.type} fill={item.section.color} />)}
                 <LabelList dataKey="gained" position="right" formatter={(value) => (typeof value === "number" ? signed(value) : "")} fill="#233a5a" fontSize={13} fontWeight={700} />
               </Bar>
@@ -180,51 +197,51 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
           </div>
           <div className="summary-grid">
             <ChartCard title="Điểm theo cơ sở" unit={`Thang ${SUMMARY_SCALE} · nét đứt: trung bình`} wide>
-              {bars.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width="100%" height={Math.max(180, bars.length * 38 + 40)}>
+              {bars.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width={chartWidth} height={Math.max(180, bars.length * 38 + 40)}>
                 <BarChart layout="vertical" data={bars} margin={{ left: 8, right: 44 }}>
                   <CartesianGrid horizontal={false} stroke="#e8edf4" />
                   <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" width={210} tick={AXIS} tickLine={false} axisLine={false} />
                   <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE}` : "—", "Điểm"]} />
                   {summary.avgScore != null && <ReferenceLine x={summary.avgScore} stroke="#586b84" strokeDasharray="5 4" />}
-                  <Bar dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
+                  <Bar isAnimationActive={!printing} dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
                     <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={12} fontWeight={700} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>}
             </ChartCard>
             <ChartCard title="Điểm theo nền tảng" unit={`Thang ${SUMMARY_SCALE}`}>
-              {summary.platformAvg.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width="100%" height={Math.max(180, summary.platformAvg.length * 38 + 40)}>
+              {summary.platformAvg.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width={chartWidth} height={Math.max(180, summary.platformAvg.length * 38 + 40)}>
                 <BarChart layout="vertical" data={summary.platformAvg.map((item) => ({ name: PLATFORM_LABELS[item.platform], score: item.score, locations: item.locations }))} margin={{ left: 8, right: 44 }}>
                   <CartesianGrid horizontal={false} stroke="#e8edf4" />
                   <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
                   <Tooltip {...TOOLTIP} formatter={(value, _name, item) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE} (${item.payload.locations} cơ sở)` : "—", "Điểm"]} />
-                  <Bar dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
+                  <Bar isAnimationActive={!printing} dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
                     <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={12} fontWeight={700} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>}
             </ChartCard>
             <ChartCard title="Diễn biến điểm" unit={`${days} ngày qua`}>
-              {trend.points.filter((point) => point.score != null).length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width="100%" height={240}>
+              {trend.points.filter((point) => point.score != null).length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width={chartWidth} height={240}>
                 <LineChart data={trend.points} margin={{ left: 0, right: 16, top: 8 }}>
                   <CartesianGrid vertical={false} stroke="#e8edf4" />
-                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value).slice(0, 5)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
+                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
                   <YAxis domain={[(min: number) => Math.max(0, Math.floor(min * 10 - 3) / 10), (max: number) => Math.min(SUMMARY_SCALE, Math.ceil(max * 10 + 3) / 10)]} tickFormatter={(value: number) => num(value)} tick={AXIS} tickLine={false} axisLine={false} width={40} />
                   <Tooltip {...TOOLTIP} labelFormatter={(value) => fmtDate(String(value))} formatter={(value) => [typeof value === "number" ? `${num(value, 2)} / ${SUMMARY_SCALE}` : "—", "Điểm trung bình"]} />
-                  <Line type="monotone" dataKey="score" stroke={section.color} strokeWidth={2.5} dot={{ r: 3, fill: section.color, stroke: "#fff", strokeWidth: 2 }} connectNulls />
+                  <Line isAnimationActive={!printing} type="monotone" dataKey="score" stroke={section.color} strokeWidth={2.5} dot={{ r: 3, fill: section.color, stroke: "#fff", strokeWidth: 2 }} connectNulls />
                 </LineChart>
               </ResponsiveContainer>}
             </ChartCard>
             <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`}>
-              {trend.points.length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width="100%" height={240}>
+              {trend.points.length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width={chartWidth} height={240}>
                 <AreaChart data={trend.points} margin={{ left: 0, right: 16, top: 8 }}>
                   <CartesianGrid vertical={false} stroke="#e8edf4" />
-                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value).slice(0, 5)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
+                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
                   <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
                   <Tooltip {...TOOLTIP} labelFormatter={(value) => fmtDate(String(value))} formatter={(value) => [typeof value === "number" ? signed(value) : "—", "Đánh giá mới"]} />
-                  <Area type="monotone" dataKey="gained" stroke={section.color} strokeWidth={2.5} fill={section.color} fillOpacity={0.18} />
+                  <Area isAnimationActive={!printing} type="monotone" dataKey="gained" stroke={section.color} strokeWidth={2.5} fill={section.color} fillOpacity={0.18} />
                 </AreaChart>
               </ResponsiveContainer>}
             </ChartCard>

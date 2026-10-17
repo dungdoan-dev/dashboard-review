@@ -791,6 +791,8 @@ tbody tr:hover { background: #fbfcfe; }
 .notification-bell { position: relative; flex: 0 0 auto; }
 .notification-trigger { position: relative; width: 38px; height: 38px; }
 .notification-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #d64545; color: #fff; font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; }
+.missing-badge { background: #d98a00; }
+.missing-item { display: grid; gap: 2px; padding: 10px 14px; }
 .notification-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(380px, calc(100vw - 28px)); max-height: min(520px, 70vh); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 12px 32px #172b4a26; overflow: hidden; }
 .notification-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #edf0f4; }
 .notification-panel-head > div { display: flex; align-items: center; gap: 8px; }
@@ -1004,6 +1006,161 @@ tbody tr:hover { background: #fbfcfe; }
 .range-date-field input[type="text"] { width: 130px; height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
 .range-date-field button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
 .range-date-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+/* Shared date picker (components/date-picker.tsx): dd/mm/yyyy text field + Monday-first calendar */
+.date-picker { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.date-picker input[type="text"] { width: 130px; height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
+.date-picker-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
+.date-picker-popover { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: max-content; max-width: calc(100vw - 28px); padding: 6px; border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-shadow: 0 12px 32px #172b4a26; font-size: 13px; }
+/* react-day-picker sets its sizes on .rdp-root itself, so they are overridden there, not on the popover. */
+.date-picker-popover .rdp-root { --rdp-accent-color: #285ca9; --rdp-accent-background-color: #e6effb; --rdp-today-color: #285ca9; --rdp-day-width: 32px; --rdp-day-height: 32px; --rdp-day_button-width: 30px; --rdp-day_button-height: 30px; --rdp-nav_button-width: 28px; --rdp-nav_button-height: 28px; --rdp-nav-height: 32px; }
+.date-picker-popover .rdp-month_caption { font-size: 14px; }
+.date-picker-popover .rdp-day_button { color: #233a5a; font: 500 13px 'Inter',sans-serif; }
+.date-picker-popover .rdp-today .rdp-day_button { color: #285ca9; font-weight: 800; }
+.date-picker-popover .rdp-selected .rdp-day_button { color: #285ca9; font-weight: 800; }
+.scoreboard-sort .date-picker-popover { left: auto; right: 0; }
+/* The site's own table rules (full width, min-width, padded cells, 67px rows; e.g. `.scoreboard table`) must not reach the calendar's table: two classes beat them everywhere. */
+.date-picker-popover .rdp-root table { width: auto; min-width: 0; border-collapse: separate; }
+.date-picker-popover .rdp-root thead { background: none; }
+.date-picker-popover .rdp-root th, .date-picker-popover .rdp-root td { min-width: 0; height: auto; padding: 0; border: 0; letter-spacing: 0; font-size: 12px; text-align: center; vertical-align: middle; white-space: nowrap; }
+.date-picker-popover .rdp-root td { height: var(--rdp-day-height); }
+.date-picker-popover .rdp-root tbody tr:hover { background: none; }
+.range-apply { height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #285ca9; color: #fff; font: 600 13px 'Inter',sans-serif; cursor: pointer; }
+.range-apply:disabled { opacity: .6; cursor: default; }
+.range-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.range-presets button { height: 32px; padding: 0 12px; border: 1px solid #dfe6f0; border-radius: 999px; background: #fff; color: #46586f; font: 600 12px 'Inter',sans-serif; cursor: pointer; }
+.range-presets button:hover { border-color: #285ca9; color: #285ca9; }
+.range-presets button[aria-pressed="true"] { border-color: #285ca9; background: #e6effb; color: #285ca9; }
+.reconcile-filter { margin-left: 0; }
+.reconcile-diff { font-weight: 700; color: #c0392b; }
+.reconcile-link { padding: 0; border: 0; background: none; color: #285ca9; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.reconcile-selected { background: #e6effb; }
+.reconcile-issues { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+.summary-controls label.button { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; cursor: pointer; }
+.summary-controls label.button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+/* Select hiện đại: danh sách thả xuống tùy biến được (Chrome/Edge 135+). Trình duyệt cũ giữ danh sách mặc định. */
+.location-picker, .analytics-range-picker, .select-box { transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.location-picker:hover, .analytics-range-picker:hover, .select-box:hover { border-color: #b9cdee; }
+.location-picker:focus-within, .analytics-range-picker:focus-within, .select-box:focus-within { border-color: #285ca9; box-shadow: 0 0 0 3px #285ca91f; }
+select { cursor: pointer; }
+@supports (appearance: base-select) {
+  select, select::picker(select) { appearance: base-select !important; }
+  select::picker-icon { display: none; } /* ứng dụng đã vẽ mũi tên riêng */
+  select::picker(select) {
+    box-sizing: border-box; min-width: anchor-size(width); max-height: min(340px, 60vh); margin-top: 6px; padding: 6px;
+    border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-shadow: 0 14px 36px #1b2b4530, 0 2px 6px #1b2b4514;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  select option {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+    color: #233a5a; font: 500 13px 'Inter',sans-serif; cursor: pointer; transition: background-color .1s;
+  }
+  select option:hover, select option:focus-visible { background: #eff4ff; outline: 0; }
+  select option:checked { background: #e6effb; color: #1f4f9e; font-weight: 700; }
+  select option::checkmark { order: 1; margin-left: auto; color: #285ca9; }
+  select option:disabled { color: #9aa8bb; cursor: default; }
+}
+@supports (appearance: base-select) {
+  /* Chữ đã chọn thẳng hàng với nhãn bên cạnh: bỏ đệm mặc định của nút select tùy biến */
+  .location-picker select, .analytics-range-picker select, .select-box select, .daily-report-location-picker select {
+    display: flex; align-items: center; height: 100%; padding: 0; margin: 0; line-height: 1.2;
+  }
+  select selectedcontent { display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}@media print {
+  .sidebar, .dashboard-topbar, .summary-no-print { display: none !important; }
+  .main-area { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+  .summary-report { display: block !important; }
+  .summary-section { break-before: page; border: 0 !important; padding: 0 !important; margin: 0 0 12px; }
+  .summary-hero + .summary-section, .summary-note + .summary-section { break-before: auto; }
+  .summary-chart, .summary-kpi, .summary-insights, .summary-table tr, .summary-table thead { break-inside: avoid; }
+  .summary-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .summary-chart { overflow: hidden; }
+  .summary-table-scroll { overflow: visible !important; }
+  .summary-report .summary-table th, .summary-report .summary-table td { padding: 5px 4px !important; font-size: 10px !important; white-space: normal !important; }
+  .summary-table summary { list-style: none; }
+}
+.summary-chart h4 small { margin-left: 8px; color: #5f6f86; font: 500 12px 'Inter',sans-serif; }
+.summary-chart.wide { grid-column: 1 / -1; }
+.summary-chart .recharts-text { font-family: 'Inter',sans-serif; }
+.summary-report .summary-table th, .summary-report .summary-table td { font-size: 14px; letter-spacing: 0; text-transform: none; }
+.summary-report .summary-table thead th { background: transparent; color: #46586f; font-size: 13px; font-weight: 700; }
+.summary-report .summary-table tbody th { color: #233a5a; font-weight: 700; }
+.summary-report .summary-table tbody th small { margin-top: 2px; color: #6d7f9a; font-size: 12px; font-weight: 500; }
+.summary-report .summary-table td { color: #233a5a; }
+.summary-report .summary-kpi span, .summary-report .summary-insights ul { color: #46586f; }
+.summary-controls button:focus-visible { outline: 2px solid #285ca9; outline-offset: 2px; }
+.summary-controls { flex-wrap: wrap; }
+.summary-controls button:disabled { opacity: .55; cursor: not-allowed; }
+/* Settings: collapsible panels (details/summary); the four automatic-sync panels share a name, so they act as an accordion. */
+.settings-panel > summary { position: relative; padding-right: 40px; list-style: none; cursor: pointer; }
+.settings-panel > summary::-webkit-details-marker { display: none; }
+.settings-panel > summary::after { content: ""; position: absolute; top: 14px; right: 12px; width: 9px; height: 9px; border-right: 2px solid #7990b4; border-bottom: 2px solid #7990b4; transform: rotate(45deg); transition: transform .15s ease; }
+.settings-panel[open] > summary::after { top: 18px; transform: rotate(-135deg); }
+.settings-panel > summary:focus-visible { outline: 2px solid #285ca9; outline-offset: 4px; border-radius: 8px; }
+.settings-panel:not([open]) > summary, .settings-panel:not([open]) > summary p { margin-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .settings-panel > summary::after { transition: none; } }
+/* Sidebar scrolls on short screens; the menu button only shows when the sidebar becomes a drawer (<= 700px). */
+.sidebar { overflow-y: auto; }
+.nav-toggle { display: none; flex: 0 0 auto; }
+@media (max-width: 700px) { .nav-toggle { display: inline-grid; width: 38px; height: 38px; border-color: #dce5f3; } }
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none !important; } }
+/* Responsive: grid children must be allowed to shrink below their content (charts, tables) or the page scrolls sideways. */
+.summary-report, .summary-section { grid-template-columns: minmax(0, 1fr); }
+.summary-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); }
+/* Absolutely positioned children (e.g. .sr-only table headers) must stay inside the scroll box, not stretch the page. */
+.table-scroll, .summary-table-scroll { position: relative; }
+.report-dashboard-head > *, .report-dashboard-actions { min-width: 0; max-width: 100%; }
+.automatic-sync-history .fail { color: #a53b35; }
+.automatic-sync-history > div > span:last-child { text-align: right; }
+@media (max-width: 600px) { .automatic-sync-history > div > span:last-child { text-align: left; } }
+
+/* Báo cáo doanh thu theo đặt phòng (Blue Jay) */
+.bluejay-revenue { display: grid; gap: 16px; padding: 22px; border: 1px solid #e0e7f0; border-radius: 14px; background: #fff; }
+.bluejay-revenue h2 { margin: 0; font: 800 21px 'Inter',sans-serif; color: #233a5a; }
+.revenue-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 12px; }
+.revenue-filters input[type="search"], .revenue-filters select { height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 13px 'Inter',sans-serif; }
+.revenue-filters input[type="search"] { min-width: 260px; }
+.revenue-filters label { display: flex; align-items: center; gap: 6px; color: #46586f; font-size: 13px; }
+.bluejay-revenue .summary-table td, .bluejay-revenue .summary-table th { white-space: nowrap; font-size: 13px; }
+.bluejay-revenue .summary-table tbody th { color: #233a5a; font-weight: 700; }
+.revenue-cancelled { color: #8795a8; }
+.revenue-flag { display: inline-block; margin-right: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.revenue-flag.balance { background: #fdf3e0; color: #8a5a00; }
+.revenue-flag.overpaid, .revenue-flag.mismatch { background: #fdecea; color: #c0392b; }
+.revenue-flag.cancelled-paid { background: #e6effb; color: #285ca9; }
+
+/* Nhập thủ công ShopeeFood (Cafe, Mart 24h): nút mở cửa sổ nhập hàng loạt */
+.manual-import { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
+.manual-import h3 { margin: 0 0 4px; color: #233a5a; font: 700 16px 'Inter',sans-serif; }
+.manual-import p { margin: 0; max-width: 560px; color: #586b84; font-size: 13px; }
+.manual-import-actions, .manual-import-bar { display: flex; flex-wrap: wrap; gap: 10px; }
+.manual-import-bar { margin-bottom: 14px; }
+.shopee-open { display: inline-flex; align-items: center; gap: 6px; }
+.shopee-modal { width: min(760px, 100%); }
+.shopee-body { display: grid; gap: 14px; padding: 16px 23px; }
+.shopee-date { display: flex; align-items: center; gap: 10px; color: #46586f; font-size: 13px; font-weight: 700; }
+.shopee-date-field { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.shopee-date-field input[type="text"] { width: 130px; }
+.shopee-date-field button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
+.shopee-date-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.shopee-body input { height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
+.shopee-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shopee-table th, .shopee-table td { padding: 8px 8px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: middle; font-size: 13px; letter-spacing: 0; text-transform: none; }
+.shopee-table thead th { color: #46586f; font-weight: 700; }
+.shopee-table tbody th { min-width: 180px; color: #233a5a; font-weight: 700; white-space: normal; }
+.shopee-table tbody th small { display: block; color: #6d7f9a; font-weight: 500; }
+.shopee-table td input { width: 110px; }
+.shopee-current { color: #6d7f9a; white-space: nowrap; }
+.shopee-done { display: flex; align-items: center; gap: 8px; padding: 9px 11px; margin: 13px 23px 0; border: 1px solid #cfe9dc; border-radius: 8px; background: #f0faf4; color: #247b5b; font-size: 13px; }
+
+/* Báo cáo vận hành theo khoảng ngày */
+.bluejay-range-picker { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; border: 1px solid #e0e7f0; border-radius: 12px; background: #fff; }
+.range-date { display: grid; gap: 4px; color: #46586f; font-size: 12px; font-weight: 700; }
+.range-date-field { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.range-date-field input[type="text"] { width: 130px; height: 36px; padding: 0 10px; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #233a5a; font: 500 14px 'Inter',sans-serif; }
+.range-date-field button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dfe6f0; border-radius: 8px; background: #fff; color: #285ca9; cursor: pointer; }
+.range-date-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .range-apply { height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #285ca9; color: #fff; font: 600 13px 'Inter',sans-serif; cursor: pointer; }
 .range-apply:disabled { opacity: .6; cursor: default; }
 .range-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
@@ -1039,3 +1196,5 @@ select { cursor: pointer; }
   }
   select selectedcontent { display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+.summary-subtitle { margin: 20px 0 8px; font-size: 16px; }

@@ -1,7 +1,8 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
-import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueWeek } from "./bluejay-revenue.ts";
+import { openDebts, paymentCheck, weeksWithDebt } from "./bluejay-debt.ts";
+import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const BASE = "https://api-pms.bluejaypms.com/api/v2/";
@@ -146,6 +147,28 @@ export async function readRange(db: SupabaseClient, from: string, to: string) {
   );
 }
 
+/**
+ * Stored bookings of one hotel that can appear in a cash ledger for [from, to]: weeks from 9 weeks before (OTAs pay late) to the period end,
+ * one record per booking (the latest snapshot wins). missingWeeks: Mondays inside the period with no stored revenue week, so "not in Blue Jay" can be read with care.
+ */
+export async function readReconcileBookings(db: SupabaseClient, hotelId: number, from: string, to: string) {
+  if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
+  if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("week_start,revenue")
+    .gte("week_start", addDays(mondayOf(from), -63)).lte("week_start", mondayOf(to)).order("week_start");
+  if (error) throw new Error(error.message);
+  const have = new Set<string>();
+  const latest = new Map<string, RevenueBooking>();
+  for (const row of data ?? []) {
+    if (row.revenue?.v !== REVENUE_VERSION) continue;
+    have.add(String(row.week_start));
+    for (const b of (row.revenue as RevenueWeek).hotels.find((h) => h.id === hotelId)?.bookings ?? []) latest.set(`${b.code}|${b.room}|${b.roomType}`, b);
+  }
+  const missingWeeks: string[] = [];
+  for (let monday = mondayOf(from); monday <= to; monday = addDays(monday, 7)) if (!have.has(monday)) missingWeeks.push(monday);
+  return { bookings: [...latest.values()], missingWeeks };
+}
+
 export async function readReport(db: SupabaseClient, monday: string): Promise<WeeklyReport | null> {
   if (!isDate(monday)) return null;
   const { data, error } = await db.from("bluejay_weekly_reports").select("report").eq("week_start", monday).maybeSingle();
@@ -171,6 +194,67 @@ export async function storedWeeks(db: SupabaseClient, from: string, to: string) 
   const current = (rows: { week_start: unknown; v: unknown }[] | null, version: number) => new Set((rows ?? []).filter((r) => Number(r.v) === version).map((r) => String(r.week_start)));
   const withRevenue = current(revenue.data, REVENUE_VERSION);
   return new Set([...current(reports.data, VERSION)].filter((week) => withRevenue.has(week)));
+}
+
+const DEBT_WEEKS = 16; // shortcut: debts older than 16 weeks are not re-pulled; raise it (or pull the week by hand) when an OTA pays that late
+
+/** Revenue weeks of the last DEBT_WEEKS weeks plus the current one, oldest first. */
+async function recentRevenueWeeks(db: SupabaseClient) {
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", addDays(lastFullWeek(), -7 * DEBT_WEEKS)).order("week_start");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
+}
+
+/** Open OTA debts from the stored weeks (no call to Blue Jay), with the oldest payment snapshot they rest on. */
+export async function readDebts(db: SupabaseClient, today: string) {
+  const weeks = await recentRevenueWeeks(db);
+  return { rows: openDebts(weeks, today), oldestAsOf: weeks.map((w) => w.paymentsAt ?? w.fetchedAt).sort()[0] ?? null };
+}
+
+/** Paid / unpaid check of the stays that checked out in [from, to], from the stored weeks (no call to Blue Jay). */
+export async function readPaymentCheck(db: SupabaseClient, from: string, to: string, today: string) {
+  if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
+  if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
+  // A stay that checks out in the period shows up in the week of its check-out; earlier weeks are read too so long stays keep their newest snapshot.
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue")
+    .gte("week_start", addDays(mondayOf(from), -63)).lte("week_start", mondayOf(to)).order("week_start");
+  if (error) throw new Error(error.message);
+  const weeks = (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
+  const missingWeeks: string[] = [];
+  for (let monday = mondayOf(from); monday <= to; monday = addDays(monday, 7)) if (!weeks.some((w) => w.monday === monday)) missingWeeks.push(monday);
+  return { ...paymentCheck(weeks, from, to, today), missingWeeks, oldestAsOf: weeks.map((w) => w.paymentsAt ?? w.fetchedAt).sort()[0] ?? null };
+}
+
+/**
+ * OTAs pay weeks after the stay, and a stored week is pulled once, so its "paid / balance" goes stale. Re-pulls only the reservations
+ * (not occupancy or services) of the weeks and hotels that still show an open OTA debt, stalest first, and stamps paymentsAt.
+ * A week is saved only when all its hotels were pulled; a week that is cut short is retried next run.
+ */
+export async function refreshPayments(db: SupabaseClient, deadline = Infinity) {
+  const result = { weeks: 0, remaining: 0, stoppedBy: null as null | "deadline" | "window", lastError: null as string | null };
+  const stored = await recentRevenueWeeks(db);
+  const targets = weeksWithDebt(stored);
+  result.remaining = targets.length;
+  const check = stopCheck(deadline);
+  for (const target of targets) {
+    try { check(); } catch (e) { result.stoppedBy = (e as SyncStop).reason; break; }
+    const week: RevenueWeek = structuredClone(stored.find((w) => w.monday === target.monday)!);
+    try {
+      for (const hotelId of target.hotelIds) {
+        const reservations = await fetchAllReservations(db, hotelId, { dateType: 3, from: apiDate(target.monday), to: apiDate(target.end) }, check);
+        const hotel = week.hotels.find((h) => h.id === hotelId)!;
+        hotel.bookings = revenueBookings(reservations, week.monday, week.end);
+      }
+      week.paymentsAt = new Date().toISOString();
+      const { error } = await db.from("bluejay_revenue_weeks").update({ revenue: week }).eq("week_start", week.monday);
+      if (error) throw new Error(error.message);
+      result.weeks++; result.remaining--;
+    } catch (e) {
+      if (e instanceof SyncStop) { result.stoppedBy = e.reason; break; }
+      result.lastError = (e instanceof Error ? e.message : String(e)).slice(0, 1000);
+    }
+  }
+  return result;
 }
 
 export type SyncTrigger = "cron" | "manual" | "script";

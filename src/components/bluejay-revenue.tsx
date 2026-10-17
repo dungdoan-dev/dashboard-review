@@ -5,7 +5,7 @@ import { fmtDate } from "@/lib/format-date";
 import { FLAG_LABELS, revenueTotals, serviceMatrix, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
-const dm = (date: string) => (date ? fmtDate(date).slice(0, 5) : "–");
+const dm = (date: string) => (date ? fmtDate(date) : "–"); // dd/mm/yyyy
 
 type Row = RevenueBooking & { hotel: string };
 

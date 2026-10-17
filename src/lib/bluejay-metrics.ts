@@ -13,7 +13,7 @@ export const BLUEJAY_HOTELS = [
 export const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 export const addDays = (s: string, n: number) => new Date(new Date(`${s}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
 export const apiDate = (s: string) => s.replace(/-0(\d)/g, "-$1"); // API doc style: 2026-5-21
-export const vnDay = (s: string) => `${+s.slice(8)}/${+s.slice(5, 7)}`;
+export const vnDay = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}`; // dd/mm: short form for chart axes and Excel titles; everywhere else shows dd/mm/yyyy (fmtDate)
 export const weekEnd = (monday: string) => addDays(monday, 6);
 
 export function isoWeek(s: string) {
