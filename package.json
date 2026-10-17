@@ -26,7 +26,7 @@
     "scrape:grab": "node scraper/grab-merchant-scraper.mjs",
     "scrape:grab:login": "node scraper/grab-merchant-scraper.mjs --login",
     "scrape:all": "node scraper/gmaps-scraper.mjs && node scraper/tripadvisor-scraper.mjs && node scraper/agoda-scraper.mjs && node scraper/booking-scraper.mjs && node scraper/tripcom-scraper.mjs",
-    "test": "node --test src/lib/bluejay-metrics.test.ts src/lib/bluejay-revenue.test.ts src/lib/bluejay-range.test.ts src/lib/bluejay-reconcile.test.ts src/lib/bluejay-debt.test.ts src/lib/bluejay-paid.test.ts src/lib/bluejay-ledger-template.test.ts src/lib/bluejay-ledger-meta.test.ts src/lib/bluejay-ledger-guide.test.ts src/lib/google-profile.test.ts src/lib/facebook-page.test.ts src/lib/instagram-page.test.ts src/lib/facebook-ads.test.ts",
+    "test": "node --test src/lib/bluejay-metrics.test.ts src/lib/bluejay-revenue.test.ts src/lib/bluejay-range.test.ts src/lib/bluejay-reconcile.test.ts src/lib/bluejay-debt.test.ts src/lib/bluejay-paid.test.ts src/lib/bluejay-ledger-template.test.ts src/lib/bluejay-ledger-meta.test.ts src/lib/bluejay-ledger-guide.test.ts src/lib/google-profile.test.ts src/lib/facebook-page.test.ts src/lib/instagram-page.test.ts src/lib/facebook-ads.test.ts src/lib/tiktok-page.test.ts",
     "bluejay:backfill": "node scraper/bluejay-backfill.mjs"
   },
   "dependencies": {

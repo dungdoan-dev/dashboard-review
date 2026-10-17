@@ -11,6 +11,7 @@ import {
   ThumbsUp,
   Camera,
   Megaphone,
+  Music2,
   ArrowDownToLine,
   ArrowUpRight,
   Building2,
@@ -65,6 +66,7 @@ import { GoogleProfile } from "@/components/google-profile";
 import { FacebookPage } from "@/components/facebook-page";
 import { InstagramPage } from "@/components/instagram-page";
 import { FacebookAds } from "@/components/facebook-ads";
+import { TiktokPage } from "@/components/tiktok-page";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
@@ -254,7 +256,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isFacebookPage = pathname === "/facebook";
   const isInstagramPage = pathname === "/instagram";
   const isFacebookAdsPage = pathname === "/facebook-ads";
-  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage;
+  const isTiktokPage = pathname === "/tiktok";
+  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isTiktokPage;
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
@@ -1775,6 +1778,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook"><ThumbsUp size={17} /><span>Facebook</span></Link>
           <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram"><Camera size={17} /><span>Instagram</span></Link>
           <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads"><Megaphone size={17} /><span>Facebook Ads</span></Link>
+          <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok"><Music2 size={17} /><span>TikTok</span></Link>
           <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
           <button className="nav-link" type="button" onClick={exportCsv}><ArrowDownToLine size={17} /><span>Xuất dữ liệu</span></button>
           <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings"><Settings2 size={17} /><span>Cài đặt</span></Link>
@@ -1787,7 +1791,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
-          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
           {supabaseConfigured && !isBluejayPage && <MissingReportsBell userId={user?.id ?? null} locations={locations.flatMap((location) => { const type = filterTypeOf(location.type); return type === "entertainment" ? [] : [{ id: location.id, name: location.name, kind: type === "hotel" ? "hotel" as const : "fnb" as const }]; })} />}
@@ -1818,6 +1822,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isFacebookPage && <FacebookPage />}
           {isInstagramPage && <InstagramPage />}
           {isFacebookAdsPage && <FacebookAds />}
+          {isTiktokPage && <TiktokPage />}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
           {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
