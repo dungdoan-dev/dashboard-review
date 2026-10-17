@@ -5,7 +5,7 @@
 import { addDays, mondayOf, nightsIn, rate, type Day, type WeeklyReport } from "./bluejay-metrics.ts";
 import type { RevenueBooking, RevenueWeek, ServiceDay } from "./bluejay-revenue.ts";
 
-export const MAX_RANGE_DAYS = 93;
+export const MAX_RANGE_DAYS = 366;
 
 export type RangeHotel = {
   id: number; name: string;
