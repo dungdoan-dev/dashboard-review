@@ -10,7 +10,7 @@ import type { RevenueBooking } from "@/lib/bluejay-revenue";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const signed = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(x));
-const KINDS: Kind[] = ["diff", "ledger-only", "bj-only", "settle-missing", "settle-open", "settle-ok", "prior", "ok"];
+const KINDS: Kind[] = ["diff", "ledger-only", "bj-only", "settle-missing", "settle-open", "settle-ok", "deposit-next", "prior-stay", "prior", "ok"];
 const PROBLEMS: Kind[] = ["diff", "ledger-only", "bj-only", "settle-missing", "settle-open"];
 const BASIS = { payment: "Thanh toán", service: "Dịch vụ" } as const;
 
@@ -80,7 +80,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
     <td>{item.basis ? BASIS[item.basis] : "–"}</td>
     <td>{num(item.excel)}</td>
     <td>{item.basis ? num(item.bluejay) : "–"}</td>
-    <td className={item.kind === "ok" ? undefined : "reconcile-diff"}>{item.kind === "ok" || item.kind === "prior" ? "–" : signed(item.diff)}</td>
+    <td className={item.kind === "ok" ? undefined : "reconcile-diff"}>{item.kind === "ok" || item.kind === "prior" || item.kind === "deposit-next" || item.kind === "prior-stay" ? "–" : signed(item.diff)}</td>
     <td>{KIND_LABELS[item.kind]}</td>
     <td>{item.notes.length ? item.notes.join("; ") : "–"}</td>
   </tr>;

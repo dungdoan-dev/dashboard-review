@@ -164,3 +164,49 @@ test("a TT OTA line settles many bookings: ids split, unknown ids and still-owin
   const clean = reconcile(parseLedger(sheet([settle("009001,009002", 900000)])), [paid, { ...owing, balance: 0, payment: 600000 }], "2026-09-01", "2026-09-30");
   assert.equal(clean.counts["settle-ok"], 1);
 });
+
+test("a line with money only in a \"Cọc ... chưa ở\" column is a deposit for a later period: its own group, not counted, not a no-money line; a stay later uses the \"đã ở\" column", () => {
+  // column 10 = "Cọc TM chưa ở" in the test header; column 7 = "Cọc TM ở"; column 9 = "Tiền măt"
+  const advance = line("2026-09-15", "009999", "Khách Lẻ", "Cọc phòng", "cọc ở tháng 10", 0, 0, 0);
+  advance[10] = 1000000;
+  const september = reconcile(parseLedger(sheet([advance])), [], "2026-09-01", "2026-09-30");
+  assert.equal(september.counts["deposit-next"], 1);
+  assert.equal(september.counts["ledger-only"], 0);
+  assert.equal(september.fileIssues.noMoney.length, 0);
+  assert.equal(september.items[0].excel, 1000000); // shown, so the person sees it
+  assert.equal(parseLedger(sheet([advance])).lines[0].collected, 0); // but never added to the takings
+
+  // October: the guest uses 2.000.000 in all, 1.000.000 of it the September deposit (column 7, "đã ở") and 1.000.000 paid at the desk (column 9)
+  const stay = line("2026-10-11", "009999", "Khách Lẻ", "Tiền phòng", "", 1000000, 0, 0);
+  stay[7] = 1000000;
+  const october = reconcile(parseLedger(sheet([stay])), [booking({ code: "009999", checkIn: "2026-10-10", checkOut: "2026-10-11", payment: 2000000, totalPrice: 2000000, roomPrice: 2000000, balance: 0 })], "2026-10-01", "2026-10-31");
+  assert.equal(october.counts.ok, 1);
+});
+
+test("a booking whose stay starts after the ledger period is a deposit for the next period, not a difference; a stay inside the period is still compared", () => {
+  const deposit = line("2026-09-29", "008556", "Zalo", "Cọc phòng", "", 0, 0, 0);
+  deposit[10] = 1200000; // "Cọc TM chưa ở"
+  const later = booking({ code: "008556", checkIn: "2026-10-01", checkOut: "2026-10-02", payment: 2520000, totalPrice: 2520000, roomPrice: 2520000, balance: 0 });
+  const r = reconcile(parseLedger(sheet([deposit])), [later], "2026-09-01", "2026-09-30");
+  assert.deepEqual([r.counts["deposit-next"], r.counts.diff], [1, 0]);
+  const item = r.items[0];
+  assert.deepEqual([item.excel, item.diff, item.checkIn], [1200000, 0, "2026-10-01"]);
+  assert.ok(item.notes.some((n) => n.includes("bảng kê tháng 10/2026")));
+  assert.equal(r.counts["bj-only"], 0); // the booking is used, not reported as missing from the ledger
+
+  const inside = reconcile(parseLedger(sheet([deposit])), [{ ...later, checkIn: "2026-09-30", checkOut: "2026-10-01" }], "2026-09-01", "2026-09-30");
+  assert.equal(inside.counts["deposit-next"], 0); // starts on the last day of the period: compared as usual
+  assert.equal(inside.counts.diff, 1);
+});
+
+test("a stay that began before the period: Blue Jay above the ledger is 'Lưu trú từ kỳ trước' (the earlier part is in last month's ledger), the ledger above Blue Jay is still a difference", () => {
+  const ota = booking({ code: "007834", channel: "Agoda", source: "Agoda", checkIn: "2026-08-31", checkOut: "2026-09-01", servicePrice: 625000, totalPrice: 1745000, roomPrice: 1120000, payment: 1745000, balance: 0 });
+  const service225 = parseLedger(sheet([line("2026-09-01", "007834", "Agoda", "Laundry", "", 225000, 0, 0)]));
+  const r = reconcile(service225, [ota], "2026-09-01", "2026-09-30");
+  assert.deepEqual([r.counts["prior-stay"], r.counts.diff], [1, 0]);
+  assert.ok(r.items[0].notes.some((n) => n.includes("31/08/2026") && n.includes("400.000") && n.includes("08/2026")));
+  const more = parseLedger(sheet([line("2026-09-01", "007834", "Agoda", "Laundry", "", 700000, 0, 0)]));
+  assert.equal(reconcile(more, [ota], "2026-09-01", "2026-09-30").counts.diff, 1);
+  const sameMonth = reconcile(service225, [{ ...ota, checkIn: "2026-09-01", checkOut: "2026-09-02" }], "2026-09-01", "2026-09-30");
+  assert.equal(sameMonth.counts.diff, 1); // began inside the period: a real difference
+});
