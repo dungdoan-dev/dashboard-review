@@ -324,8 +324,13 @@ export async function plannedWeeks(db: SupabaseClient) {
   return weeks;
 }
 
-/** Another run started in the last 10 minutes and has not finished (cron and "Chạy ngay" must not overlap). */
+/**
+ * Another run started in the last 10 minutes and has not finished (cron, "Chạy ngay", the payment refresh and the backfill script must not overlap).
+ * A run still "running" after 10 minutes was killed (timeout, Ctrl+C): it is closed as failed here, so the log never shows it running forever.
+ */
 export async function syncBusy(db: SupabaseClient) {
-  const { data } = await db.from("bluejay_sync_runs").select("id").eq("status", "running").gte("started_at", new Date(Date.now() - 10 * 60_000).toISOString()).limit(1);
+  const since = new Date(Date.now() - 10 * 60_000).toISOString();
+  await db.from("bluejay_sync_runs").update({ status: "failed", message: "Bị dừng giữa chừng (quá 10 phút không kết thúc); tuần này sẽ được lấy lại ở lượt sau.", finished_at: new Date().toISOString() }).eq("status", "running").lt("started_at", since);
+  const { data } = await db.from("bluejay_sync_runs").select("id").eq("status", "running").gte("started_at", since).limit(1);
   return Boolean(data?.length);
 }

@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { serviceDb, storedWeeks, syncWeeks } from "../src/lib/bluejay.ts";
+import { serviceDb, storedWeeks, syncBusy, syncWeeks } from "../src/lib/bluejay.ts";
 import { addDays, isDate, mondayOf } from "../src/lib/bluejay-metrics.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -40,6 +40,7 @@ const from = mondayOf(fromArg), to = mondayOf(toArg);
 
 await loadEnv();
 const db = serviceDb();
+if (await syncBusy(db)) { console.error("Đang có một lượt đồng bộ Blue Jay chạy (cron hoặc nút trên web). Chạy lại sau vài phút."); process.exit(1); }
 const have = force ? new Set() : await storedWeeks(db, from, to);
 const weeks = [];
 for (let monday = to; monday >= from; monday = addDays(monday, -7)) if (!have.has(monday)) weeks.push(monday); // mới nhất trước
