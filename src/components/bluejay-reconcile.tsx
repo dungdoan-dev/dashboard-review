@@ -10,8 +10,8 @@ import type { RevenueBooking } from "@/lib/bluejay-revenue";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const signed = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(x));
-const KINDS: Kind[] = ["diff", "ledger-only", "bj-only", "prior", "ok"];
-const PROBLEMS: Kind[] = ["diff", "ledger-only", "bj-only"];
+const KINDS: Kind[] = ["diff", "ledger-only", "bj-only", "settle-missing", "settle-open", "settle-ok", "prior", "ok"];
+const PROBLEMS: Kind[] = ["diff", "ledger-only", "bj-only", "settle-missing", "settle-open"];
 const BASIS = { payment: "Thanh toán", service: "Dịch vụ" } as const;
 
 type Stored = { key: string; bookings: RevenueBooking[]; missingWeeks: string[]; message: string };
@@ -114,7 +114,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
         {stored.missingWeeks.length > 0 && <p className="summary-note bad" role="alert">Blue Jay chưa lưu tuần bắt đầu {stored.missingWeeks.map(fmtDate).join(", ")}. Đặt phòng của các tuần này sẽ hiện là “Có trong bảng kê, không có trong Blue Jay” dù chưa chắc sai; hãy lấy các tuần đó trong khung giờ API rồi đối soát lại.</p>}
 
         <div className="summary-kpis">
-          <div className="summary-kpi"><span>Tổng thu trong bảng kê</span><strong>{num(result.totals.excelCollected)}</strong><small>Nhóm “Thu tiền khách sạn” của dòng có ID (không gồm cọc đã ở, POS)</small></div>
+          <div className="summary-kpi"><span>Tổng thu trong bảng kê</span><strong>{num(result.totals.excelCollected)}</strong><small>Cọc đã nhận + tiền mặt + TK + quẹt thẻ của dòng có ID (không gồm cọc chưa ở, POS)</small></div>
           {ledger.hasCounted && <div className="summary-kpi"><span>Cột “Tiền so Bluejay”</span><strong>{num(result.totals.excelCounted)}</strong><small>Tổng toàn bảng kê</small></div>}
           <div className="summary-kpi"><span>Dòng không có ID</span><strong>{num(result.totals.excelNoId)}</strong><small>Quẹt thẻ, hoa hồng, lãi; trừ {num(result.totals.deductions)}</small></div>
         </div>

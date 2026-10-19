@@ -9,7 +9,7 @@ const DAY = 86_400_000;
 const OTA = new Set(OTA_CHANNELS);
 const PRIOR = /tháng\s*\d{1,2}|kỳ trước/i; // "Agoda tt tháng 6": settlement of an earlier stay
 
-export type LedgerLine = { row: number; date: string; id: string; platform: string; service: string; note: string; stayMonth: string; isRoom: boolean; collected: number; counted: number }; // stayMonth: yyyy-mm of the stay a room payment is for, or ""
+export type LedgerLine = { row: number; date: string; id: string; platform: string; service: string; note: string; stayMonth: string; isRoom: boolean; settlement: boolean; collected: number; counted: number }; // stayMonth: yyyy-mm of the stay a room payment is for, or ""
 export type Ledger = {
   lines: LedgerLine[];
   noId: { rows: number; collected: number; deductions: number }; // card totals, commissions, interest: summary lines without a booking id
@@ -56,20 +56,21 @@ export function parseLedger(rows: unknown[][]): Ledger {
     for (let i = from; i <= to && i < rows.length; i++) { const c = rows[i].findIndex((cell) => re.test(norm(cell))); if (c >= 0) return c; }
     return -1;
   };
-  const col = { date: cols(/^ngay thang$/), id: cols(/^id he thong$/), platform: cols(/^nen tang$/), service: cols(/^dich vu$/), note: cols(/^((ghu|ghi) chu|noi dung)$/), deposit: cols(/^tien coc da nhan$/), deduct: cols(/^(khoan )?giam tru doanh thu$/), total: cols(/^tong tien$/), counted: cols(/^tien so bluejay$/) };
+  const col = { date: cols(/^ngay thang$/), id: cols(/^id he thong$/), platform: cols(/^nen tang$/), service: cols(/^dich vu$/), note: cols(/^((ghu|ghi) chu|noi dung)$/), deposit: cols(/^tien coc da nhan$/), deduct: cols(/^(khoan )?giam tru doanh thu$/), total: cols(/^tong tien$/), counted: cols(/^tien so bluejay$/), pay: cols(/^(thanh toan|hinh thuc thanh toan)$/) };
   const stay = cols(/^ky luu tru duoc thanh toan$/);
   const dailyDate = cols(/^(doanh thu|thu tien) theo ngay$/);
   // "Tiền so bluejay" can also head the daily block on the right; the per-line column is the one left of that block.
   if (dailyDate >= 0 && col.counted > dailyDate) col.counted = -1;
   const missing = Object.entries({ "NGÀY THÁNG": col.date, "ID HỆ THỐNG": col.id, "NỀN TẢNG": col.platform, "DỊCH VỤ": col.service, "TIỀN CỌC ĐÃ NHẬN": col.deposit, "Giảm trừ doanh thu": col.deduct }).filter(([, c]) => c < 0).map(([name]) => name);
   if (missing.length) throw new Error(`Bảng kê thiếu cột: ${missing.join(", ")}.`);
-  // The hotel's takings are the columns of the group "THU TIỀN KHÁCH SẠN" (cash, account, card and the deposits of guests not yet staying) except POS cafe.
-  // The group "TIỀN CỌC ĐÃ NHẬN" (deposits of guests already staying) is the same money counted again, so it is not added; nor is the sheet's own "Tổng tiền".
+  // The hotel's takings: the whole group "TIỀN CỌC ĐÃ NHẬN" (deposits of guests already staying) plus the group "THU TIỀN KHÁCH SẠN" (cash, account, card)
+  // without its "Cọc ... chưa ở" columns and POS cafe. The sheet's own "Tổng tiền" is not added (it would count everything twice).
   const moneyEnd = Math.min(...[col.total, col.deduct].filter((c) => c > col.deposit));
   const takingStart = cols(/^thu tien khach san$/);
   if (takingStart < 0) throw new Error("Bảng kê thiếu cột: THU TIỀN KHÁCH SẠN.");
+  const skipped = (c: number) => [head, head + 1, head + 2].some((i) => /\b(coc|pos)\b/.test(norm(rows[i]?.[c])));
   const takingCols: number[] = [];
-  for (let c = takingStart; c < moneyEnd; c++) if (![head, head + 1, head + 2].some((i) => /\bpos\b/.test(norm(rows[i]?.[c])))) takingCols.push(c);
+  for (let c = col.deposit; c < moneyEnd; c++) if (c < takingStart || !skipped(c)) takingCols.push(c);
   const deductEnd = col.counted > col.deduct ? col.counted : col.deduct + 2; // hoa hồng nền tảng + các khoản giảm trừ khác
 
   // "KHÁCH SẠN" and "KỲ BÁO CÁO" cells above the header: the value is the cell to the right, or the text after a colon in the same cell.
@@ -107,7 +108,7 @@ export function parseLedger(rows: unknown[][]): Ledger {
     const service = String(r[col.service] ?? "").trim(); // "Tiền phòng" and "Cọc phòng" (room deposit) are room money, the rest is service
     lines.push({
       row: i + 1, date, id, platform: String(r[col.platform] ?? "").trim(), service, note: col.note >= 0 ? String(r[col.note] ?? "").trim() : "", stayMonth: stay >= 0 ? monthOf(r[stay]) : "",
-      isRoom: /^(tien|coc) phong$/.test(norm(service)), collected, counted,
+      isRoom: /^(tien|coc) phong$/.test(norm(service)), settlement: col.pay >= 0 && norm(r[col.pay]) === "tt ota", collected, counted,
     });
   }
   if (!lines.length) throw new Error("Bảng kê không có dòng giao dịch nào có ngày và ID.");
@@ -149,9 +150,10 @@ export function parseLedgerWorkbook(sheets: { name: string; rows: unknown[][] }[
   throw new Error(sheets.length > 1 ? `Không thấy sheet bảng kê thu tiền trong file. ${reason}` : reason || "File không có sheet nào.");
 }
 
-export type Kind = "diff" | "ok" | "ledger-only" | "bj-only" | "prior";
+export type Kind = "diff" | "ok" | "ledger-only" | "bj-only" | "prior" | "settle-ok" | "settle-open" | "settle-missing";
 export const KIND_LABELS: Record<Kind, string> = {
   diff: "Lệch số tiền", ok: "Khớp", "ledger-only": "Có trong bảng kê, không có trong Blue Jay", "bj-only": "Có trong Blue Jay, chưa có trong bảng kê", prior: "Thanh toán kỳ trước",
+  "settle-ok": "OTA thanh toán công nợ: khớp", "settle-open": "OTA thanh toán công nợ: Blue Jay còn ghi nợ", "settle-missing": "OTA thanh toán công nợ: có mã không thấy trong Blue Jay",
 };
 export type Item = {
   kind: Kind; id: string; channel: string; room: string; checkIn: string; checkOut: string; status: string;
@@ -167,16 +169,61 @@ export type Reconciliation = {
 const keyOf = (b: RevenueBooking) => `${b.code}|${b.room}|${b.roomType}`;
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
 
+const dmy = (iso: string) => iso.split("-").reverse().join("/");
+const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+
+/**
+ * Lines paid by an OTA ("Thanh toán" = TT OTA): one line settles many bookings, the ID cell lists them ("006951,007225,..."), and the money is net of the OTA's commission.
+ * So the amount is not compared to the penny. Each listed id is looked up in the hotel's Blue Jay bookings: unknown ids and bookings Blue Jay still shows as owing are the findings;
+ * the ratio ledger money / Blue Jay total shows the commission, and a ratio far from what the same OTA's other lines show is noted.
+ * shortcut: the "usual" ratio is the median of the OTA's lines in this file, needs 3 lines; keep a fixed rate per OTA if files get too small for that.
+ */
+function settlements(lines: LedgerLine[], byId: Map<string, RevenueBooking[]>, used: Set<string>): Item[] {
+  const rows = lines.map((l) => {
+    const all = l.id.split(/[,;]/).filter(Boolean);
+    const ids = [...new Set(all)];
+    const duplicated = [...new Set(all.filter((id, i) => all.indexOf(id) !== i))];
+    const found = ids.map((id) => [...new Map((byId.get(id) ?? []).map((b) => [keyOf(b), b])).values()]);
+    const bookings = found.flat();
+    bookings.forEach((b) => used.add(keyOf(b)));
+    const missing = ids.filter((_, i) => !found[i].length);
+    const open = bookings.filter((b) => b.stay && b.balance > TOLERANCE);
+    const total = sum(bookings.filter((b) => b.stay).map((b) => b.totalPrice));
+    const excel = l.collected;
+    return { l, ids, duplicated, bookings, missing, open, total, excel, ratio: total > 0 ? excel / total : 0 };
+  });
+  const usual = new Map<string, number>(); // per OTA name
+  for (const platform of new Set(rows.map((r) => norm(r.l.platform)))) {
+    const ratios = rows.filter((r) => norm(r.l.platform) === platform && r.ratio > 0).map((r) => r.ratio);
+    if (ratios.length >= 3) usual.set(platform, median(ratios));
+  }
+  return rows.map((r): Item => {
+    const outs = r.bookings.map((b) => b.checkOut).filter(Boolean).sort();
+    const notes = [...new Set([r.l.note, r.l.stayMonth ? `Thanh toán cho kỳ lưu trú ${r.l.stayMonth.slice(5)}/${r.l.stayMonth.slice(0, 4)}` : ""].filter(Boolean))];
+    notes.push(`Tìm thấy ${r.ids.length - r.missing.length}/${r.ids.length} mã trong Blue Jay`);
+    if (r.missing.length) notes.push(`Không thấy: ${r.missing.join(", ")}`);
+    if (r.open.length) notes.push(`Blue Jay còn ghi nợ ${r.open.length} mã (${Math.round(sum(r.open.map((b) => b.balance))).toLocaleString("vi-VN")}): ${r.open.map((b) => b.ref || b.code).join(", ")}`);
+    if (r.duplicated.length) notes.push(`Mã ghi lặp trong ô: ${r.duplicated.join(", ")}`);
+    if (outs.length) notes.push(`Trả phòng ${dmy(outs[0])}–${dmy(outs[outs.length - 1])}`);
+    if (r.ratio > 0) {
+      const mid = usual.get(norm(r.l.platform));
+      notes.push(`Tiền bảng kê = ${(r.ratio * 100).toFixed(1)}% tổng tiền Blue Jay (đã trừ hoa hồng)${mid !== undefined && Math.abs(r.ratio - mid) > 0.05 ? `; khác mức thường của OTA này (${(mid * 100).toFixed(1)}%)` : ""}`);
+    }
+    const kind: Kind = r.missing.length ? "settle-missing" : r.open.length ? "settle-open" : "settle-ok";
+    return { kind, id: `${r.l.platform || "OTA"} · ${r.ids.length} mã`, channel: r.l.platform, room: "", checkIn: outs[0] ?? "", checkOut: outs[outs.length - 1] ?? "", status: "", basis: null, excel: r.excel, bluejay: r.total, diff: r.excel - r.total, lines: 1, notes };
+  });
+}
+
 /** bookings: stored Blue Jay bookings of ONE hotel, one record per booking (latest snapshot). from/to: the ledger period. */
 export function reconcile(ledger: Ledger, bookings: RevenueBooking[], from = ledger.from, to = ledger.to): Reconciliation {
   const byId = new Map<string, RevenueBooking[]>();
   for (const b of bookings) for (const key of new Set([cleanId(b.ref), cleanId(b.code)])) if (key) byId.set(key, [...(byId.get(key) ?? []), b]);
 
   const groups = new Map<string, LedgerLine[]>();
-  for (const l of ledger.lines) groups.set(l.id, [...(groups.get(l.id) ?? []), l]);
+  for (const l of ledger.lines) if (!l.settlement) groups.set(l.id, [...(groups.get(l.id) ?? []), l]);
 
   const used = new Set<string>();
-  const items: Item[] = [];
+  const items: Item[] = settlements(ledger.lines.filter((l) => l.settlement), byId, used);
   for (const [id, lines] of groups) {
     const matched = [...new Map((byId.get(id) ?? []).map((b) => [keyOf(b), b])).values()];
     const notes = [...new Set([...lines.map((l) => l.note), ...lines.map((l) => (l.stayMonth ? `Thanh toán cho kỳ lưu trú ${l.stayMonth.slice(5)}/${l.stayMonth.slice(0, 4)}` : ""))].filter(Boolean))];
@@ -213,9 +260,9 @@ export function reconcile(ledger: Ledger, bookings: RevenueBooking[], from = led
     items.push({ kind: "bj-only", id: b.ref || b.code, channel: b.channel, room: b.room, checkIn: b.checkIn, checkOut: b.checkOut, status: b.status, basis: amount === b.servicePrice && (ota || b.checkIn < from) ? "service" : "payment", excel: 0, bluejay: amount, diff: -amount, lines: 0, notes: [] });
   }
 
-  const order: Record<Kind, number> = { diff: 0, "ledger-only": 1, "bj-only": 2, prior: 3, ok: 4 };
+  const order: Record<Kind, number> = { "settle-missing": 0, "settle-open": 1, diff: 2, "ledger-only": 3, "bj-only": 4, prior: 5, "settle-ok": 6, ok: 7 };
   items.sort((a, b) => order[a.kind] - order[b.kind] || Math.abs(b.diff) - Math.abs(a.diff) || a.id.localeCompare(b.id));
-  const counts: Record<Kind, number> = { diff: 0, ok: 0, "ledger-only": 0, "bj-only": 0, prior: 0 };
+  const counts: Record<Kind, number> = { diff: 0, ok: 0, "ledger-only": 0, "bj-only": 0, prior: 0, "settle-ok": 0, "settle-open": 0, "settle-missing": 0 };
   for (const it of items) counts[it.kind]++;
 
   const seen = new Map<string, LedgerLine[]>();

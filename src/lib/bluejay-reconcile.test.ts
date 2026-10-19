@@ -143,6 +143,24 @@ test("the monthly workbook: the ledger sheet is found among many, and its own la
   assert.equal(parsed.sheet, "BK THU TIỀN KS");
   assert.equal(parsed.hasCounted, false);
   assert.equal(parsed.lines[0].id, "008001");
-  assert.equal(parsed.lines[0].collected, 390000); // cash + account + deposit of a guest not yet staying (col 11): not the "TIỀN CỌC ĐÃ NHẬN" deposit (col 7), not POS cafe (col 15), and not again through the sheet's own "Tổng tiền"
+  assert.equal(parsed.lines[0].collected, 440000); // deposit received (col 7) + cash + account; not "Cọc TM chưa ở" (col 11), not POS cafe (col 15), and not again through the sheet's own "Tổng tiền"
   assert.throws(() => parseLedgerWorkbook([{ name: "A", rows: [["x"]] }, { name: "B", rows: [["y"]] }]), /Không thấy sheet bảng kê/);
+});
+
+test("a TT OTA line settles many bookings: ids split, unknown ids and still-owing bookings are findings, money is not compared to the penny", () => {
+  const settle = (id: string, amount: number) => { const r = line("2026-09-10", id, "Agoda", "Tiền phòng", "", 0, amount, 0); r[3] = "TT OTA"; return r; };
+  const ledger = parseLedger(sheet([settle("009001, 009002,009002,009999", 900000)]));
+  assert.equal(ledger.lines[0].settlement, true);
+  const owing = booking({ code: "009002", channel: "Agoda", totalPrice: 600000, payment: 100000, balance: 500000 });
+  const paid = booking({ code: "009001", channel: "Agoda", totalPrice: 500000, payment: 500000, balance: 0 });
+  const r = reconcile(ledger, [paid, owing], "2026-09-01", "2026-09-30");
+  assert.equal(r.counts["settle-missing"], 1); // 009999 is not in Blue Jay: missing wins over still-owing
+  const item = r.items.find((i) => i.kind === "settle-missing")!;
+  assert.equal(item.bluejay, 1100000);
+  assert.equal(item.excel, 900000);
+  assert.ok(item.notes.some((n) => n.includes("Không thấy: 009999")) && item.notes.some((n) => n.includes("Mã ghi lặp trong ô: 009002")) && item.notes.some((n) => n.includes("còn ghi nợ 1 mã")));
+  assert.equal(r.counts["ledger-only"], 0); // no false "not in Blue Jay" for the long id cell
+  assert.equal(r.counts["bj-only"], 0); // the settled bookings are used
+  const clean = reconcile(parseLedger(sheet([settle("009001,009002", 900000)])), [paid, { ...owing, balance: 0, payment: 600000 }], "2026-09-01", "2026-09-30");
+  assert.equal(clean.counts["settle-ok"], 1);
 });

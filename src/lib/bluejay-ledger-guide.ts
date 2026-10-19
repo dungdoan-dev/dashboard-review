@@ -22,9 +22,9 @@ const FIELDS: Cell[][] = [
   ["Cột E", "Dịch vụ", "Bắt buộc", "Chọn từ danh sách. Tiền phòng ghi đúng “Tiền phòng”; tiền cọc phòng ghi “Cọc phòng”; còn lại là dịch vụ (Minibar, Giặt Ủi, Phụ thu…).", "Tiền phòng, Minibar", "“Tiền phòng” và “Cọc phòng” là tiền phòng, mọi chữ khác là dịch vụ. Khách OTA chỉ so phần dịch vụ.", "Ghi sai chữ làm tiền phòng bị tính là dịch vụ và gây lệch."],
   ["Cột F", "Nội dung (ghi chú)", "Không bắt buộc", "Ghi chú tự do về khoản thu.", "túi giặt", "Hiện ở cột Kết quả. Nếu có chữ “tháng N” hoặc “kỳ trước” và cột T để trống thì tool coi là thanh toán kỳ trước.", "Nên ghi tên OTA và tháng khi OTA trả tiền phòng."],
   ["Cột G", "Số phòng", "Không bắt buộc", "Số phòng của khoản thu.", "202", "Không dùng để so sánh.", ""],
-  ["Cột H, I, J", "Tiền cọc đã nhận (đã ở)", "Khi có", "Cọc tiền mặt, cọc chuyển khoản, cọc thẻ của khách đã ở. Mỗi khoản vào đúng một cột.", "1.500.000", "Chỉ để ghi nhận: tool không cộng nhóm này vào tiền thu (tránh tính trùng với nhóm “Thu tiền khách sạn”).", "Không nhập cọc vào cột khác."],
-  ["Cột K đến P", "Thu tiền khách sạn", "Khi có", "Tiền mặt, cọc TM chưa ở, tiền TK, cọc TK chưa ở, tiền quẹt thẻ, tiền POS cafe. Mỗi khoản vào đúng một cột.", "50.000", "Tool cộng cột K đến O (tiền mặt, cọc TM chưa ở, tiền TK, cọc TK chưa ở, quẹt thẻ), không cộng POS cafe (P). Khách trực tiếp: tổng các cột này của mọi dòng cùng mã được so với tiền đã thanh toán trong Blue Jay.", "Hoàn tiền nhập số âm."],
-  ["Cột Q", "Tổng tiền", "Không nhập", "Tự cộng từ cột H đến P bằng công thức.", "", "Tool chỉ cộng cột K đến O (không cộng cọc đã ở, POS) nên không đọc cột này.", "Không xóa công thức."],
+  ["Cột H, I, J", "Tiền cọc đã nhận (đã ở)", "Khi có", "Cọc tiền mặt, cọc chuyển khoản, cọc thẻ của khách đã ở. Mỗi khoản vào đúng một cột.", "1.500.000", "Cộng vào tổng thu của dòng.", "Không nhập cọc vào cột khác."],
+  ["Cột K đến P", "Thu tiền khách sạn", "Khi có", "Tiền mặt, cọc TM chưa ở, tiền TK, cọc TK chưa ở, tiền quẹt thẻ, tiền POS cafe. Mỗi khoản vào đúng một cột.", "50.000", "Tool chỉ cộng tiền mặt (K), tiền TK (M) và quẹt thẻ (O). Cọc TM chưa ở (L), cọc TK chưa ở (N) và POS cafe (P) chỉ để ghi nhận, không tính. Khách trực tiếp: tổng thu của mọi dòng cùng mã (gồm cọc đã nhận H–J) được so với tiền đã thanh toán trong Blue Jay.", "Hoàn tiền nhập số âm."],
+  ["Cột Q", "Tổng tiền", "Không nhập", "Tự cộng từ cột H đến P bằng công thức.", "", "Tool tự cộng cột H, I, J, K, M, O (không cộng L, N, P) nên không đọc cột này.", "Không xóa công thức."],
   ["Cột R, S", "Giảm trừ doanh thu", "Khi có", "Hoa hồng nền tảng và các khoản giảm trừ khác.", "375.870", "Không tính vào tiền thu. Tổng giảm trừ của dòng không có ID hiện ở thẻ “Dòng không có ID”.", "Không nhập hoa hồng vào cột thu."],
   ["Cột T", "Kỳ lưu trú được thanh toán", "Khi OTA trả sau", "Chỉ cho tiền phòng OTA trả sau: tháng khách đã ở, dạng mm/yyyy.", "08/2026", "Nhỏ hơn kỳ báo cáo thì dòng được xếp là “thanh toán kỳ trước”, không bị báo thiếu trong Blue Jay.", "Để trống thì tool đọc chữ “tháng N” ở cột Nội dung."],
 ];
@@ -46,7 +46,7 @@ const RESULTS: Cell[][] = [
 ];
 
 const RULES: Cell[][] = [
-  ["Khách trực tiếp (Khách lẻ, Zalo, BE)", "So tổng các cột thu tiền khách sạn (cột K đến O, không gồm POS) của các dòng cùng mã với tổng “đã thanh toán” trong Blue Jay.", "Khách trực tiếp trả hết cho khách sạn nên bảng kê phải có đủ."],
+  ["Khách trực tiếp (Khách lẻ, Zalo, BE)", "So tổng thu (cọc đã nhận H–J + tiền mặt K + tiền TK M + quẹt thẻ O) của các dòng cùng mã với tổng “đã thanh toán” trong Blue Jay.", "Khách trực tiếp trả hết cho khách sạn nên bảng kê phải có đủ."],
   ["Khách OTA", "Chỉ so phần dịch vụ (không gồm “Tiền phòng”, “Cọc phòng”) với tiền dịch vụ trong Blue Jay.", "OTA trả tiền phòng sau cả tháng nên không so theo từng đặt phòng."],
   ["Khách trực tiếp nhận phòng trước kỳ", "Chỉ so dịch vụ.", "Tiền phòng đã thu ở bảng kê tháng trước."],
   ["Dung sai", "1 đồng.", "Blue Jay lưu số nguyên đồng."],
@@ -54,7 +54,8 @@ const RULES: Cell[][] = [
 
 const SPECIAL: Cell[][] = [
   ["OTA trả tiền phòng", "Ghi vào ngày OTA thanh toán, dịch vụ “Tiền phòng”, điền cột T (tháng khách ở) và ghi tên OTA ở Nội dung. Không điền cột T thì ghi chữ “tháng N” ở Nội dung."],
-  ["Dịch vụ khách trả tại quầy", "Nhập ngày khách trả, đúng dịch vụ (Minibar, Giặt Ủi, Phụ thu…) vào cột thu tương ứng."],
+  ["OTA thanh toán gộp công nợ", "Một dòng cho một lần OTA trả: cột Thanh toán chọn “TT OTA”, cột Nền tảng ghi tên OTA, cột ID liệt kê các mã đặt phòng cách nhau bằng dấu phẩy, tiền nhập vào cột thu. Tool tách từng mã, tìm trong Blue Jay: báo mã không thấy, mã Blue Jay còn ghi nợ, và tỷ lệ tiền bảng kê so với tổng tiền Blue Jay (OTA trả sau khi trừ hoa hồng nên không so từng đồng)."],
+  ["Dịch vụ khách trả tại quầy","Nhập ngày khách trả, đúng dịch vụ (Minibar, Giặt Ủi, Phụ thu…) vào cột thu tương ứng."],
   ["Đặt phòng nhiều phòng", "Nhập cùng một mã cho mọi phòng. Tool cộng tiền của các phòng trong Blue Jay trước khi so."],
   ["Đặt phòng bắc qua tháng", "Tiền phòng nằm ở bảng kê tháng nhận phòng. Bảng kê tháng sau chỉ nhập khoản phát sinh trong tháng đó (thường là dịch vụ)."],
   ["Dòng tổng hợp", "Quẹt thẻ cuối ngày, hoa hồng nền tảng, lãi tiền gửi: để trống cột mã. Tool tách riêng, không đối soát theo đặt phòng."],
