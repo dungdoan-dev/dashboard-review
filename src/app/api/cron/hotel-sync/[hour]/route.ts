@@ -74,7 +74,8 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
       }
 
       try {
-        const sources = await listSources(db, locationId, setting.location_type as SyncType);
+        // GrabFood is not run automatically (its login failed on Vercel and held up the other sources); it is crawled by hand in Cài đặt.
+        const sources = (await listSources(db, locationId, setting.location_type as SyncType)).filter((source) => source.platform !== "grabfood");
         if (!sources.length) throw new Error("Cơ sở chưa có nguồn đồng bộ.");
         const metrics = [];
         const reports = [];
