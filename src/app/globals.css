@@ -1198,3 +1198,9 @@ select { cursor: pointer; }
 }
 
 .summary-subtitle { margin: 20px 0 8px; font-size: 16px; }
+.revenue-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.revenue-fold > summary::-webkit-details-marker { display: none; }
+.revenue-fold > summary::after { content: "▾"; color: #5f6f86; transition: transform .15s; }
+.revenue-fold:not([open]) > summary::after { transform: rotate(-90deg); }
+.revenue-fold > summary h4 { margin: 0; }
+.revenue-fold[open] > summary { margin-bottom: 8px; }

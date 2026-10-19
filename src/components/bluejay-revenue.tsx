@@ -71,16 +71,16 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
       <Kpi label="Hủy / no-show đã thu" value={num(totals.cancelled.payment)} hint={`${num(totals.cancelled.bookings)} đặt phòng`} />
     </div>
 
-    <article className="summary-chart wide">
-      <h4>Theo nguồn</h4>
+    <details className="summary-chart wide revenue-fold" open>
+      <summary><h4>Theo nguồn</h4></summary>
       <div className="summary-table summary-table-scroll"><table>
         <thead><tr><th>Nguồn</th><th>Đặt phòng</th><th>Đêm</th><th>Tiền phòng</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Đã thanh toán</th><th>Còn phải thu</th></tr></thead>
         <tbody>{totals.channels.map((c) => <tr key={c.name}><th scope="row">{c.name}</th><td>{num(c.bookings)}</td><td>{num(c.nights)}</td><td>{num(c.room)}</td><td>{num(c.service)}</td><td>{num(c.total)}</td><td>{num(c.payment)}</td><td>{num(c.balance)}</td></tr>)}</tbody>
       </table></div>
-    </article>
+    </details>
 
-    <article className="summary-chart wide">
-      <h4>Doanh thu dịch vụ theo ngày</h4>
+    <details className="summary-chart wide revenue-fold">
+      <summary><h4>Doanh thu dịch vụ theo ngày</h4></summary>
       <p className="summary-note">Theo nhóm dịch vụ của Blue Jay. Blue Jay chỉ cho tổng theo ngày và nhóm, không chia theo từng phòng hay đặt phòng.</p>
       {services.groups.length === 0 ? <p className="summary-note">Không có doanh thu dịch vụ trong {period} này.</p> : <div className="summary-table summary-table-scroll"><table>
         <thead><tr><th>Ngày</th>{services.groups.map((g) => <th key={g.name}>{g.name}</th>)}<th>Tổng</th></tr></thead>
@@ -89,18 +89,18 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
           <tr><th scope="row">Cả {period}</th>{services.groups.map((g) => <td key={g.name}><strong>{num(g.total)}</strong></td>)}<td><strong>{num(services.total)}</strong></td></tr>
         </tbody>
       </table></div>}
-    </article>
+    </details>
 
-    <article className="summary-chart wide">
-      <h4>Chi tiết từng dịch vụ <small>{Math.min(serviceLines.length, LIMIT)}/{serviceLines.length} dòng</small></h4>
+    <details className="summary-chart wide revenue-fold">
+      <summary><h4>Chi tiết từng dịch vụ <small>{Math.min(serviceLines.length, LIMIT)}/{serviceLines.length} dòng</small></h4></summary>
       {serviceLines.length === 0 ? <p className="summary-note">Không có dịch vụ trong {period} này.</p> : <div className="summary-table summary-table-scroll"><table>
         <thead><tr><th>Ngày</th><th>Nhóm</th><th>Dịch vụ</th><th>ĐVT</th><th>Số lượng</th><th>Thành tiền</th></tr></thead>
         <tbody>{serviceLines.slice(0, LIMIT).map((l, i) => <tr key={i}><th scope="row">{dm(l.date)}</th><td>{l.group}</td><td>{l.name}</td><td>{l.unit}</td><td>{num(l.quantity)}</td><td>{num(l.total)}</td></tr>)}</tbody>
       </table></div>}
-    </article>
+    </details>
 
-    <article className="summary-chart wide">
-      <h4>Chi tiết từng đặt phòng <small>{shown.length}/{rows.length} dòng · {totals.flagged} dòng cần đối soát</small></h4>
+    <details className="summary-chart wide revenue-fold">
+      <summary><h4>Chi tiết từng đặt phòng <small>{shown.length}/{rows.length} dòng · {totals.flagged} dòng cần đối soát</small></h4></summary>
       <div className="revenue-filters">
         <input type="search" placeholder="Tìm mã đặt phòng, mã kênh, phòng" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Tìm đặt phòng" />
         <select value={channel} onChange={(event) => setChannel(event.target.value)} aria-label="Lọc theo nguồn"><option value="">Mọi nguồn</option>{channels.map((c) => <option key={c}>{c}</option>)}</select>
@@ -118,7 +118,7 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
         </tr>)}</tbody>
       </table></div>
       {shown.length > LIMIT && <p className="summary-note">Chỉ hiển thị {LIMIT} dòng đầu trong {shown.length} dòng. Dùng ô tìm kiếm hoặc bộ lọc để thu hẹp.</p>}
-    </article>
+    </details>
   </section>;
 }
 
