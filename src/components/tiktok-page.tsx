@@ -51,7 +51,7 @@ export function TiktokPage() {
       <div className="summary-hero">
         <div>
           <h1>TikTok</h1>
-          <p>Chỉ số TikTok qua Windsor.ai, lấy trực tiếp theo khoảng ngày chọn. Windsor chỉ giữ {TT_MAX_DAYS} ngày gần nhất của TikTok. Liên hệ Mes Windsor không có, cần nhập tay. Đối tượng tiếp cận là tổng các ngày nên cao hơn số người thật; lượt nhấp web là lượt nhấp liên kết trong tiểu sử.</p>
+          <p>Chỉ số TikTok, lấy trực tiếp theo khoảng ngày chọn. Chỉ xem được {TT_MAX_DAYS} ngày gần nhất của TikTok. Liên hệ Mes chưa có số liệu tự động, cần nhập tay. Đối tượng tiếp cận là tổng các ngày nên cao hơn số người thật; lượt nhấp web là lượt nhấp liên kết trong tiểu sử.</p>
         </div>
         <div className="summary-controls">
           <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
@@ -61,13 +61,13 @@ export function TiktokPage() {
       </div>
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {TT_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy từ Windsor…</p>}
+      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
       {data && !data.message && !invalid && data.accounts.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo tài khoản">
         <button type="button" aria-pressed={!account} onClick={() => setAccount("")}>Tất cả ({data.accounts.length})</button>
         {data.accounts.map((t) => <button type="button" key={t.id} aria-pressed={account === t.id} onClick={() => setAccount(t.id)}>{t.name}</button>)}
       </div>}
       {data && !data.message && !invalid && (data.accounts.length === 0
-        ? <p className="summary-note">Windsor không trả dữ liệu trong khoảng này.</p>
+        ? <p className="summary-note">Không có dữ liệu trong khoảng này.</p>
         : <div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Tài khoản</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{accounts.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>

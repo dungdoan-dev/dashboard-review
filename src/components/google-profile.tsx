@@ -40,7 +40,7 @@ export function GoogleProfile() {
     const body = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
     if (!res || !res.ok) { setNotice(body.message ?? "Không kết nối được máy chủ."); return; }
-    setNotice(`Đã lấy ${body.days} dòng theo ngày và ${body.posts} bài đăng từ Windsor.`);
+    setNotice(`Đã lấy ${body.days} dòng theo ngày và ${body.posts} bài đăng.`);
     setVersion((v) => v + 1);
   }
 
@@ -62,7 +62,7 @@ export function GoogleProfile() {
       <div className="summary-hero">
         <div>
           <h1>Google Maps</h1>
-          <p>Chỉ số tiếp cận từ Google Business Profile qua Windsor.ai{data?.fetchedAt ? `; lấy lần cuối ${fmtDateTime(data.fetchedAt)}` : ""}. Tự cập nhật mỗi ngày lúc 07:30; Google bổ sung số của những ngày gần nhất chậm vài ngày.</p>
+          <p>Chỉ số tiếp cận từ Google Business Profile{data?.fetchedAt ? `; lấy lần cuối ${fmtDateTime(data.fetchedAt)}` : ""}. Tự cập nhật mỗi ngày lúc 07:30; Google bổ sung số của những ngày gần nhất chậm vài ngày.</p>
         </div>
         <div className="summary-controls">
           <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
@@ -80,7 +80,7 @@ export function GoogleProfile() {
         {data.locations.map((t) => <button type="button" key={t.id} aria-pressed={location === t.id} onClick={() => setLocation(t.id)}>{t.name}</button>)}
       </div>}
       {data && !data.message && !invalid && (data.locations.length === 0
-        ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật từ Google” để lấy từ Windsor.</p>
+        ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật từ Google” để lấy số liệu.</p>
         : <div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Cơ sở</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}<th>Số ngày có dữ liệu</th></tr></thead>
           <tbody>{locations.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => <td key={label}>{num(value(t))}</td>)}<td>{t.days}</td></tr>)}</tbody>

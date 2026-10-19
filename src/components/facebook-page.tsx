@@ -51,7 +51,7 @@ export function FacebookPage() {
       <div className="summary-hero">
         <div>
           <h1>Facebook</h1>
-          <p>Chỉ số tiếp cận của Facebook Page qua Windsor.ai, lấy trực tiếp theo khoảng ngày chọn. Lượt click liên kết, liên hệ Mes và tỷ lệ phản hồi Windsor không có, cần nhập tay. Lượt tương tác chỉ tính reactions nên thấp hơn số Meta Business Suite.</p>
+          <p>Chỉ số tiếp cận của Facebook Page, lấy trực tiếp theo khoảng ngày chọn. Lượt click liên kết, liên hệ Mes và tỷ lệ phản hồi chưa có số liệu tự động, cần nhập tay. Lượt tương tác chỉ tính reactions nên thấp hơn số Meta Business Suite.</p>
         </div>
         <div className="summary-controls">
           <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
@@ -61,13 +61,13 @@ export function FacebookPage() {
       </div>
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {FB_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy từ Windsor…</p>}
+      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
       {data && !data.message && !invalid && data.pages.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo trang">
         <button type="button" aria-pressed={!page} onClick={() => setPage("")}>Tất cả ({data.pages.length})</button>
         {data.pages.map((t) => <button type="button" key={t.id} aria-pressed={page === t.id} onClick={() => setPage(t.id)}>{t.name}</button>)}
       </div>}
       {data && !data.message && !invalid && (data.pages.length === 0
-        ? <p className="summary-note">Windsor không trả dữ liệu trong khoảng này.</p>
+        ? <p className="summary-note">Không có dữ liệu trong khoảng này.</p>
         : <div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Trang</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{pages.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>

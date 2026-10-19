@@ -57,7 +57,7 @@ export function FacebookAds() {
       <div className="summary-hero">
         <div>
           <h1>Facebook Ads</h1>
-          <p>Quảng cáo Facebook theo chiến dịch qua Windsor.ai, lấy trực tiếp theo khoảng ngày chọn. Người tiếp cận là số người trong cả kỳ nên không bằng tổng các ngày. Tin nhắn mới là số cuộc trò chuyện bắt đầu từ quảng cáo.</p>
+          <p>Quảng cáo Facebook theo chiến dịch, lấy trực tiếp theo khoảng ngày chọn. Người tiếp cận là số người trong cả kỳ nên không bằng tổng các ngày. Tin nhắn mới là số cuộc trò chuyện bắt đầu từ quảng cáo.</p>
         </div>
         <div className="summary-controls">
           <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
@@ -67,7 +67,7 @@ export function FacebookAds() {
       </div>
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {ADS_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy từ Windsor…</p>}
+      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
       {data && !data.message && !invalid && data.campaigns.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo chiến dịch">
         <button type="button" aria-pressed={!campaign} onClick={() => setCampaign("")}>Tất cả ({data.campaigns.length})</button>
         {data.campaigns.map((t) => <button type="button" key={t.id} aria-pressed={campaign === t.id} onClick={() => setCampaign(t.id)}>{t.campaign}</button>)}
