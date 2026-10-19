@@ -53,15 +53,15 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
 
   return <section className="bluejay-revenue">
     <h2>Doanh thu và thanh toán theo đặt phòng</h2>
-    <p className="summary-note">Chỉ tính đặt phòng có đêm ở trong {period}, bỏ hủy, no-show và hạng M-Standard. Tiền phòng chỉ gồm các đêm trong {period}; dịch vụ, tổng tiền, đã thanh toán, còn lại và cọc là số của cả đặt phòng. Blue Jay chỉ trả tổng thanh toán, không có hình thức (tiền mặt, chuyển khoản, thẻ) hay ngày thu từng khoản.</p>
+    <p className="summary-note">Chỉ tính đặt phòng có đêm ở trong {period}, bỏ hủy, no-show và hạng M-Standard. Tiền phòng chỉ gồm các đêm trong {period}; đã thanh toán, còn lại và cọc là số của cả đặt phòng. Ô Tổng tiền = Tiền phòng + Tiền dịch vụ trong {period}. Ô Tiền dịch vụ là dịch vụ phát sinh trong {period} theo báo cáo dịch vụ của Blue Jay (cột Dịch vụ ở bảng Theo nguồn vẫn là dịch vụ gắn từng đặt phòng). Blue Jay chỉ trả tổng thanh toán, không có hình thức (tiền mặt, chuyển khoản, thẻ) hay ngày thu từng khoản.</p>
     <div className="summary-kpis">
       <Kpi label="Số đặt phòng" value={num(t.bookings)} hint={`${num(t.nights)} đêm trong ${period}`} />
-      <Kpi label={`Tiền phòng (trong ${period})`} value={num(t.room)} />
-      <Kpi label="Tiền dịch vụ" value={num(t.service)} />
-      <Kpi label="Tổng tiền" value={num(t.total)} />
-      <Kpi label="Đã thanh toán" value={num(t.payment)} />
-      <Kpi label="Còn phải thu" value={num(t.balance)} />
-      <Kpi label="Tiền cọc" value={num(t.deposit)} />
+      <Kpi label={`Tiền phòng (trong ${period})`} value={num(t.room)} hint="chỉ các đêm trong kỳ, giá chia đều theo đêm" />
+      <Kpi label="Tiền dịch vụ" value={num(services.total)} hint={`phát sinh trong ${period}, tính cả dịch vụ không gắn đặt phòng`} />
+      <Kpi label="Tổng tiền" value={num(t.room + services.total)} hint={`tiền phòng + tiền dịch vụ trong ${period}`} />
+      <Kpi label="Đã thanh toán" value={num(t.payment)} hint="cả đặt phòng, gồm phần ngoài kỳ" />
+      <Kpi label="Còn phải thu" value={num(t.balance)} hint="cả đặt phòng, gồm OTA thanh toán sau" />
+      <Kpi label="Tiền cọc" value={num(t.deposit)} hint="cả đặt phòng, Blue Jay ghi cọc riêng" />
       <Kpi label="Hủy / no-show đã thu" value={num(totals.cancelled.payment)} hint={`${num(totals.cancelled.bookings)} đặt phòng`} />
     </div>
 
