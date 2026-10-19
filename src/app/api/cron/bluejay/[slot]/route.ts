@@ -1,4 +1,4 @@
-import { plannedWeeks, refreshPayments, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
+import { plannedWeeks, pruneApiCalls, refreshPayments, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
 import { inApiWindow } from "@/lib/bluejay-metrics";
 
 export const maxDuration = 300;
@@ -19,8 +19,9 @@ export async function GET(request: Request) {
     const deadline = Date.now() + 240_000;
     const synced = await syncWeeks(db, weeks, "cron", deadline);
     // Missing weeks come first; the time left goes to re-pulling payments of weeks that still show an open OTA debt.
-    const payments = synced.stoppedBy ? null : await refreshPayments(db, deadline);
-    return Response.json({ planned: weeks.length, ...synced, payments });
+    const payments = synced.stoppedBy ? null : await refreshPayments(db, deadline, { trigger: "cron", minAgeMs: 20 * 3_600_000 }); // once a day per week is enough
+    const pruned = await pruneApiCalls(db).then(() => "ok", (e) => (e instanceof Error ? e.message : String(e))); // housekeeping must not fail the sync that already succeeded
+    return Response.json({ planned: weeks.length, ...synced, payments, pruned });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

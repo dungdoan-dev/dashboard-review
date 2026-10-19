@@ -63,6 +63,16 @@ export const n = (v: Amount) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 export const money = (v: Amount) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
 // Same rule as the PMS dashboard: M-Standard room types are not sellable inventory.
+// The call log keeps raw reservation pages for debugging. Guest names, notes and ID-paper links are never read by the reports, so they are not kept.
+const PRIVATE_FIELDS = ["guestName", "guestImagepaper", "note"];
+export function redactReservations<T>(body: T): T {
+  const page = body as { data?: { attributes?: { reservations?: unknown } } } | null;
+  const list = page?.data?.attributes?.reservations;
+  if (!Array.isArray(list)) return body;
+  const clean = list.map((r) => (r && typeof r === "object" ? Object.fromEntries(Object.entries(r).filter(([key]) => !PRIVATE_FIELDS.includes(key))) : r));
+  return { ...page, data: { ...page!.data, attributes: { ...page!.data!.attributes, reservations: clean } } } as T;
+}
+
 export const isExcludedRoom = (name: unknown) => /^m(?:\s*[-_‐-―]\s*|\s+)standard(?:$|[^a-z0-9])/i.test(String(name || "").trim());
 
 // Cancelled and no-show bookings occupy no room-night. Labels are the PMS's Vietnamese status strings.

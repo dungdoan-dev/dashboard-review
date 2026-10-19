@@ -56,3 +56,14 @@ test("range helpers", () => {
   assert.deepEqual(datesBetween("2026-10-30", "2026-11-02"), ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
   assert.ok(MAX_RANGE_DAYS >= 62);
 });
+
+test("a booking stored in two weeks keeps the money of the newest snapshot, while its nights are added across the weeks", () => {
+  const stay = (payment: number) => res({ bookingCode: "S1", checkInTime: "2026-10-11", checkOutTime: "2026-10-13", night: 2, roomPrice: 2000000, totalPrice: 2000000, payment, balance: 2000000 - payment });
+  const stored = (monday: string, end: string, payment: number, fetchedAt: string): RevenueWeek => ({ v: REVENUE_VERSION, monday, end, fetchedAt, hotels: [{ id: 1, name: "H", bookings: revenueBookings([stay(payment)], monday, end), services: [] }] });
+  const early = stored("2026-10-05", "2026-10-11", 2000000, "2026-10-18T00:00:00Z"); // refreshed last: paid in full
+  const later = stored("2026-10-12", "2026-10-18", 500000, "2026-10-12T00:00:00Z"); // the later week, but an older snapshot
+  const booking = rangeData([], [early, later], "2026-10-05", "2026-10-18").hotels[0].bookings.find((b) => b.code === "S1")!;
+  assert.equal(booking.nightsInWeek, 2);
+  assert.equal(booking.payment, 2000000);
+  assert.equal(booking.balance, 0);
+});

@@ -23,7 +23,7 @@ export async function POST() {
   try {
     const db = serviceDb();
     if (await syncBusy(db)) return Response.json({ message: "Đang có một lượt đồng bộ Blue Jay chạy, thử lại sau vài phút." }, { status: 409 });
-    return Response.json(await refreshPayments(db, Date.now() + 240_000));
+    return Response.json(await refreshPayments(db, Date.now() + 240_000, { trigger: "manual" }));
   } catch (e) {
     return Response.json({ message: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }

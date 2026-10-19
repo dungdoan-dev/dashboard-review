@@ -39,6 +39,7 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
     const days = dates.map((date) => reportOf.get(mondayOf(date))?.hotels.find((h) => h.id === id)?.days.find((d) => d.date === date) ?? null);
 
     const merged = new Map<string, RevenueBooking>();
+    const stamp = new Map<string, string>(); // when the snapshot behind each merged booking was pulled
     const services: ServiceDay[] = [];
     for (const week of revenues) {
       const hotel = week.hotels.find((h) => h.id === id);
@@ -50,8 +51,11 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
         const room = b.stay && b.nights > 0 ? (b.roomPrice / b.nights) * nights : 0;
         const key = `${b.code}|${b.room}|${b.roomType}`;
         const seen = merged.get(key);
-        if (seen) { seen.nightsInWeek += nights; seen.roomInWeek += room; } // same booking in the next week: add its nights
-        else merged.set(key, { ...b, nightsInWeek: nights, roomInWeek: room });
+        const pulled = week.paymentsAt ?? week.fetchedAt;
+        if (seen) {
+          seen.nightsInWeek += nights; seen.roomInWeek += room; // same booking in the next week: add its nights
+          if (pulled > (stamp.get(key) ?? "")) { Object.assign(seen, { status: b.status, payment: b.payment, balance: b.balance, totalPrice: b.totalPrice, servicePrice: b.servicePrice, deposit: b.deposit, flags: b.flags }); stamp.set(key, pulled); } // the newest snapshot has the money
+        } else { merged.set(key, { ...b, nightsInWeek: nights, roomInWeek: room }); stamp.set(key, pulled); }
       }
       for (const d of hotel.services) if (d.date >= from && d.date <= to) services.push(d);
     }

@@ -130,3 +130,13 @@ test("single-hotel scope limits the daily sheet; the summary title carries no ho
   assert.match(String(daily.A1.v), /- B$/);
   assert.doesNotMatch(String(wb.Sheets["Tổng hợp"].A1.v), /- B$/);
 });
+
+test("redactReservations drops guest names, notes and ID-paper links from a logged page and leaves the original alone", async () => {
+  const { redactReservations } = await import("./bluejay-metrics.ts");
+  const page = { meta: { total: 1 }, data: { attributes: { reservations: [{ bookingCode: "1", balance: 5, guestName: "A", note: "x", guestImagepaper: "u" }] } } };
+  const out = redactReservations(page);
+  assert.deepEqual(out.data.attributes.reservations, [{ bookingCode: "1", balance: 5 }]);
+  assert.equal(out.meta.total, 1);
+  assert.equal((page.data.attributes.reservations[0] as Record<string, unknown>).guestName, "A");
+  assert.equal(redactReservations(null), null);
+});

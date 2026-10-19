@@ -1,9 +1,9 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
-import { openDebts, paymentCheck, weeksWithDebt } from "./bluejay-debt.ts";
+import { latestBookings, openDebts, paymentCheck, weeksWithDebt } from "./bluejay-debt.ts";
 import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
-import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
+import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, redactReservations, todayVN, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const BASE = "https://api-pms.bluejaypms.com/api/v2/";
 const VERSION = 3; // same snapshot shape as the sample project; bump when it changes (older snapshots are ignored)
@@ -45,11 +45,20 @@ export async function callBluejay(db: SupabaseClient, hotelId: number, endpoint:
 
   const { error: saveError } = await db.from("bluejay_api_calls").insert({
     hotel_id: hotelId, endpoint, params: sent, http_status: httpStatus, ok: !error,
-    error: error?.slice(0, 1000) ?? null, response: body, duration_ms: Date.now() - started,
+    error: error?.slice(0, 1000) ?? null, response: redactReservations(body), duration_ms: Date.now() - started,
   });
   if (saveError) throw new Error(`Không lưu được kết quả gọi ${endpoint}: ${saveError.message}`);
   if (error) throw new Error(`${endpoint} (hotel ${hotelId}): ${error}`);
   return body;
+}
+
+const KEEP_RESPONSES_DAYS = 7;
+
+/** Raw responses are for debugging a recent run: empty the ones of successful calls older than a week (a failed call keeps its response). The row itself stays. */
+export async function pruneApiCalls(db: SupabaseClient) {
+  const { error } = await db.from("bluejay_api_calls").update({ response: null })
+    .eq("ok", true).not("response", "is", null).lt("called_at", new Date(Date.now() - KEEP_RESPONSES_DAYS * 864e5).toISOString());
+  if (error) throw new Error(error.message);
 }
 
 /** Thrown between API calls when the run must stop: its deadline passed or the API window closed. */
@@ -158,15 +167,16 @@ export async function readReconcileBookings(db: SupabaseClient, hotelId: number,
     .gte("week_start", addDays(mondayOf(from), -63)).lte("week_start", mondayOf(to)).order("week_start");
   if (error) throw new Error(error.message);
   const have = new Set<string>();
-  const latest = new Map<string, RevenueBooking>();
+  const weeks: RevenueWeek[] = [];
   for (const row of data ?? []) {
     if (row.revenue?.v !== REVENUE_VERSION) continue;
     have.add(String(row.week_start));
-    for (const b of (row.revenue as RevenueWeek).hotels.find((h) => h.id === hotelId)?.bookings ?? []) latest.set(`${b.code}|${b.room}|${b.roomType}`, b);
+    weeks.push(row.revenue as RevenueWeek);
   }
   const missingWeeks: string[] = [];
   for (let monday = mondayOf(from); monday <= to; monday = addDays(monday, 7)) if (!have.has(monday)) missingWeeks.push(monday);
-  return { bookings: [...latest.values()], missingWeeks };
+  // The newest snapshot of a booking wins, as on the debt and paid pages. Not the latest week: a payment refresh or a backfill can make an earlier week the newer snapshot.
+  return { bookings: latestBookings(weeks, todayVN()).filter((b) => b.hotelId === hotelId), missingWeeks };
 }
 
 export async function readReport(db: SupabaseClient, monday: string): Promise<WeeklyReport | null> {
@@ -233,11 +243,18 @@ export async function readPaymentCheck(db: SupabaseClient, from: string, to: str
  * (not occupancy or services) of the weeks and hotels that still show an open OTA debt, stalest first, and stamps paymentsAt.
  * A week is saved only when all its hotels were pulled; a week that is cut short is retried next run.
  */
-export async function refreshPayments(db: SupabaseClient, deadline = Infinity) {
+export async function refreshPayments(db: SupabaseClient, deadline = Infinity, { trigger = "cron", minAgeMs = 0 }: { trigger?: SyncTrigger; minAgeMs?: number } = {}) {
   const result = { weeks: 0, remaining: 0, stoppedBy: null as null | "deadline" | "window", lastError: null as string | null };
   const stored = await recentRevenueWeeks(db);
-  const targets = weeksWithDebt(stored);
+  // minAgeMs: the cron skips weeks pulled in the last hours (their payments are not older than a day); the button passes 0.
+  const cutoff = new Date(Date.now() - minAgeMs).toISOString();
+  const targets = weeksWithDebt(stored).filter((t) => t.asOf <= cutoff);
   result.remaining = targets.length;
+  if (!targets.length) return result;
+  const started = new Date().toISOString();
+  // One row in the run log while it works: syncBusy sees it, so a second refresh or a sync cannot start alongside.
+  const { data: run, error: runError } = await db.from("bluejay_sync_runs").insert({ week_start: targets[0].monday, trigger, status: "running", message: "Làm mới thanh toán OTA", started_at: started }).select("id").single();
+  if (runError) throw new Error(`Không ghi được log đồng bộ: ${runError.message}`);
   const check = stopCheck(deadline);
   for (const target of targets) {
     try { check(); } catch (e) { result.stoppedBy = (e as SyncStop).reason; break; }
@@ -257,6 +274,9 @@ export async function refreshPayments(db: SupabaseClient, deadline = Infinity) {
       result.lastError = (e instanceof Error ? e.message : String(e)).slice(0, 1000);
     }
   }
+  const { count } = await db.from("bluejay_api_calls").select("id", { count: "exact", head: true }).gte("called_at", started);
+  const summary = `Làm mới thanh toán OTA: ${result.weeks} tuần${result.remaining ? `, còn ${result.remaining}` : ""}${result.lastError ? `. Lỗi: ${result.lastError}` : ""}`;
+  await db.from("bluejay_sync_runs").update({ status: result.lastError ? "failed" : "success", message: summary.slice(0, 1000), api_calls: count ?? null, finished_at: new Date().toISOString() }).eq("id", run.id);
   return result;
 }
 
