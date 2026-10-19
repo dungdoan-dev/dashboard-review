@@ -75,12 +75,14 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const itemCell = (item: Item) => <tr key={`${item.kind}-${item.id}-${item.room}`}>
     <th scope="row">{item.id}<small>{item.channel}</small></th>
     <td>{item.room || "–"}</td>
-    <td>{item.checkIn ? `${fmtDate(item.checkIn)} → ${item.checkOut ? fmtDate(item.checkOut) : "–"}` : "–"}<small>{item.status}</small></td>
+    <td>{item.checkIn ? `${fmtDate(item.checkIn)} → ${item.checkOut ? fmtDate(item.checkOut) : "–"}` : "–"}</td>
+    <td>{item.status || "–"}</td>
     <td>{item.basis ? BASIS[item.basis] : "–"}</td>
     <td>{num(item.excel)}</td>
     <td>{item.basis ? num(item.bluejay) : "–"}</td>
     <td className={item.kind === "ok" ? undefined : "reconcile-diff"}>{item.kind === "ok" || item.kind === "prior" ? "–" : signed(item.diff)}</td>
-    <td>{KIND_LABELS[item.kind]}{item.notes.length > 0 && <small>{item.notes.join("; ")}</small>}</td>
+    <td>{KIND_LABELS[item.kind]}</td>
+    <td>{item.notes.length ? item.notes.join("; ") : "–"}</td>
   </tr>;
 
   return (
@@ -112,7 +114,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
         {stored.missingWeeks.length > 0 && <p className="summary-note bad" role="alert">Blue Jay chưa lưu tuần bắt đầu {stored.missingWeeks.map(fmtDate).join(", ")}. Đặt phòng của các tuần này sẽ hiện là “Có trong bảng kê, không có trong Blue Jay” dù chưa chắc sai; hãy lấy các tuần đó trong khung giờ API rồi đối soát lại.</p>}
 
         <div className="summary-kpis">
-          <div className="summary-kpi"><span>Tổng thu trong bảng kê</span><strong>{num(result.totals.excelCollected)}</strong><small>Mọi cột thu của dòng có ID (gồm cọc)</small></div>
+          <div className="summary-kpi"><span>Tổng thu trong bảng kê</span><strong>{num(result.totals.excelCollected)}</strong><small>Nhóm “Thu tiền khách sạn” của dòng có ID (không gồm cọc đã ở, POS)</small></div>
           {ledger.hasCounted && <div className="summary-kpi"><span>Cột “Tiền so Bluejay”</span><strong>{num(result.totals.excelCounted)}</strong><small>Tổng toàn bảng kê</small></div>}
           <div className="summary-kpi"><span>Dòng không có ID</span><strong>{num(result.totals.excelNoId)}</strong><small>Quẹt thẻ, hoa hồng, lãi; trừ {num(result.totals.deductions)}</small></div>
         </div>
@@ -122,7 +124,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
         </div>
 
         {rows.length === 0 ? <p className="summary-note">Không có dòng nào thuộc nhóm đang chọn.</p> : <div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Mã / nguồn</th><th>Phòng</th><th>Lưu trú</th><th>So sánh theo</th><th>Bảng kê</th><th>Blue Jay</th><th>Chênh</th><th>Kết quả</th></tr></thead>
+          <thead><tr><th>Mã / nguồn</th><th>Phòng</th><th>Lưu trú</th><th>Trạng thái</th><th>So sánh theo</th><th>Bảng kê</th><th>Blue Jay</th><th>Chênh</th><th>Kết quả</th><th>Ghi chú</th></tr></thead>
           <tbody>{rows.map(itemCell)}</tbody>
         </table></div>}
 

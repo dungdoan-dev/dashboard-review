@@ -137,12 +137,12 @@ test("a direct stay that began before the period is compared on services only (i
 
 test("the monthly workbook: the ledger sheet is found among many, and its own layout (no Tiền so Bluejay column, Tổng tiền excluded) is read", () => {
   const head = ["NGÀY THÁNG", "ID HỆ THỐNG", "NỀN TẢNG", "Thanh toán", "DỊCH VỤ", "NỘI DUNG", "SỐ PHÒNG TT", "TIỀN CỌC ĐÃ NHẬN", "", "", "THU TIỀN KHÁCH SẠN", "", "", "", "", "", "Tổng tiền", "GIẢM TRỪ DOANH THU"];
-  const row = (id: string, cash: number, account: number, total: number) => { const r: unknown[] = new Array(19).fill(""); Object.assign(r, { 0: serial("2026-09-02"), 1: id, 2: "Zalo", 4: "Tiền phòng", 10: cash || "", 12: account || "", 16: total, 17: 5 }); return r; };
-  const rows = [["BẢNG KÊ"], head, ["", "", "", "", "", "", "", "Cọc TM ở"], row("	008001", 100000, 250000, 350000)];
+  const row = (id: string, cash: number, account: number, total: number) => { const r: unknown[] = new Array(19).fill(""); Object.assign(r, { 0: serial("2026-09-02"), 1: id, 2: "Zalo", 4: "Tiền phòng", 7: 90000, 10: cash || "", 11: 40000, 12: account || "", 15: 70000, 16: total, 17: 5 }); return r; };
+  const rows = [["BẢNG KÊ"], head, ["", "", "", "", "", "", "", "Cọc TM ở", "", "", "Tiền măt", "Cọc TM chưa ở", "Tiền TK", "", "", "Tiền POS cafe"], row("	008001", 100000, 250000, 350000)];
   const parsed = parseLedgerWorkbook([{ name: "DOANH THU KS.", rows: [["x"]] }, { name: "BK THU TIỀN KS", rows }]);
   assert.equal(parsed.sheet, "BK THU TIỀN KS");
   assert.equal(parsed.hasCounted, false);
   assert.equal(parsed.lines[0].id, "008001");
-  assert.equal(parsed.lines[0].collected, 350000); // cash + account, not counted again through the sheet's own "Tổng tiền"
+  assert.equal(parsed.lines[0].collected, 390000); // cash + account + deposit of a guest not yet staying (col 11): not the "TIỀN CỌC ĐÃ NHẬN" deposit (col 7), not POS cafe (col 15), and not again through the sheet's own "Tổng tiền"
   assert.throws(() => parseLedgerWorkbook([{ name: "A", rows: [["x"]] }, { name: "B", rows: [["y"]] }]), /Không thấy sheet bảng kê/);
 });

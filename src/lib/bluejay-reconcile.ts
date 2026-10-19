@@ -63,8 +63,13 @@ export function parseLedger(rows: unknown[][]): Ledger {
   if (dailyDate >= 0 && col.counted > dailyDate) col.counted = -1;
   const missing = Object.entries({ "NGÀY THÁNG": col.date, "ID HỆ THỐNG": col.id, "NỀN TẢNG": col.platform, "DỊCH VỤ": col.service, "TIỀN CỌC ĐÃ NHẬN": col.deposit, "Giảm trừ doanh thu": col.deduct }).filter(([, c]) => c < 0).map(([name]) => name);
   if (missing.length) throw new Error(`Bảng kê thiếu cột: ${missing.join(", ")}.`);
-  // Money columns run from "TIỀN CỌC ĐÃ NHẬN" up to the sheet's own "Tổng tiền" total (not collected twice) or the deductions block, whichever comes first.
+  // The hotel's takings are the columns of the group "THU TIỀN KHÁCH SẠN" (cash, account, card and the deposits of guests not yet staying) except POS cafe.
+  // The group "TIỀN CỌC ĐÃ NHẬN" (deposits of guests already staying) is the same money counted again, so it is not added; nor is the sheet's own "Tổng tiền".
   const moneyEnd = Math.min(...[col.total, col.deduct].filter((c) => c > col.deposit));
+  const takingStart = cols(/^thu tien khach san$/);
+  if (takingStart < 0) throw new Error("Bảng kê thiếu cột: THU TIỀN KHÁCH SẠN.");
+  const takingCols: number[] = [];
+  for (let c = takingStart; c < moneyEnd; c++) if (![head, head + 1, head + 2].some((i) => /\bpos\b/.test(norm(rows[i]?.[c])))) takingCols.push(c);
   const deductEnd = col.counted > col.deduct ? col.counted : col.deduct + 2; // hoa hồng nền tảng + các khoản giảm trừ khác
 
   // "KHÁCH SẠN" and "KỲ BÁO CÁO" cells above the header: the value is the cell to the right, or the text after a colon in the same cell.
@@ -93,7 +98,7 @@ export function parseLedger(rows: unknown[][]): Ledger {
     if (!from || date < from) from = date;
     if (!to || date > to) to = date;
     let collected = 0, deductions = 0;
-    for (let c = col.deposit; c < moneyEnd; c++) collected += num(r[c]);
+    for (const c of takingCols) collected += num(r[c]);
     for (let c = col.deduct; c < deductEnd; c++) deductions += num(r[c]);
     const counted = col.counted >= 0 ? num(r[col.counted]) : 0;
     countedByDay[date] = (countedByDay[date] ?? 0) + counted;
