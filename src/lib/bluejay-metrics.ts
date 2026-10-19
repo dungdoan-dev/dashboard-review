@@ -103,11 +103,11 @@ export const occupancyTotals = (report: OccupancyResponse): Totals =>
 // Occupancy = occupied / total room-nights. Blocked rooms are NOT taken out of the denominator (verified in the sample project).
 export const rate = ({ occ, total }: Totals) => (total > 0 ? occ / total : 0);
 
-export const dedupe = (rows: Reservation[]) => {
+export const dedupe = (rows: Reservation[], keepExcluded = false) => {
   const seen = new Set<string>();
   return rows.filter((r) => {
     const key = JSON.stringify(r);
-    if (seen.has(key) || isExcludedRoom(r.roomType)) return false;
+    if (seen.has(key) || (!keepExcluded && isExcludedRoom(r.roomType))) return false;
     seen.add(key);
     return true;
   });

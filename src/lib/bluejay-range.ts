@@ -10,6 +10,8 @@ export const MAX_RANGE_DAYS = 366;
 export type RangeHotel = {
   id: number; name: string;
   days: (Day | null)[];           // aligned with RangeData.dates; null = that week is not stored
+  excludedService?: number;       // same for the service money kept on those bookings
+  excludedRoom?: number;          // room money of M-Standard / Unassigned bookings checked out inside the range; undefined when a stored week predates that data
   bookings: RevenueBooking[];     // nights / room money inside the range (nightsInWeek, roomInWeek hold the in-range values)
   services: ServiceDay[];         // stored daily service totals that fall inside the range
 };
@@ -41,14 +43,18 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
     const merged = new Map<string, RevenueBooking>();
     const stamp = new Map<string, string>(); // when the snapshot behind each merged booking was pulled
     const services: ServiceDay[] = [];
+    let excludedRoom: number | undefined = 0, excludedService = 0;
     for (const week of revenues) {
       const hotel = week.hotels.find((h) => h.id === id);
       if (!hotel) continue;
       const lo = from > week.monday ? from : week.monday, hi = to < week.end ? to : week.end;
+      if (!hotel.excluded) excludedRoom = undefined;
+      else if (excludedRoom !== undefined && lo <= hi) for (const b of hotel.excluded) if (b.stay && b.nights > 0 && b.checkOut >= lo && b.checkOut <= hi) { excludedRoom += b.roomPrice; excludedService += b.servicePrice; }
+      const checkout = hotel.basis === "checkout"; // newer weeks hold the stays that check out in the week, whole; older ones hold stays with nights in the week
       for (const b of hotel.bookings) {
-        const nights = lo <= hi ? nightsIn({ checkInTime: b.checkIn, checkOutTime: b.checkOut }, lo, hi) : 0;
-        if (nights <= 0) continue;
-        const room = b.stay && b.nights > 0 ? (b.roomPrice / b.nights) * nights : 0;
+        const nights = checkout ? b.nights : lo <= hi ? nightsIn({ checkInTime: b.checkIn, checkOutTime: b.checkOut }, lo, hi) : 0;
+        if (checkout ? !(lo <= hi && b.checkOut >= lo && b.checkOut <= hi) : nights <= 0) continue;
+        const room = b.stay && b.nights > 0 ? (checkout ? b.roomPrice : (b.roomPrice / b.nights) * nights) : 0;
         const key = `${b.code}|${b.room}|${b.roomType}`;
         const seen = merged.get(key);
         const pulled = week.paymentsAt ?? week.fetchedAt;
@@ -59,7 +65,7 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
       }
       for (const d of hotel.services) if (d.date >= from && d.date <= to) services.push(d);
     }
-    return { id, name, days, bookings: [...merged.values()], services: services.sort((a, b) => a.date.localeCompare(b.date)) };
+    return { id, name, days, excludedRoom, excludedService, bookings: [...merged.values()], services: services.sort((a, b) => a.date.localeCompare(b.date)) };
   });
   return { from, to, dates, weeks, hotels };
 }

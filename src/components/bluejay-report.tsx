@@ -352,7 +352,7 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
         </Card>}
 
         </>}
-        {view === "revenue" && <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services }))} showHotel={!scopeId} period="kỳ" />}
+        {view === "revenue" && <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services, excludedRoom: h.excludedRoom, excludedService: h.excludedService }))} showHotel={!scopeId} period="kỳ" />}
       </>}
     </section>
   );

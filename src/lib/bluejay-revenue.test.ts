@@ -13,14 +13,15 @@ test("OTA site names map to the short names used in the finance sheets", () => {
   assert.deepEqual(["Booking.com", "Traveloka.com", "Ctrip", "Walking", "Phone", "Agoda", "Expedia", "BE", ""].map(channelOf), ["Booking", "Traveloka", "Trip", "Khách lẻ", "Khách lẻ", "Agoda", "Expedia", "BE", "Không rõ"]);
 });
 
-test("room money is the part inside the week; cancelled rows are listed but not counted", () => {
-  const straddle = res({ bookingCode: "002", checkInTime: "2026-10-10", checkOutTime: "2026-10-14", night: 4, roomPrice: 4000000, totalPrice: 4100000, payment: 4100000 });
+test("a stay counts whole in the week it checks out; cancelled rows are listed but not counted", () => {
+  const straddle = res({ bookingCode: "002", checkInTime: "2026-10-03", checkOutTime: "2026-10-07", night: 4, roomPrice: 4000000, totalPrice: 4100000, payment: 4100000 });
   const rows = revenueBookings([res(), straddle, res({ bookingCode: "003", status: "Đã huỷ", payment: 500000 }), res({ bookingCode: "004", roomType: "M-Standard" })], ...W);
   assert.equal(rows.length, 3); // M-Standard left out
   const t = revenueTotals(rows);
   assert.equal(t.all.bookings, 2);
-  assert.equal(t.all.room, 2000000 + 2000000); // 2 nights of 2 + 2 of 4 nights at 1,000,000
-  assert.equal(t.all.nights, 4);
+  assert.equal(t.all.room, 2000000 + 4000000); // the stay that began the week before counts all 4 nights
+  assert.equal(t.all.nights, 6);
+  assert.equal(revenueBookings([res({ bookingCode: "005", checkOutTime: "2026-10-12" })], ...W)[0].roomInWeek, 0); // checks out next week
   assert.deepEqual(t.cancelled, { bookings: 1, payment: 500000 });
 });
 
@@ -55,4 +56,14 @@ test("service days: line price is a total, groups sort by revenue, a missing lis
   assert.equal(m.total, 350000);
   assert.deepEqual(m.days[1].byGroup, { Food: 50000 });
   assert.throws(() => serviceDay("2026-10-07", {}));
+});
+
+test("M-Standard bookings are kept apart so room money can be shown with and without them", () => {
+  const rows = [res(), res({ bookingCode: "004", roomType: "M-Standard Room-1 Bed", roomName: "Unassigned", roomPrice: 700000, night: 1, checkOutTime: "2026-10-06" })];
+  assert.deepEqual(revenueBookings(rows, ...W).map((b) => b.code), ["001"]);
+  const only = revenueBookings(rows, ...W, true);
+  assert.deepEqual(only.map((b) => [b.code, b.roomInWeek]), [["004", 700000]]);
+  const none = res({ bookingCode: "006", roomName: "Unassigned", roomType: "Superior King", roomPrice: 560000, night: 1, checkOutTime: "2026-10-06" });
+  assert.deepEqual(revenueBookings([none], ...W), []); // no room assigned: out of the totals, in the with-column
+  assert.deepEqual(revenueBookings([none], ...W, true).map((b) => b.code), ["006"]);
 });

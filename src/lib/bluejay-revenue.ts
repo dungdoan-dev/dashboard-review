@@ -1,7 +1,7 @@
 // Revenue and payment report per booking, plus hotel service revenue per day. Pure functions: tested by bluejay-revenue.test.ts.
 // Same inclusion rules as the weekly operations report (bluejay-metrics.ts): M-Standard rooms are left out, and cancelled / no-show
 // bookings are listed but never counted as revenue. Imports use ".ts" because scraper/bluejay-backfill.mjs runs this with plain Node.
-import { dedupe, isStay, money, n, nightsIn, type Reservation } from "./bluejay-metrics.ts";
+import { dedupe, isExcludedRoom, isStay, money, n, type Reservation } from "./bluejay-metrics.ts";
 
 export const REVENUE_VERSION = 1;
 
@@ -23,7 +23,7 @@ export type RevenueBooking = {
 export type ServiceItem = { name: string; unit: string; quantity: number; total: number };
 export type ServiceGroupDay = { name: string; quantity: number; total: number; items: ServiceItem[] };
 export type ServiceDay = { date: string; total: number; groups: ServiceGroupDay[] };
-export type HotelRevenue = { id: number; name: string; bookings: RevenueBooking[]; services: ServiceDay[] };
+export type HotelRevenue = { id: number; name: string; bookings: RevenueBooking[]; services: ServiceDay[]; excluded?: RevenueBooking[]; basis?: "checkout" }; // excluded: M-Standard bookings, kept apart so the totals can show money with and without them
 // paymentsAt: when refreshPayments last re-pulled this week's reservations (OTAs pay weeks later, so "payment / balance" goes stale); fetchedAt otherwise.
 export type RevenueWeek = { v: number; monday: string; end: string; fetchedAt: string; paymentsAt?: string; hotels: HotelRevenue[] };
 export const OTA_CHANNELS: readonly string[] = ["Agoda", "Booking", "Expedia", "Trip", "Traveloka"];
@@ -44,10 +44,14 @@ const text = (v: unknown) => String(v ?? "").trim();
 const day = (v: unknown) => text(v).slice(0, 10);
 const TOLERANCE = 1; // VND: the PMS stores whole dong, so anything above 1 is a real difference
 
-export function revenueBookings(rows: Reservation[], from: string, to: string): RevenueBooking[] {
-  return dedupe(rows).map((r) => {
+// Revenue also leaves out bookings with no room assigned (room "Unassigned"); the operations report keeps them, so this is not part of isExcludedRoom.
+const unassigned = (r: Reservation) => /^unassigned$/i.test(text(r.roomName));
+
+export function revenueBookings(rows: Reservation[], from: string, to: string, onlyExcluded = false): RevenueBooking[] {
+  return (onlyExcluded ? dedupe(rows.filter((r) => isExcludedRoom(r.roomType) || unassigned(r)), true) : dedupe(rows.filter((r) => !unassigned(r)))).map((r) => {
     const stay = isStay(r);
-    const price = money(r.roomPrice) ?? 0, nights = n(r.night), inWeek = nightsIn(r, from, to);
+    const price = money(r.roomPrice) ?? 0, nights = n(r.night);
+    const inWeek = day(r.checkOutTime) >= from && day(r.checkOutTime) <= to ? nights : 0; // revenue belongs to the week of check-out: the whole stay counts
     const room = price, service = n(r.servicePrice), total = n(r.totalPrice), payment = n(r.payment), balance = n(r.balance);
     const flags: RevenueFlag[] = [];
     if (stay) {
@@ -59,7 +63,7 @@ export function revenueBookings(rows: Reservation[], from: string, to: string): 
       code: text(r.bookingCode), ref: text(r.referenceCode), source: text(r.source), channel: channelOf(r.source),
       roomType: text(r.roomType), room: text(r.roomName), status: text(r.status),
       bookDate: day(r.bookDate), checkIn: day(r.checkInTime), checkOut: day(r.checkOutTime), nights, nightsInWeek: inWeek,
-      roomPrice: room, roomInWeek: stay && nights > 0 ? (room / nights) * inWeek : 0, servicePrice: service, totalPrice: total,
+      roomPrice: room, roomInWeek: stay && inWeek > 0 ? room : 0, servicePrice: service, totalPrice: total,
       payment, balance, deposit: n(r.deposit), stay, flags,
     };
   }).sort((a, b) => a.checkIn.localeCompare(b.checkIn) || a.code.localeCompare(b.code) || a.room.localeCompare(b.room));

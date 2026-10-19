@@ -107,6 +107,7 @@ export async function refreshReport(db: SupabaseClient, monday: string, deadline
     const occ: OccupancyResponse[] = [];
     for (const off of [0, 1, 2]) occ.push(await call(h.id, "report-room-occupancy", { dateType: 1, ...week(off) }) as OccupancyResponse);
     const reservations = await fetchAllReservations(db, h.id, { dateType: 3, ...week(0) }, check); // every status; filtered in code
+    const checkouts = await fetchAllReservations(db, h.id, { dateType: 1, ...week(0) }, check); // the revenue report counts a stay in the week it checks out
     const services = await call(h.id, "extraservice-sumary", { ...week(0), serviceType: 0 }) as ServiceResponse;
     // Service revenue per day for the revenue report (the week call above stays as is for the operations report).
     const serviceDays = [];
@@ -114,7 +115,7 @@ export async function refreshReport(db: SupabaseClient, monday: string, deadline
       const date = addDays(monday, i);
       serviceDays.push(serviceDay(date, await call(h.id, "extraservice-sumary", { from: apiDate(date), to: apiDate(date), serviceType: 0 }) as { data?: unknown }));
     }
-    revenue.push({ id: h.id, name: h.name, bookings: revenueBookings(reservations, monday, weekEnd(monday)), services: serviceDays });
+    revenue.push({ id: h.id, name: h.name, bookings: revenueBookings(checkouts, monday, weekEnd(monday)), excluded: revenueBookings(checkouts, monday, weekEnd(monday), true), basis: "checkout", services: serviceDays });
     hotels.push(hotelRecord({
       id: h.id, name: h.name,
       weeks: occ.map(occupancyTotals), days: occ.flatMap(occupancyDaily),
@@ -261,9 +262,11 @@ export async function refreshPayments(db: SupabaseClient, deadline = Infinity, {
     const week: RevenueWeek = structuredClone(stored.find((w) => w.monday === target.monday)!);
     try {
       for (const hotelId of target.hotelIds) {
-        const reservations = await fetchAllReservations(db, hotelId, { dateType: 3, from: apiDate(target.monday), to: apiDate(target.end) }, check);
+        const reservations = await fetchAllReservations(db, hotelId, { dateType: 1, from: apiDate(target.monday), to: apiDate(target.end) }, check);
         const hotel = week.hotels.find((h) => h.id === hotelId)!;
+        hotel.basis = "checkout";
         hotel.bookings = revenueBookings(reservations, week.monday, week.end);
+        hotel.excluded = revenueBookings(reservations, week.monday, week.end, true);
       }
       week.paymentsAt = new Date().toISOString();
       const { error } = await db.from("bluejay_revenue_weeks").update({ revenue: week }).eq("week_start", week.monday);
