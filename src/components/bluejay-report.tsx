@@ -147,6 +147,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
       <div className="summary-hero">
         <div>
           <h1>{monday ? `Báo cáo ${view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} tuần ${isoWeek(monday)} (${fmtDate(monday)}–${fmtDate(addDays(monday, 6))})` : view === "revenue" ? "Báo cáo doanh thu và thanh toán" : "Báo cáo vận hành"} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
+          {report && <p><strong>Lấy dữ liệu lúc {fmtDateTime(report.fetchedAt)}</strong></p>}
           <p>Dữ liệu Blue Jay PMS. Blue Jay chỉ trả lời trong 08:00–08:30, 16:00–16:59 và 00:00–00:59 (giờ VN).</p>
         </div>
         <div className="summary-controls">
@@ -233,7 +234,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
         </Card>
         </>}
         {view === "revenue" && <BluejayRevenue monday={monday} scopeId={scopeId} />}
-        {view === "operations" && <p className="summary-note">Lấy lúc {fmtDateTime(report.fetchedAt)}. Pickup là công suất đã đặt trước tại thời điểm đó.</p>}
+        {view === "operations" && <p className="summary-note">Pickup là công suất đã đặt trước tại thời điểm lấy dữ liệu.</p>}
       </>}
     </section>
   );

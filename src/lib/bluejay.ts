@@ -207,8 +207,9 @@ async function recentRevenueWeeks(db: SupabaseClient) {
 
 /** Open OTA debts from the stored weeks (no call to Blue Jay), with the oldest payment snapshot they rest on. */
 export async function readDebts(db: SupabaseClient, today: string) {
-  const weeks = await recentRevenueWeeks(db);
-  return { rows: openDebts(weeks, today), oldestAsOf: weeks.map((w) => w.paymentsAt ?? w.fetchedAt).sort()[0] ?? null };
+  const rows = openDebts(await recentRevenueWeeks(db), today);
+  // Only weeks that still owe are re-pulled; a settled week keeps its old snapshot and must not make the page look stale.
+  return { rows, oldestAsOf: rows.map((r) => r.asOf).sort()[0] ?? null };
 }
 
 /** Paid / unpaid check of the stays that checked out in [from, to], from the stored weeks (no call to Blue Jay). */
@@ -222,7 +223,9 @@ export async function readPaymentCheck(db: SupabaseClient, from: string, to: str
   const weeks = (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
   const missingWeeks: string[] = [];
   for (let monday = mondayOf(from); monday <= to; monday = addDays(monday, 7)) if (!weeks.some((w) => w.monday === monday)) missingWeeks.push(monday);
-  return { ...paymentCheck(weeks, from, to, today), missingWeeks, oldestAsOf: weeks.map((w) => w.paymentsAt ?? w.fetchedAt).sort()[0] ?? null };
+  const check = paymentCheck(weeks, from, to, today);
+  // Age of the stays that still owe (the only ones the payment refresh re-pulls); fully paid stays do not change. 1 = the debt tolerance of bluejay-debt.ts.
+  return { ...check, missingWeeks, oldestAsOf: check.rows.filter((r) => r.balance > 1).map((r) => r.asOf).sort()[0] ?? null };
 }
 
 /**
