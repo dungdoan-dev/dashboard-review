@@ -3,8 +3,8 @@ import { ReviewdeskApp } from "@/components/reviewdesk-app";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Reviewdesk — Quản lý đánh giá đa cơ sở",
-  description: "Theo dõi điểm sao và số lượng đánh giá của các cơ sở trên Google Maps và Tripadvisor.",
+  title: "VJH Dashboard — Vận hành và đánh giá đa cơ sở",
+  description: "Theo dõi đánh giá, vận hành khách sạn, doanh thu và chỉ số tiếp cận của các cơ sở.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
