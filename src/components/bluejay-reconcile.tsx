@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import { ArrowDownToLine, FileDown, FileSpreadsheet } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BLUEJAY_HOTELS, addDays, mondayOf } from "@/lib/bluejay-metrics";
+import { ledgerSheetUrl } from "@/lib/ledger-sheets";
 import { KIND_LABELS, ledgerWarnings, parseLedgerWorkbook, reconcile, type Item, type Kind, type Ledger } from "@/lib/bluejay-reconcile";
 import type { RevenueBooking } from "@/lib/bluejay-revenue";
 
@@ -22,6 +23,15 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const [fileError, setFileError] = useState("");
   const [stored, setStored] = useState<Stored | null>(null);
   const [shown, setShown] = useState<Kind[]>(PROBLEMS);
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [loadingSheet, setLoadingSheet] = useState(false);
+  const [sheetLink, setSheetLink] = useState<{ url: string; gid: number } | null>(null); // where the ledger came from, to open it in Google Sheets
+  const [fromSheet, setFromSheet] = useState(false); // the ledger on screen was read from the sheet, so the link opens its tab
+  const [locked, setLocked] = useState<string[] | null>(null); // Mondays whose rows are protected in the sheet (null: not read yet)
+  const [lockBusy, setLockBusy] = useState("");
+  const [lockMessage, setLockMessage] = useState("");
+  const lockMonth = ledger?.month || month;
+  const sheetUrl = scopeId ? ledgerSheetUrl(scopeId) : null; // the link is always there for a hotel that has a sheet
 
   const key = ledger && scopeId ? `${scopeId}|${ledger.from}|${ledger.to}` : "";
   useEffect(() => {
@@ -47,11 +57,47 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
       const book = XLSX.read(await file.arrayBuffer());
       const sheets = book.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, defval: "" }) }));
       const parsed = parseLedgerWorkbook(sheets);
-      setLedger({ ...parsed, name: `${file.name} · ${parsed.sheet}` });
+      setLedger({ ...parsed, name: `${file.name} · ${parsed.sheet}` }); setFromSheet(false); setSheetLink(null);
     } catch (error) {
       setLedger(null);
       setFileError(error instanceof Error ? error.message : "Không đọc được file Excel.");
     }
+  }
+
+  const lockUrl = (week = "") => `/api/bluejay/sheet-lock?hotel=${scopeId}&month=${lockMonth}${week ? `&week=${week}` : ""}`;
+  async function loadLocked() {
+    if (!scopeId) return;
+    try {
+      const res = await fetch(lockUrl(), { cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? `Lỗi ${res.status}`);
+      setLocked(body.weeks ?? []); setLockMessage("");
+    } catch (error) { setLocked(null); setLockMessage(error instanceof Error ? error.message : "Không đọc được trạng thái khóa."); }
+  }
+  async function changeLock(week: string, method: "POST" | "DELETE") {
+    setLockBusy(week); setLockMessage("");
+    try {
+      const res = await fetch(lockUrl(week), { method });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? `Lỗi ${res.status}`);
+      await loadLocked();
+    } catch (error) { setLockMessage(error instanceof Error ? error.message : "Không đổi được khóa tuần."); } finally { setLockBusy(""); }
+  }
+  useEffect(() => { if (fromSheet && ledger) void loadLocked(); else setLocked(null); }, [fromSheet, ledger]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function onSheet() {
+    if (!scopeId) return;
+    setFileError(""); setStored(null); setLoadingSheet(true);
+    try {
+      const res = await fetch(`/api/bluejay/ledger-sheet?hotel=${scopeId}&month=${month}`, { cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? `Lỗi ${res.status}`);
+      const parsed = parseLedgerWorkbook(body.sheets);
+      setLedger({ ...parsed, name: `Google Sheet · ${parsed.sheet}` }); setFromSheet(true); setSheetLink(body.sheetUrl ? { url: body.sheetUrl, gid: body.gid ?? 0 } : null);
+    } catch (error) {
+      setLedger(null);
+      setFileError(error instanceof Error ? error.message : "Không đọc được Google Sheet.");
+    } finally { setLoadingSheet(false); }
   }
 
   function toggle(kind: Kind) {
@@ -72,7 +118,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
     XLSX.writeFile(book, `doi-soat-${hotelName.replace(/\s+/g, "-")}-${ledger.from}_${ledger.to}.xlsx`);
   }
 
-  const itemCell = (item: Item) => <tr key={`${item.kind}-${item.id}-${item.room}`}>
+  const itemCell = (item: Item, index: number) => <tr key={`${item.kind}-${item.id}-${item.room}-${index}`}>
     <th scope="row">{item.id}<small>{item.channel}</small></th>
     <td>{item.room || "–"}</td>
     <td>{item.checkIn ? `${fmtDate(item.checkIn)} → ${item.checkOut ? fmtDate(item.checkOut) : "–"}` : "–"}</td>
@@ -97,6 +143,9 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
             <FileSpreadsheet size={15} />{ledger ? "Chọn file khác" : "Chọn file bảng kê (.xlsx)"}
             <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void onFile(event.target.files?.[0]); event.target.value = ""; }} />
           </label>
+          <input type="month" aria-label="Tháng bảng kê" value={month} onChange={(event) => setMonth(event.target.value)} disabled={!scopeId} />
+          <button type="button" disabled={!scopeId || !month || loadingSheet} onClick={() => void onSheet()}><FileSpreadsheet size={15} />{loadingSheet ? "Đang đọc Google Sheet…" : "Lấy từ Google Sheet"}</button>
+          {sheetUrl && <a className="button button-outline" href={fromSheet && sheetLink ? `${sheetLink.url}#gid=${sheetLink.gid}` : sheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Mở Google Sheet</a>}
           <button type="button" onClick={() => void import("@/lib/bluejay-ledger-template").then((m) => m.downloadLedgerTemplate())}><FileDown size={15} />Tải file mẫu</button>
           {result && <button type="button" onClick={exportExcel}><ArrowDownToLine size={15} />Xuất Excel</button>}
         </div>
@@ -104,6 +153,18 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
 
       {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Mỗi bảng kê chỉ thuộc một khách sạn nên không đối soát toàn chuỗi.</span></div>}
       {fileError && <div className="alert alert-error" role="alert"><span>{fileError}</span></div>}
+      {fromSheet && ledger && <details className="summary-table">
+        <summary>Khóa tuần ({locked ? locked.filter((w) => ledger.lines.some((l) => l.date && mondayOf(l.date) === w)).length : "?"} đã khóa)</summary>
+        <p className="summary-note">Bấm Khóa tuần để khóa các dòng của tuần đó trong Google Sheet: nhân viên khách sạn không sửa được nữa, chỉ chủ sở hữu sheet sửa được. Dòng cần sắp theo ngày. Mở khóa khi cần sửa lại.</p>
+        {lockMessage && <div className="alert alert-error" role="alert"><span>{lockMessage}</span></div>}
+        <table><thead><tr><th>Tuần</th><th>Số dòng</th><th>Trạng thái</th><th></th></tr></thead><tbody>
+          {[...new Set(ledger.lines.filter((l) => l.date).map((l) => mondayOf(l.date)))].sort().map((w) => {
+            const isLocked = Boolean(locked?.includes(w));
+            return <tr key={w}><th scope="row">{fmtDate(w)} – {fmtDate(addDays(w, 6))}</th><td>{ledger.lines.filter((l) => l.date >= w && l.date <= addDays(w, 6)).length}</td><td>{locked === null ? "…" : isLocked ? "Đã khóa" : "Chưa khóa"}</td>
+              <td><button type="button" disabled={locked === null || Boolean(lockBusy)} onClick={() => void changeLock(w, isLocked ? "DELETE" : "POST")}>{lockBusy === w ? "Đang xử lý…" : isLocked ? "Mở khóa" : "Khóa tuần"}</button></td></tr>;
+          })}
+        </tbody></table>
+      </details>}
       {stored?.key === key && stored.message && <div className="alert alert-error" role="alert"><span>{stored.message}</span></div>}
       {scopeId && !ledger && !fileError && <p className="summary-note">Chưa có file. Chọn file bảng kê của tháng cần đối soát; kỳ đối soát tự lấy theo ngày nhỏ nhất và lớn nhất trong file.</p>}
       {ledger && !result && !fileError && !(stored?.key === key && stored.message) && scopeId && <p className="summary-note">Đang đối soát…</p>}

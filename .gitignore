@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Grab merchant login session
 scraper/.grab-profile/
+
+# Google service account keys
+sheet-vjh-*.json
