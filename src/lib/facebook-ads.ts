@@ -40,9 +40,12 @@ export function summarizeAds(days: WindsorRow[], period: WindsorRow[], from: str
   // results add up over the days (a campaign keeps one goal; if it changed, the goal with the most results is shown)
   const goals = new Map<string, Map<string, number>>();
   for (const d of daily) if (d.resultType) { const g = goals.get(d.id) ?? new Map<string, number>(); g.set(d.resultType, (g.get(d.resultType) ?? 0) + d.results); goals.set(d.id, g); }
+  // the range query can come back from Windsor's cache with names from before a rename: the name of the newest stored day with spend wins
+  const names = new Map<string, string>();
+  for (const d of daily) if (d.spend > 0 && !names.has(d.id)) names.set(d.id, d.campaign); // days without spend can be left over from before a rename
   const campaigns: AdsTotals[] = period.map((r) => {
     const [resultType, results] = [...(goals.get(String(r.campaign_id)) ?? [])].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
-    const t = { id: String(r.campaign_id), campaign: String(r.campaign), spend: n(r.spend), impressions: n(r.impressions), reach: n(r.reach), clicks: n(r.clicks), linkClicks: n(r.link_clicks), messages: n(r[MESSAGES]), results, resultType };
+    const t = { id: String(r.campaign_id), campaign: names.get(String(r.campaign_id)) ?? String(r.campaign), spend: n(r.spend), impressions: n(r.impressions), reach: n(r.reach), clicks: n(r.clicks), linkClicks: n(r.link_clicks), messages: n(r[MESSAGES]), results, resultType };
     return { ...t, frequency: ratio(t.impressions, t.reach), ctr: ratio(t.clicks, t.impressions), cpc: ratio(t.spend, t.clicks), costPerMessage: ratio(t.spend, t.messages), costPerResult: ratio(t.spend, results) };
   }).sort((a, b) => b.spend - a.spend);
   return { campaigns, daily };

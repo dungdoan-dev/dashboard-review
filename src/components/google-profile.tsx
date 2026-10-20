@@ -81,16 +81,15 @@ export function GoogleProfile() {
       </div>}
       {data && !data.message && !invalid && (data.locations.length === 0
         ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật từ Google” để lấy số liệu.</p>
-        : <div className="summary-table summary-table-scroll"><table>
+        : <details className="summary-chart wide revenue-fold" open><summary><h4>Theo cơ sở</h4></summary><div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Cơ sở</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}<th>Số ngày có dữ liệu</th></tr></thead>
           <tbody>{locations.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => <td key={label}>{num(value(t))}</td>)}<td>{t.days}</td></tr>)}</tbody>
-        </table></div>)}
+        </table></div></details>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <h2 className="summary-subtitle">Số liệu theo ngày</h2>
-        <div className="summary-table summary-table-scroll"><table>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Ngày</th><th>Cơ sở</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{daily.map((r) => <tr key={`${r.day}-${r.id}`}><th scope="row">{fmtDate(r.day)}</th><td>{r.name}</td>{COLUMNS.map(([label, value]) => <td key={label}>{num(value(r))}</td>)}</tr>)}</tbody>
-        </table></div>
+        </table></div></details>
       </>}
     </section>
   );

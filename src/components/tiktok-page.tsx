@@ -83,16 +83,15 @@ export function TiktokPage() {
       </div>}
       {data && !data.message && !invalid && (data.accounts.length === 0
         ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
-        : <div className="summary-table summary-table-scroll"><table>
+        : <details className="summary-chart wide revenue-fold" open><summary><h4>Theo tài khoản</h4></summary><div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Tài khoản</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{accounts.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>
-        </table></div>)}
+        </table></div></details>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <h2 className="summary-subtitle">Số liệu theo ngày</h2>
-        <div className="summary-table summary-table-scroll"><table>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Ngày</th><th>Tài khoản</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.name}</td>{DAILY.map(([label, value]) => <td key={label}>{num(value(d))}</td>)}</tr>)}</tbody>
-        </table></div>
+        </table></div></details>
       </>}
     </section>
   );

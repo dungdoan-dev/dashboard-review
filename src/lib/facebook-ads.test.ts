@@ -40,3 +40,12 @@ test("results follow the campaign goal: ThruPlays for a video campaign, conversa
   assert.deepEqual([by.QC05.results, resultLabel(by.QC05.resultType), by.QC05.costPerResult], [692, "Lượt ThruPlay", 60 / 692]);
   assert.deepEqual([by.QC02.results, resultLabel(by.QC02.resultType), by.QC02.costPerResult], [2, "Cuộc trò chuyện qua tin nhắn", 30]);
 });
+
+test("a campaign renamed in Ads Manager shows the name of its newest stored day even when the range totals carry the old name", () => {
+  const days = [
+    { date: "2026-10-01", campaign_id: "c1", campaign: "QC05 - new", spend: 10 },
+    { date: "2026-10-02", campaign_id: "c1", campaign: "QC05 - new", spend: 10 },
+  ];
+  const { campaigns } = summarizeAds(days, [{ campaign_id: "c1", campaign: "VTDC SG Hàng Tháng", spend: 20 }], "2026-10-01", "2026-10-19");
+  assert.equal(campaigns[0].campaign, "QC05 - new");
+});

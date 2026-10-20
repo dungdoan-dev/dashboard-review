@@ -90,17 +90,16 @@ export function GoogleAds() {
         ? <p className="summary-note">Chưa có chiến dịch trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
         : <>
           <p className="summary-note">Tổng chi phí {campaign ? "chiến dịch" : `${campaigns.length} chiến dịch`}: <strong>{num(spend)} VND</strong></p>
-          <div className="summary-table summary-table-scroll"><table>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo chiến dịch</h4></summary><div className="summary-table summary-table-scroll"><table>
             <thead><tr><th>Chiến dịch</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
             <tbody>{campaigns.map((t) => <tr key={t.id}><th scope="row">{t.campaign}</th>{COLUMNS.map(([label, text]) => <td key={label}>{text(t)}</td>)}</tr>)}</tbody>
-          </table></div>
+          </table></div></details>
         </>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <h2 className="summary-subtitle">Số liệu theo ngày</h2>
-        <div className="summary-table summary-table-scroll"><table>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Ngày</th><th>Chiến dịch</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.campaign}</td>{DAILY.map(([label, value]) => <td key={label}>{value(d)}</td>)}</tr>)}</tbody>
-        </table></div>
+        </table></div></details>
       </>}
     </section>
   );
