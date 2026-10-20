@@ -7,6 +7,8 @@ import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { GADS_MAX_DAYS, type GadsDaily, type GadsTotals } from "@/lib/google-ads";
 import { IsoDatePicker } from "@/components/date-picker";
+import { ReachChart } from "@/components/reach-chart";
+import { ReachTable, additive, type Col } from "@/components/reach-table";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (x: number) => `${(x * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`;
@@ -16,9 +18,11 @@ const COLUMNS: [string, (t: GadsTotals) => string, (t: GadsTotals) => number][] 
   ["Chi phí (VND)", (t) => num(t.spend), (t) => t.spend], ["Hiển thị", (t) => num(t.impressions), (t) => t.impressions], ["Lượt nhấp", (t) => num(t.clicks), (t) => t.clicks],
   ["CTR", (t) => dash(t.ctr, pct), (t) => t.ctr], ["CPC (VND)", (t) => dash(t.cpc, num), (t) => t.cpc], ["Chuyển đổi", (t) => dec(t.conversions), (t) => t.conversions], ["Chi phí / chuyển đổi (VND)", (t) => dash(t.costPerConversion, num), (t) => t.costPerConversion],
 ];
-const DAILY: [string, (d: GadsDaily) => string][] = [["Chi phí (VND)", (d) => num(d.spend)], ["Hiển thị", (d) => num(d.impressions)], ["Lượt nhấp", (d) => num(d.clicks)], ["Chuyển đổi", (d) => dec(d.conversions)]];
+const DAILY: [string, (d: GadsDaily) => number][] = [["Chi phí (VND)", (d) => d.spend], ["Hiển thị", (d) => d.impressions], ["Lượt nhấp", (d) => d.clicks], ["Chuyển đổi", (d) => d.conversions]];
 
 type Loaded = { campaigns: GadsTotals[]; daily: GadsDaily[]; message: string };
+const placeCols: Col<GadsTotals>[] = [{ label: "Chiến dịch", text: (t) => t.campaign }, ...COLUMNS.map(([label, text, value]): Col<GadsTotals> => ({ label, text, value, total: additive(label) }))];
+const dayCols: Col<GadsDaily>[] = [{ label: "Ngày", text: (d) => fmtDate(d.day), sort: (d) => d.day }, { label: "Chiến dịch", text: (d) => d.campaign }, ...DAILY.map(([label, value]): Col<GadsDaily> => ({ label, value, text: (d) => (label === "Chuyển đổi" || label === "Kết quả" ? dec(value(d)) : num(value(d))), total: additive(label) }))];
 
 /** Google Ads per campaign for a date range, from the days stored by the daily Windsor sync. */
 export function GoogleAds() {
@@ -90,16 +94,11 @@ export function GoogleAds() {
         ? <p className="summary-note">Chưa có chiến dịch trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
         : <>
           <p className="summary-note">Tổng chi phí {campaign ? "chiến dịch" : `${campaigns.length} chiến dịch`}: <strong>{num(spend)} VND</strong></p>
-          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo chiến dịch</h4></summary><div className="summary-table summary-table-scroll"><table>
-            <thead><tr><th>Chiến dịch</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-            <tbody>{campaigns.map((t) => <tr key={t.id}><th scope="row">{t.campaign}</th>{COLUMNS.map(([label, text]) => <td key={label}>{text(t)}</td>)}</tr>)}</tbody>
-          </table></div></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Biểu đồ</h4></summary><ReachChart rows={campaigns} columns={placeCols} nameOf={(t) => t.campaign} daily={daily} dailyColumns={dayCols} dayOf={(d) => d.day} /></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo chiến dịch</h4></summary><ReachTable rows={campaigns} columns={placeCols} rowKey={(t) => t.id} /></details>
         </>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Ngày</th><th>Chiến dịch</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.campaign}</td>{DAILY.map(([label, value]) => <td key={label}>{value(d)}</td>)}</tr>)}</tbody>
-        </table></div></details>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><ReachTable rows={daily} columns={dayCols} rowKey={(d) => `${d.day}-${d.id}`} /></details>
       </>}
     </section>
   );

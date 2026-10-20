@@ -6,12 +6,17 @@ import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { MAX_DAYS, type DailyRow, type LocationTotals } from "@/lib/google-profile";
+import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
+import { ReachChart } from "@/components/reach-chart";
+import { ReachTable, type Col } from "@/components/reach-table";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const COLUMNS: [string, (t: Omit<LocationTotals, "days">) => number][] = [["Lượt tương tác", (t) => t.engagement], ["Cuộc gọi", (t) => t.calls], ["Tìm đường", (t) => t.directions], ["Nhấp vào web", (t) => t.website], ["Nhấp đặt phòng/thực đơn", (t) => t.bookingMenu], ["Số post bài", (t) => t.posts]];
 
 type Loaded = { locations: LocationTotals[]; daily: DailyRow[]; fetchedAt: string | null; message: string };
+const placeCols: Col<LocationTotals>[] = [{ label: "Cơ sở", text: (t) => t.name }, ...COLUMNS.map(([label, value]): Col<LocationTotals> => ({ label, value, text: (t) => num(value(t)), total: true })), { label: "Số ngày có dữ liệu", value: (t) => t.days, text: (t) => String(t.days) }];
+const dayCols: Col<DailyRow>[] = [{ label: "Ngày", text: (d) => fmtDate(d.day), sort: (d) => d.day }, { label: "Cơ sở", text: (d) => d.name }, ...COLUMNS.map(([label, value]): Col<DailyRow> => ({ label, value, text: (d) => num(value(d)), total: true }))];
 
 /** Google Maps figures per location for a date range, from the days stored by the daily Windsor sync (no call to Windsor on load). */
 export function GoogleProfile() {
@@ -81,15 +86,10 @@ export function GoogleProfile() {
       </div>}
       {data && !data.message && !invalid && (data.locations.length === 0
         ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật từ Google” để lấy số liệu.</p>
-        : <details className="summary-chart wide revenue-fold" open><summary><h4>Theo cơ sở</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Cơ sở</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}<th>Số ngày có dữ liệu</th></tr></thead>
-          <tbody>{locations.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => <td key={label}>{num(value(t))}</td>)}<td>{t.days}</td></tr>)}</tbody>
-        </table></div></details>)}
+        : <><details className="summary-chart wide revenue-fold" open><summary><h4>Biểu đồ</h4></summary><ReachChart rows={locations} columns={placeCols} nameOf={(t) => t.name} daily={daily} dailyColumns={dayCols} dayOf={(d) => d.day} /></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo cơ sở</h4></summary><ReachTable rows={locations} columns={placeCols} rowKey={(t) => t.id} groupOf={(t) => reachGroup(t.name)} /></details></>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Ngày</th><th>Cơ sở</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{daily.map((r) => <tr key={`${r.day}-${r.id}`}><th scope="row">{fmtDate(r.day)}</th><td>{r.name}</td>{COLUMNS.map(([label, value]) => <td key={label}>{num(value(r))}</td>)}</tr>)}</tbody>
-        </table></div></details>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><ReachTable rows={daily} columns={dayCols} rowKey={(d) => `${d.day}-${d.id}`} /></details>
       </>}
     </section>
   );

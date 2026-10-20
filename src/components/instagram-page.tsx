@@ -6,7 +6,10 @@ import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { IG_MAX_DAYS, type IgDaily, type IgTotals } from "@/lib/instagram-page";
+import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
+import { ReachChart } from "@/components/reach-chart";
+import { ReachTable, additive, type Col } from "@/components/reach-table";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const NA = "—"; // Windsor has no figure for it: enter by hand
@@ -15,6 +18,8 @@ const COLUMNS: [string, (t: IgTotals) => number | null][] = [["Lượt xem", (t)
 const DAILY: [string, (d: IgDaily) => number][] = [["Lượt xem", (d) => d.views], ["Người tiếp cận", (d) => d.reach], ["Lượt tương tác", (d) => d.engagement], ["Lượt click liên kết", (d) => d.linkClicks]];
 
 type Loaded = { accounts: IgTotals[]; daily: IgDaily[]; message: string };
+const placeCols: Col<IgTotals>[] = [{ label: "Tài khoản", text: (t) => t.name }, ...COLUMNS.map(([label, value]): Col<IgTotals> => ({ label, value, text: (t) => { const v = value(t); return v === null ? NA : num(v); }, total: additive(label) }))];
+const dayCols: Col<IgDaily>[] = [{ label: "Ngày", text: (d) => fmtDate(d.day), sort: (d) => d.day }, { label: "Tài khoản", text: (d) => d.name }, ...DAILY.map(([label, value]): Col<IgDaily> => ({ label, value, text: (d) => num(value(d)), total: additive(label) }))];
 
 /** Instagram figures per account for a date range, read from Windsor when the range changes. */
 export function InstagramPage() {
@@ -83,15 +88,10 @@ export function InstagramPage() {
       </div>}
       {data && !data.message && !invalid && (data.accounts.length === 0
         ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
-        : <details className="summary-chart wide revenue-fold" open><summary><h4>Theo tài khoản</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Tài khoản</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{accounts.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>
-        </table></div></details>)}
+        : <><details className="summary-chart wide revenue-fold" open><summary><h4>Biểu đồ</h4></summary><ReachChart rows={accounts} columns={placeCols} nameOf={(t) => t.name} daily={daily} dailyColumns={dayCols} dayOf={(d) => d.day} /></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo tài khoản</h4></summary><ReachTable rows={accounts} columns={placeCols} rowKey={(t) => t.id} groupOf={(t) => reachGroup(t.name)} /></details></>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Ngày</th><th>Tài khoản</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.name}</td>{DAILY.map(([label, value]) => <td key={label}>{num(value(d))}</td>)}</tr>)}</tbody>
-        </table></div></details>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><ReachTable rows={daily} columns={dayCols} rowKey={(d) => `${d.day}-${d.id}`} /></details>
       </>}
     </section>
   );

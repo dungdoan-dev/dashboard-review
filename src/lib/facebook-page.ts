@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
+import { compareReach } from "./reach-order.ts";
 
 export const FB_MAX_DAYS = 120;
 const dayOf = (iso: string) => new Date(Date.parse(iso) + 7 * 3_600_000).toISOString().slice(0, 10); // Vietnam day of a timestamp
@@ -22,7 +23,7 @@ export function summarizeFacebook(days: WindsorRow[], period: WindsorRow[], post
   const daily: FbDaily[] = days.filter((r) => String(r.date) >= from && String(r.date) <= to).map((r) => ({
     day: String(r.date), id: String(r.account_id), name: String(r.account_name),
     views: n(r.page_impressions), engagement: n(r.page_actions_post_reactions_total), visits: n(r.page_views_total), follows: n(r.page_daily_follows_unique),
-  })).sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+  })).sort((a, b) => b.day.localeCompare(a.day) || compareReach(a.name, b.name));
   const pages = new Map<string, FbTotals>();
   for (const d of daily) {
     const t = pages.get(d.id) ?? { id: d.id, name: d.name, views: 0, engagement: 0, visits: 0, follows: 0, viewers: 0, posts: 0 };
@@ -37,7 +38,7 @@ export function summarizeFacebook(days: WindsorRow[], period: WindsorRow[], post
     const d = dayOf(String(p.post_created_time)), t = pages.get(String(p.account_id));
     if (t && d >= from && d <= to) t.posts++;
   }
-  return { pages: [...pages.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
+  return { pages: [...pages.values()].sort((a, b) => compareReach(a.name, b.name)), daily };
 }
 
 export async function readFacebook(db: SupabaseClient, from: string, to: string) {

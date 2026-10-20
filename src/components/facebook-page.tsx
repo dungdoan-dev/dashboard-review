@@ -6,7 +6,10 @@ import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { FB_MAX_DAYS, type FbDaily, type FbTotals } from "@/lib/facebook-page";
+import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
+import { ReachChart } from "@/components/reach-chart";
+import { ReachTable, additive, type Col } from "@/components/reach-table";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const NA = "—"; // Windsor has no figure for it: enter by hand
@@ -15,6 +18,8 @@ const COLUMNS: [string, (t: FbTotals) => number | null][] = [["Lượt xem", (t)
 const DAILY: [string, (d: FbDaily) => number][] = [["Lượt xem", (d) => d.views], ["Lượt tương tác", (d) => d.engagement], ["Lượt truy cập", (d) => d.visits], ["Lượt theo dõi", (d) => d.follows]];
 
 type Loaded = { pages: FbTotals[]; daily: FbDaily[]; message: string };
+const placeCols: Col<FbTotals>[] = [{ label: "Trang", text: (t) => t.name }, ...COLUMNS.map(([label, value]): Col<FbTotals> => ({ label, value, text: (t) => { const v = value(t); return v === null ? NA : num(v); }, total: additive(label) }))];
+const dayCols: Col<FbDaily>[] = [{ label: "Ngày", text: (d) => fmtDate(d.day), sort: (d) => d.day }, { label: "Trang", text: (d) => d.name }, ...DAILY.map(([label, value]): Col<FbDaily> => ({ label, value, text: (d) => num(value(d)), total: additive(label) }))];
 
 /** Facebook Page figures per page for a date range, read from Windsor when the range changes. */
 export function FacebookPage() {
@@ -83,15 +88,10 @@ export function FacebookPage() {
       </div>}
       {data && !data.message && !invalid && (data.pages.length === 0
         ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
-        : <details className="summary-chart wide revenue-fold" open><summary><h4>Theo trang</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Trang</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{pages.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>
-        </table></div></details>)}
+        : <><details className="summary-chart wide revenue-fold" open><summary><h4>Biểu đồ</h4></summary><ReachChart rows={pages} columns={placeCols} nameOf={(t) => t.name} daily={daily} dailyColumns={dayCols} dayOf={(d) => d.day} /></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo trang</h4></summary><ReachTable rows={pages} columns={placeCols} rowKey={(t) => t.id} groupOf={(t) => reachGroup(t.name)} /></details></>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Ngày</th><th>Trang</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.name}</td>{DAILY.map(([label, value]) => <td key={label}>{num(value(d))}</td>)}</tr>)}</tbody>
-        </table></div></details>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><ReachTable rows={daily} columns={dayCols} rowKey={(d) => `${d.day}-${d.id}`} /></details>
       </>}
     </section>
   );

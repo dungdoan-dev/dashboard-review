@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
+import { compareReach } from "./reach-order.ts";
 
 export const TT_MAX_DAYS = 60;
 const dayOf = (iso: string) => new Date(Date.parse(`${iso}Z`) + 7 * 3_600_000).toISOString().slice(0, 10); // video_create_datetime has no zone: taken as UTC
@@ -22,7 +23,7 @@ export function summarizeTiktok(days: WindsorRow[], videos: WindsorRow[], from: 
   const daily: TtDaily[] = days.filter((r) => String(r.date) >= from && String(r.date) <= to).map((r) => ({
     day: String(r.date), id: String(r.account_id), name: String(r.account_name),
     views: n(r.video_views), reach: n(r.engaged_audience), profileViews: n(r.profile_views), phoneClicks: n(r.phone_number_clicks), linkClicks: n(r.bio_link_clicks), follows: n(r.daily_total_followers),
-  })).sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+  })).sort((a, b) => b.day.localeCompare(a.day) || compareReach(a.name, b.name));
   const accounts = new Map<string, TtTotals>();
   for (const d of daily) {
     const t = accounts.get(d.id) ?? { id: d.id, name: d.name, views: 0, reach: 0, profileViews: 0, phoneClicks: 0, linkClicks: 0, follows: 0, posts: 0 };
@@ -36,7 +37,7 @@ export function summarizeTiktok(days: WindsorRow[], videos: WindsorRow[], from: 
     const d = dayOf(String(v.video_create_datetime)), t = accounts.get(String(v.account_id));
     if (t && d >= from && d <= to) t.posts++;
   }
-  return { accounts: [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
+  return { accounts: [...accounts.values()].sort((a, b) => compareReach(a.name, b.name)), daily };
 }
 
 export async function readTiktok(db: SupabaseClient, from: string, to: string) {

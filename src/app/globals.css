@@ -1229,3 +1229,24 @@ select { cursor: pointer; }
 
 /* Reach pages have their own filters: the top bar (type, location, date) is hidden on desktop; on a phone it stays because it holds the menu button. */
 @media (min-width: 701px) { .dashboard-topbar.topbar-hidden { display: none; } }
+
+.group-row th { padding: 6px 12px; background: #f4f7fc; color: #5f6f86; font-size: 11px; font-weight: 700; letter-spacing: .9px; text-align: left; text-transform: uppercase; }
+
+/* Reach tables (reach-table.tsx) and charts (reach-chart.tsx) */
+.reach-table table { border-collapse: separate; border-spacing: 0; }
+.reach-table thead th { position: sticky; top: 0; z-index: 2; padding: 0; background: #f8fafd; border-bottom: 1px solid #dfe6f0; }
+.reach-table thead th button { display: inline-flex; align-items: center; gap: 5px; width: 100%; padding: 10px 12px; border: 0; background: transparent; color: #46586f; font: inherit; font-weight: 700; cursor: pointer; }
+.reach-table thead th.num button { justify-content: flex-end; }
+.reach-table thead th button:hover { color: var(--blue); }
+.reach-table thead th .idle { opacity: .35; }
+.reach-table th[aria-sort="ascending"] button, .reach-table th[aria-sort="descending"] button { color: var(--blue); }
+.reach-table td.num, .reach-table tfoot td { text-align: right; font-variant-numeric: tabular-nums; }
+.reach-table td.bar { background-image: linear-gradient(#9dbcf5, #9dbcf5); background-repeat: no-repeat; background-position: 10px calc(100% - 5px); background-size: calc((100% - 20px) * var(--p, 0) / 100) 3px; }
+.reach-table tbody th[scope="row"] { min-width: 260px; max-width: 360px; white-space: normal; }
+.reach-table th, .reach-table td { padding-top: 7px; padding-bottom: 7px; }
+.brand-row .brand { font-size: 18px; white-space: nowrap; }
+.reach-table tbody tr:hover td, .reach-table tbody tr:hover th { background-color: #f6f9ff; }
+.reach-table tbody th[scope="row"], .reach-table tfoot th { position: sticky; left: 0; z-index: 1; background: #fff; }
+.reach-table tfoot th, .reach-table tfoot td { border-top: 2px solid #dfe6f0; border-bottom: 0; background: #f8fafd; color: #172b4d; font-weight: 700; }
+.reach-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; margin: 10px 0 4px; }
+.reach-charts h4 { margin: 0 0 8px; color: #233a5a; font-size: 14px; }

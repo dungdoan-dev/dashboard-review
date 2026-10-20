@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
+import { compareReach } from "./reach-order.ts";
 
 export const IG_MAX_DAYS = 120;
 const dayOf = (iso: string) => new Date(Date.parse(iso) + 7 * 3_600_000).toISOString().slice(0, 10); // Vietnam day of a timestamp
@@ -22,7 +23,7 @@ export function summarizeInstagram(days: WindsorRow[], posts: WindsorRow[], from
   const daily: IgDaily[] = days.filter((r) => String(r.date) >= from && String(r.date) <= to).map((r) => ({
     day: String(r.date), id: String(r.account_id), name: String(r.name ?? r.account_name), // name = the profile name; account_name is the @username
     views: n(r.views), reach: n(r.reach), engagement: n(r.total_interactions), linkClicks: n(r.profile_links_taps),
-  })).sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+  })).sort((a, b) => b.day.localeCompare(a.day) || compareReach(a.name, b.name));
   const accounts = new Map<string, IgTotals>();
   for (const d of daily) {
     const t = accounts.get(d.id) ?? { id: d.id, name: d.name, views: 0, reach: 0, engagement: 0, linkClicks: 0, posts: 0 };
@@ -36,7 +37,7 @@ export function summarizeInstagram(days: WindsorRow[], posts: WindsorRow[], from
     const d = dayOf(String(p.timestamp)), t = accounts.get(String(p.account_id));
     if (t && d >= from && d <= to) t.posts++;
   }
-  return { accounts: [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
+  return { accounts: [...accounts.values()].sort((a, b) => compareReach(a.name, b.name)), daily };
 }
 
 export async function readInstagram(db: SupabaseClient, from: string, to: string) {

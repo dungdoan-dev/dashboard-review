@@ -7,19 +7,23 @@ import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { ADS_MAX_DAYS, resultLabel, type AdsDaily, type AdsTotals } from "@/lib/facebook-ads";
 import { IsoDatePicker } from "@/components/date-picker";
+import { ReachChart } from "@/components/reach-chart";
+import { ReachTable, additive, type Col } from "@/components/reach-table";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (x: number) => `${(x * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`;
 const dec = (x: number) => x.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
 const dash = (x: number, show: (v: number) => string) => (x ? show(x) : "—"); // no messages / clicks: nothing to divide by
 const COLUMNS: [string, (t: AdsTotals) => string, (t: AdsTotals) => number][] = [
-  ["Chi phí (VND)", (t) => num(t.spend), (t) => t.spend], ["Kết quả", (t) => (t.results ? `${num(t.results)} ${resultLabel(t.resultType)}` : "—"), (t) => t.results], ["Chi phí / kết quả (VND)", (t) => dash(t.costPerResult, num), (t) => t.costPerResult], ["Hiển thị", (t) => num(t.impressions), (t) => t.impressions], ["Người tiếp cận", (t) => num(t.reach), (t) => t.reach],
+  ["Chi phí (VND)", (t) => num(t.spend), (t) => t.spend], ["Kết quả", (t) => (t.results ? num(t.results) : "—"), (t) => t.results], ["Chi phí / kết quả (VND)", (t) => dash(t.costPerResult, num), (t) => t.costPerResult], ["Hiển thị", (t) => num(t.impressions), (t) => t.impressions], ["Người tiếp cận", (t) => num(t.reach), (t) => t.reach],
   ["Tần suất", (t) => dash(t.frequency, dec), (t) => t.frequency], ["Lượt nhấp", (t) => num(t.clicks), (t) => t.clicks], ["Nhấp liên kết", (t) => num(t.linkClicks), (t) => t.linkClicks],
   ["CTR", (t) => dash(t.ctr, pct), (t) => t.ctr], ["CPC (VND)", (t) => dash(t.cpc, num), (t) => t.cpc], ["Tin nhắn mới", (t) => num(t.messages), (t) => t.messages], ["Chi phí / tin nhắn (VND)", (t) => dash(t.costPerMessage, num), (t) => t.costPerMessage],
 ];
 const DAILY: [string, (d: AdsDaily) => number][] = [["Chi phí (VND)", (d) => d.spend], ["Kết quả", (d) => d.results], ["Hiển thị", (d) => d.impressions], ["Người tiếp cận", (d) => d.reach], ["Lượt nhấp", (d) => d.clicks], ["Nhấp liên kết", (d) => d.linkClicks], ["Tin nhắn mới", (d) => d.messages]];
 
 type Loaded = { campaigns: AdsTotals[]; daily: AdsDaily[]; message: string };
+const placeCols: Col<AdsTotals>[] = [{ label: "Chiến dịch", text: (t) => t.campaign }, ...COLUMNS.flatMap(([label, text, value]): Col<AdsTotals>[] => [{ label, text, value, total: additive(label) }, ...(label === "Kết quả" ? [{ label: "Loại kết quả", text: (t: AdsTotals) => (t.results ? resultLabel(t.resultType) : "—") }] : [])])];
+const dayCols: Col<AdsDaily>[] = [{ label: "Ngày", text: (d) => fmtDate(d.day), sort: (d) => d.day }, { label: "Chiến dịch", text: (d) => d.campaign }, ...DAILY.map(([label, value]): Col<AdsDaily> => ({ label, value, text: (d) => (label === "Chuyển đổi" || label === "Kết quả" ? dec(value(d)) : num(value(d))), total: additive(label) }))];
 
 /** Facebook Ads per campaign for a date range, read from Windsor when the range changes. */
 export function FacebookAds() {
@@ -91,16 +95,11 @@ export function FacebookAds() {
         ? <p className="summary-note">Chưa có chiến dịch trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
         : <>
           <p className="summary-note">Tổng chi phí {campaign ? "chiến dịch" : `${campaigns.length} chiến dịch`}: <strong>{num(spend)} VND</strong></p>
-          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo chiến dịch</h4></summary><div className="summary-table summary-table-scroll"><table>
-            <thead><tr><th>Chiến dịch</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-            <tbody>{campaigns.map((t) => <tr key={t.id}><th scope="row">{t.campaign}</th>{COLUMNS.map(([label, text]) => <td key={label}>{text(t)}</td>)}</tr>)}</tbody>
-          </table></div></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Biểu đồ</h4></summary><ReachChart rows={campaigns} columns={placeCols} nameOf={(t) => t.campaign} daily={daily} dailyColumns={dayCols} dayOf={(d) => d.day} /></details>
+          <details className="summary-chart wide revenue-fold" open><summary><h4>Theo chiến dịch</h4></summary><ReachTable rows={campaigns} columns={placeCols} rowKey={(t) => t.id} /></details>
         </>)}
       {data && !data.message && !invalid && daily.length > 0 && <>
-        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><div className="summary-table summary-table-scroll"><table>
-          <thead><tr><th>Ngày</th><th>Chiến dịch</th>{DAILY.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{daily.map((d) => <tr key={`${d.day}-${d.id}`}><th scope="row">{fmtDate(d.day)}</th><td>{d.campaign}</td>{DAILY.map(([label, value]) => <td key={label}>{num(value(d))}</td>)}</tr>)}</tbody>
-        </table></div></details>
+        <details className="summary-chart wide revenue-fold"><summary><h4>Số liệu theo ngày</h4></summary><ReachTable rows={daily} columns={dayCols} rowKey={(d) => `${d.day}-${d.id}`} /></details>
       </>}
     </section>
   );

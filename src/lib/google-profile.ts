@@ -2,6 +2,7 @@
 // No "@/" imports: the pure part is tested with plain Node (google-profile.test.ts).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { windsorRows } from "./windsor.ts";
+import { compareReach } from "./reach-order.ts";
 
 export const MAX_DAYS = 120; // shortcut: one query returns at most 1000 rows (3 locations x 120 days fit), page the reads before adding many more locations
 const dayOf = (iso: string) => new Date(Date.parse(iso) + 7 * 3_600_000).toISOString().slice(0, 10); // Vietnam day of a timestamp
@@ -34,7 +35,7 @@ export function summarize(days: DayRow[], posts: PostRow[], from: string, to: st
     byLocation.set(d.location_id, t);
   }
   for (const p of posts) { const d = dayOf(p.created_at); if (d >= from && d <= to) { const t = byLocation.get(p.location_id); if (t) t.posts++; } }
-  return [...byLocation.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...byLocation.values()].sort((a, b) => compareReach(a.name, b.name));
 }
 
 export type DailyRow = Omit<LocationTotals, "days"> & { day: string };
@@ -48,7 +49,7 @@ export function dailyRows(days: DayRow[], posts: PostRow[], from: string, to: st
     rows.set(`${d.day}|${d.location_id}`, { day: d.day, id: d.location_id, name: d.location_name, calls: d.call_clicks, directions: d.direction_requests, website: d.website_clicks, bookingMenu, engagement: d.call_clicks + d.direction_requests + d.website_clicks + bookingMenu, posts: 0 });
   }
   for (const p of posts) { const r = rows.get(`${dayOf(p.created_at)}|${p.location_id}`); if (r) r.posts++; } // a post on a day Windsor sent no figures for is only in the period total
-  return [...rows.values()].sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+  return [...rows.values()].sort((a, b) => b.day.localeCompare(a.day) || compareReach(a.name, b.name));
 }
 
 export async function readGoogleProfile(db: SupabaseClient, from: string, to: string) {
