@@ -1,5 +1,7 @@
-// Instagram figures through Windsor.ai (connector "instagram", the Instagram Insights source), read live for the chosen range; nothing is stored.
+// Instagram figures through Windsor.ai (connector "instagram", the Instagram Insights source), stored by social-store.ts (cron + the page button), read from the stored days.
 // No "@/" imports: the pure part is tested with plain Node (instagram-page.test.ts).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
 
 export const IG_MAX_DAYS = 120;
@@ -18,7 +20,7 @@ export type IgTotals = Omit<IgDaily, "day"> & { posts: number };
  */
 export function summarizeInstagram(days: WindsorRow[], posts: WindsorRow[], from: string, to: string) {
   const daily: IgDaily[] = days.filter((r) => String(r.date) >= from && String(r.date) <= to).map((r) => ({
-    day: String(r.date), id: String(r.account_id), name: String(r.account_name),
+    day: String(r.date), id: String(r.account_id), name: String(r.name ?? r.account_name), // name = the profile name; account_name is the @username
     views: n(r.views), reach: n(r.reach), engagement: n(r.total_interactions), linkClicks: n(r.profile_links_taps),
   })).sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
   const accounts = new Map<string, IgTotals>();
@@ -37,10 +39,7 @@ export function summarizeInstagram(days: WindsorRow[], posts: WindsorRow[], from
   return { accounts: [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
 }
 
-export async function readInstagram(from: string, to: string) {
-  const [days, posts] = await Promise.all([
-    windsorRows("instagram", ["account_id", "account_name", "date", "views", "reach", "total_interactions", "profile_links_taps"], from, to),
-    windsorRows("instagram", ["account_id", "media_id", "timestamp"], from, to),
-  ]);
-  return summarizeInstagram(days, posts, from, to);
+export async function readInstagram(db: SupabaseClient, from: string, to: string) {
+  const stored = await readStored(db, "instagram", from, to);
+  return { ...summarizeInstagram(stored.days, stored.items, from, to), fetchedAt: stored.fetchedAt };
 }

@@ -1,5 +1,7 @@
-// Facebook Page figures through Windsor.ai (connector facebook_organic), read live for the chosen range; nothing is stored.
+// Facebook Page figures through Windsor.ai (connector facebook_organic), stored by social-store.ts (cron + the page button), read from the stored days.
 // No "@/" imports: the pure part is tested with plain Node (facebook-page.test.ts).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
 
 export const FB_MAX_DAYS = 120;
@@ -38,11 +40,11 @@ export function summarizeFacebook(days: WindsorRow[], period: WindsorRow[], post
   return { pages: [...pages.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
 }
 
-export async function readFacebook(from: string, to: string) {
-  const [days, period, posts] = await Promise.all([
-    windsorRows("facebook_organic", ["account_id", "account_name", "date", "page_impressions", "page_actions_post_reactions_total", "page_views_total", "page_daily_follows_unique"], from, to),
-    windsorRows("facebook_organic", ["account_id", "account_name", "page_total_media_view_unique"], from, to), // no date field: Windsor answers once for the whole range
-    windsorRows("facebook_organic", ["account_id", "post_id", "post_created_time"], from, to),
+export async function readFacebook(db: SupabaseClient, from: string, to: string) {
+  const [stored, period] = await Promise.all([
+    readStored(db, "facebook", from, to),
+    // people over the whole range cannot be added from days: asked live (no date field, Windsor answers once); without it "Người xem" shows 0
+    windsorRows("facebook_organic", ["account_id", "account_name", "page_total_media_view_unique"], from, to).catch(() => []),
   ]);
-  return summarizeFacebook(days, period, posts, from, to);
+  return { ...summarizeFacebook(stored.days, period, stored.items, from, to), fetchedAt: stored.fetchedAt };
 }

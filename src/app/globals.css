@@ -1204,3 +1204,25 @@ select { cursor: pointer; }
 .revenue-fold:not([open]) > summary::after { transform: rotate(-90deg); }
 .revenue-fold > summary h4 { margin: 0; }
 .revenue-fold[open] > summary { margin-bottom: 8px; }
+
+/* Desktop sidebar: the button shrinks it to icons; a hovered icon shows its name in a dark tooltip placed by script (position: fixed, so the scrolling menu does not clip it); the menu scrolls on a short screen. The drawer (<= 700px) never collapses. */
+.brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 26px; }
+.brand-row .brand { margin: 0 0 0 7px; }
+.sidebar-toggle { display: grid; flex: 0 0 auto; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #5f6f86; }
+.sidebar-toggle:hover { color: var(--blue); background: #f4f7fc; }
+@media (min-width: 701px) {
+  .sidebar, .main-area { transition: width .2s ease, margin-left .2s ease; }
+  .app-shell.collapsed .sidebar { width: 68px; padding-right: 10px; padding-left: 10px; overflow-x: hidden; }
+  .app-shell.collapsed .main-area { margin-left: 68px; }
+  .app-shell.collapsed .brand-row { flex-direction: column; gap: 12px; }
+  .app-shell.collapsed .brand-row .brand { margin: 0; }
+  .app-shell.collapsed .brand > span:last-child, .app-shell.collapsed .nav-link span, .app-shell.collapsed .profile-meta, .app-shell.collapsed .profile-row > svg { display: none; }
+  .app-shell.collapsed .nav-label { height: 1px; margin: 12px 8px; overflow: hidden; font-size: 0; background: var(--line); }
+  .app-shell.collapsed .side-nav { gap: 2px; }
+  .app-shell.collapsed .nav-link { justify-content: center; min-height: 38px; padding: 0; }
+  .app-shell.collapsed .profile-row { justify-content: center; }
+}
+@media (max-width: 700px) { .sidebar-toggle { display: none; } }
+@media (prefers-reduced-motion: reduce) { .sidebar, .main-area { transition: none !important; } }
+.nav-tip { position: fixed; z-index: 30; left: 76px; padding: 7px 11px; border-radius: 8px; background: #172033; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; transform: translateY(-50%); }
+@media (max-width: 700px) { .nav-tip { display: none; } }

@@ -1,6 +1,8 @@
-// TikTok figures through Windsor.ai (connector "tiktok_organic"), read live for the chosen range; nothing is stored.
+// TikTok figures through Windsor.ai (connector "tiktok_organic"), stored by social-store.ts (cron + the page button), read from the stored days.
 // Windsor only serves the last 60 days of TikTok Organic, so older ranges come back as an error from Windsor.
 // No "@/" imports: the pure part is tested with plain Node (tiktok-page.test.ts).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { readStored } from "./social-store.ts";
 import { windsorRows, type WindsorRow } from "./windsor.ts";
 
 export const TT_MAX_DAYS = 60;
@@ -37,10 +39,7 @@ export function summarizeTiktok(days: WindsorRow[], videos: WindsorRow[], from: 
   return { accounts: [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name)), daily };
 }
 
-export async function readTiktok(from: string, to: string) {
-  const [days, videos] = await Promise.all([
-    windsorRows("tiktok_organic", ["account_id", "account_name", "date", "video_views", "engaged_audience", "profile_views", "phone_number_clicks", "bio_link_clicks", "daily_total_followers"], from, to),
-    windsorRows("tiktok_organic", ["account_id", "video_id", "video_create_datetime"], from, to),
-  ]);
-  return summarizeTiktok(days, videos, from, to);
+export async function readTiktok(db: SupabaseClient, from: string, to: string) {
+  const stored = await readStored(db, "tiktok", from, to);
+  return { ...summarizeTiktok(stored.days, stored.items, from, to), fetchedAt: stored.fetchedAt };
 }

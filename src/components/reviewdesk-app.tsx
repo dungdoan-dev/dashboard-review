@@ -8,10 +8,8 @@ import {
   Scale,
   HandCoins,
   BadgeCheck,
-  ThumbsUp,
-  Camera,
-  Megaphone,
-  Music2,
+  PanelLeftClose,
+  PanelLeftOpen,
   ArrowDownToLine,
   ArrowUpRight,
   Building2,
@@ -66,6 +64,8 @@ import { GoogleProfile } from "@/components/google-profile";
 import { FacebookPage } from "@/components/facebook-page";
 import { InstagramPage } from "@/components/instagram-page";
 import { FacebookAds } from "@/components/facebook-ads";
+import { GoogleAds } from "@/components/google-ads";
+import { SocialIcon } from "@/components/social-icon";
 import { TiktokPage } from "@/components/tiktok-page";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -256,11 +256,22 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isFacebookPage = pathname === "/facebook";
   const isInstagramPage = pathname === "/instagram";
   const isFacebookAdsPage = pathname === "/facebook-ads";
+  const isGoogleAdsPage = pathname === "/google-ads";
   const isTiktokPage = pathname === "/tiktok";
-  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isTiktokPage;
+  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isGoogleAdsPage || isTiktokPage;
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
+  const [collapsed, setCollapsed] = useState(false); // desktop sidebar shrunk to icons; remembered per browser
+  useEffect(() => { try { setCollapsed(localStorage.getItem("sidebar-collapsed") === "1"); } catch { /* private window: stays expanded */ } }, []);
+  const [tip, setTip] = useState<{ text: string; top: number } | null>(null); // name of the hovered icon while the sidebar is collapsed
+  const showTip = (target: EventTarget) => {
+    const item = collapsed ? (target as HTMLElement).closest<HTMLElement>("[data-tip]") : null;
+    if (!item) { setTip(null); return; }
+    const box = item.getBoundingClientRect();
+    setTip({ text: item.dataset.tip ?? "", top: box.top + box.height / 2 });
+  };
+  const toggleSidebar = () => { setTip(null); setCollapsed((value) => { try { localStorage.setItem("sidebar-collapsed", value ? "0" : "1"); } catch { /* not remembered */ } return !value; }); };
   const bluejayHotel = BLUEJAY_HOTELS.find((hotel) => hotel.id === bluejayHotelId) ?? null;
   const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isBluejayPage && !isReachPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
@@ -1679,38 +1690,6 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     }
   }
 
-  function exportCsv() {
-    const cell = (value: unknown) => {
-      const text = String(value ?? "");
-      const safe = /^[=+@\-\t\r]/.test(text) ? `'${text}` : text;
-      return `"${safe.replaceAll('"', '""')}"`;
-    };
-    const rows: unknown[][] = [["Cơ sở", "Khu vực", "Loại hình", "Nền tảng", "Điểm sao", "Thang điểm", "Số lượng", "Nhãn số lượng", "Thời điểm lấy"]];
-    for (const location of locations) {
-      for (const [platform, label] of [
-        ["google", "Google Maps"],
-        ["tripadvisor", "Tripadvisor"],
-        ["agoda", "Agoda"],
-        ["booking", "Booking.com"],
-        ["tripcom", "Trip.com"],
-        ["expedia", "Expedia"],
-        ["traveloka", "Traveloka"],
-        ["grabfood", "GrabFood"],
-        ["shopeefood", "ShopeeFood"],
-      ] as const) {
-        const metric = location[platform];
-        if (metric) rows.push([location.name, location.area, typeLabels[location.type], label, metric.rating ?? "", metric.ratingScale,  metric.reviewCount ?? "", metric.countLabel, metric.capturedAt]);
-      }
-    }
-    const blob = new Blob(["\uFEFF" + rows.map((row) => row.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "vjh-dashboard-metrics.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
   function navigateWithinDashboard(event: ReactMouseEvent<HTMLDivElement>) {
     if (!(event.target instanceof Element)) return;
     const link = event.target.closest<HTMLAnchorElement>('a[href^="#"]');
@@ -1754,39 +1733,42 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }
 
   return (
-    <div className="app-shell" onClick={navigateWithinDashboard}>
+    <div className={`app-shell ${collapsed ? "collapsed" : ""}`} onClick={navigateWithinDashboard}>
       {navOpen && <button className="sidebar-backdrop" type="button" aria-label="Đóng menu" onClick={() => setNavOpen(false)} />}
-      <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
-        <Link className="brand" href="/" aria-label="VJH Dashboard, về tổng quan">
-          <span className="brand-mark"><Activity size={19} strokeWidth={2.4} /></span>
-          <span>VJH Dashboard<span className="brand-period">.</span></span>
-        </Link>
+      <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onMouseOver={(event) => showTip(event.target)} onFocus={(event) => showTip(event.target)} onMouseLeave={() => setTip(null)} onBlur={() => setTip(null)} onScroll={() => setTip(null)} onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
+        <div className="brand-row">
+          <Link className="brand" href="/" aria-label="VJH Dashboard, về tổng quan">
+            <span className="brand-mark"><Activity size={19} strokeWidth={2.4} /></span>
+            <span>VJH Dashboard<span className="brand-period">.</span></span>
+          </Link>
+          <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+        </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
           <span className="nav-label">REVIEW</span>
-          <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
-          <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
-          <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
-          <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
+          <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
+          <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
+          <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
+          <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           <span className="nav-label nav-label-spaced">VẬN HÀNH</span>
-          <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
-          <Link className={`nav-link ${isBluejayRevenuePage ? "active" : ""}`} href="/bluejay-revenue"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
-          <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
-          <Link className={`nav-link ${isBluejayDebtPage ? "active" : ""}`} href="/bluejay-debt"><HandCoins size={17} /><span>Công nợ OTA</span></Link>
-          <Link className={`nav-link ${isBluejayPaidPage ? "active" : ""}`} href="/bluejay-paid"><BadgeCheck size={17} /><span>Đã thanh toán</span></Link>
+          <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
+          <Link className={`nav-link ${isBluejayRevenuePage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
+          <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
+          <Link className={`nav-link ${isBluejayDebtPage ? "active" : ""}`} href="/bluejay-debt" data-tip="Công nợ OTA"><HandCoins size={17} /><span>Công nợ OTA</span></Link>
+          <Link className={`nav-link ${isBluejayPaidPage ? "active" : ""}`} href="/bluejay-paid" data-tip="Đã thanh toán"><BadgeCheck size={17} /><span>Đã thanh toán</span></Link>
           <span className="nav-label nav-label-spaced">TIẾP CẬN</span>
-          <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile"><MapPin size={17} /><span>Google Maps</span></Link>
-          <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook"><ThumbsUp size={17} /><span>Facebook</span></Link>
-          <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram"><Camera size={17} /><span>Instagram</span></Link>
-          <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads"><Megaphone size={17} /><span>Facebook Ads</span></Link>
-          <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok"><Music2 size={17} /><span>TikTok</span></Link>
-          <span className="nav-label nav-label-spaced">CÔNG CỤ</span>
-          <button className="nav-link" type="button" onClick={exportCsv}><ArrowDownToLine size={17} /><span>Xuất dữ liệu</span></button>
-          <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings"><Settings2 size={17} /><span>Cài đặt</span></Link>
+          <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
+          <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
+          <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
+          <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
+          <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
+          <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
         </nav>
         <div className="sidebar-bottom">
+          <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>
           <button className="profile-row" type="button" onClick={() => { if (supabaseConfigured) void logout(); }} disabled={!supabaseConfigured} aria-label={supabaseConfigured ? "Đăng xuất" : "Chế độ xem demo"}><span className="profile-avatar">{user?.email?.slice(0, 1).toUpperCase() || "D"}</span><span className="profile-meta"><strong>{user?.email || "Chế độ demo"}</strong><small>{supabaseConfigured ? "Tài khoản Supabase" : "Chưa kết nối Supabase"}</small></span>{supabaseConfigured ? <LogOut size={16} /> : <CircleHelp size={16} />}</button>
         </div>
       </aside>
+      {tip && <div className="nav-tip" role="tooltip" style={{ top: tip.top }}>{tip.text}</div>}
 
       <main className="main-area" id="overview">
         <header className="dashboard-topbar">
@@ -1822,6 +1804,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isFacebookPage && <FacebookPage />}
           {isInstagramPage && <InstagramPage />}
           {isFacebookAdsPage && <FacebookAds />}
+          {isGoogleAdsPage && <GoogleAds />}
           {isTiktokPage && <TiktokPage />}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 

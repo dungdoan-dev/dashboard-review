@@ -111,6 +111,10 @@
     {
       "path": "/api/cron/google-profile",
       "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/social",
+      "schedule": "40 0 * * *"
     }
   ]
 }

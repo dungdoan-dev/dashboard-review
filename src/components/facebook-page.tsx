@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import { ArrowDownToLine } from "lucide-react";
+import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
 import { FB_MAX_DAYS, type FbDaily, type FbTotals } from "@/lib/facebook-page";
@@ -24,6 +24,9 @@ export function FacebookPage() {
   const [data, setData] = useState<Loaded | null>(null);
   const [page, setPage] = useState(""); // page id, "" = all
 
+  const [version, setVersion] = useState(0); // bumped after a sync to read the stored days again
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const invalid = !from || !to || from > to || addDays(from, FB_MAX_DAYS - 1) < to;
   useEffect(() => {
     if (invalid) return;
@@ -34,7 +37,17 @@ export function FacebookPage() {
       .then(({ res, body }) => { if (active) setData({ pages: res.ok ? body.pages ?? [] : [], daily: res.ok ? body.daily ?? [] : [], message: res.ok ? "" : body.message ?? `Lỗi ${res.status}` }); })
       .catch(() => { if (active) setData({ pages: [], daily: [], message: "Không kết nối được máy chủ." }); });
     return () => { active = false; };
-  }, [from, to, invalid]);
+  }, [from, to, invalid, version]);
+
+  async function sync() {
+    setBusy(true); setNotice("");
+    const res = await fetch("/api/facebook", { method: "POST" }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res || !res.ok) { setNotice(body.message ?? "Không kết nối được máy chủ."); return; }
+    setNotice(`Đã lấy ${body.days} dòng theo ngày${body.posts ? ` và ${body.posts} bài đăng` : ""}.`);
+    setVersion((v) => v + 1);
+  }
 
   const pages = (data?.pages ?? []).filter((t) => !page || t.id === page);
   const daily = (data?.daily ?? []).filter((d) => !page || d.id === page);
@@ -51,14 +64,16 @@ export function FacebookPage() {
       <div className="summary-hero">
         <div>
           <h1>Facebook</h1>
-          <p>Chỉ số tiếp cận của Facebook Page, lấy trực tiếp theo khoảng ngày chọn. Lượt click liên kết, liên hệ Mes và tỷ lệ phản hồi chưa có số liệu tự động, cần nhập tay. Lượt tương tác chỉ tính reactions nên thấp hơn số Meta Business Suite.</p>
+          <p>Chỉ số tiếp cận của Facebook Page, đọc từ số liệu đã lưu, tự cập nhật mỗi ngày lúc 07:40 (bấm “Cập nhật số liệu” để lấy ngay). Lượt click liên kết, liên hệ Mes và tỷ lệ phản hồi chưa có số liệu tự động, cần nhập tay. Lượt tương tác chỉ tính reactions nên thấp hơn số Meta Business Suite.</p>
         </div>
         <div className="summary-controls">
           <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
           <IsoDatePicker label="Đến ngày" value={to} onChange={setTo} />
+          <button type="button" disabled={busy || invalid} onClick={() => void sync()}><RefreshCw size={15} className={busy ? "spin" : undefined} />{busy ? "Đang lấy…" : "Cập nhật số liệu"}</button>
           {pages.length > 0 && <button type="button" onClick={exportExcel}><ArrowDownToLine size={15} />Xuất Excel</button>}
         </div>
       </div>
+      {notice && <p className="summary-note" role="status">{notice}</p>}
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {FB_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
       {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
@@ -67,7 +82,7 @@ export function FacebookPage() {
         {data.pages.map((t) => <button type="button" key={t.id} aria-pressed={page === t.id} onClick={() => setPage(t.id)}>{t.name}</button>)}
       </div>}
       {data && !data.message && !invalid && (data.pages.length === 0
-        ? <p className="summary-note">Không có dữ liệu trong khoảng này.</p>
+        ? <p className="summary-note">Chưa có dữ liệu trong khoảng này. Bấm “Cập nhật số liệu” để lấy.</p>
         : <div className="summary-table summary-table-scroll"><table>
           <thead><tr><th>Trang</th>{COLUMNS.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{pages.map((t) => <tr key={t.id}><th scope="row">{t.name}</th>{COLUMNS.map(([label, value]) => { const v = value(t); return <td key={label}>{v === null ? NA : num(v)}</td>; })}</tr>)}</tbody>
