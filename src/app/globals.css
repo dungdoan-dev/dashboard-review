@@ -1226,3 +1226,6 @@ select { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .sidebar, .main-area { transition: none !important; } }
 .nav-tip { position: fixed; z-index: 30; left: 76px; padding: 7px 11px; border-radius: 8px; background: #172033; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; transform: translateY(-50%); }
 @media (max-width: 700px) { .nav-tip { display: none; } }
+
+/* Reach pages have their own filters: the top bar (type, location, date) is hidden on desktop; on a phone it stays because it holds the menu button. */
+@media (min-width: 701px) { .dashboard-topbar.topbar-hidden { display: none; } }
