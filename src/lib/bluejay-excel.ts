@@ -4,7 +4,7 @@ import { addDays, combine, isoWeek, summarize, vnDay, type HotelRecord, type Wee
 
 const PCT = "0.00%", INT = "#,##0";
 type Cell = string | number | null;
-type Sheet = { name: string; all?: boolean; head: string[]; fmt?: string[]; rowFmt?: string[]; rows: Cell[][] };
+type Sheet = { name: string; title?: string; all?: boolean; head: string[]; fmt?: string[]; rowFmt?: string[]; rows: Cell[][] };
 
 // One sheet per dashboard table, same as the sample project. Cells keep real numbers (not text) so Excel can sum and chart them.
 function sheets(report: WeeklyReport, records: HotelRecord[]): Sheet[] {
@@ -35,25 +35,39 @@ function sheets(report: WeeklyReport, records: HotelRecord[]): Sheet[] {
 
 const dmy = (date: string) => (date ? date.split("-").reverse().join("/") : "");
 
-// Revenue per booking (same columns as the dashboard table) and service revenue per day and group.
+// Revenue sheets follow the revenue page: a stay counts whole in the week it checks out; M-Standard / Unassigned stays are listed too, marked, and kept out of the first totals.
 function revenueSheets(revenue: RevenueWeek, scopeId: number | null): Sheet[] {
   const hotels = revenue.hotels.filter((h) => !scopeId || h.id === scopeId);
-  const bookings = hotels.flatMap((h) => h.bookings.map((b): Cell[] => [
-    h.name, b.code, b.ref, b.channel, b.roomType, b.room, b.status, dmy(b.checkIn), dmy(b.checkOut), b.nightsInWeek, b.nights,
+  const GROUP = { counted: "Tính doanh thu", apart: "M-Standard / Unassigned" };
+  const rowOf = (h: RevenueWeek["hotels"][number], b: RevenueWeek["hotels"][number]["bookings"][number], group: string): Cell[] => [
+    h.name, group, b.code, b.ref, b.channel, b.roomType, b.room, b.status, dmy(b.checkIn), dmy(b.checkOut), b.nights,
     Math.round(b.roomInWeek), b.servicePrice, b.totalPrice, b.payment, b.balance, b.deposit, b.flags.map((f) => FLAG_LABELS[f]).join(", "),
-  ]));
+  ];
+  const bookings = hotels.flatMap((h) => [...h.bookings.map((b) => rowOf(h, b, GROUP.counted)), ...(h.excluded ?? []).map((b) => rowOf(h, b, GROUP.apart))]);
+  const stays = (list: RevenueWeek["hotels"][number]["bookings"]) => list.filter((b) => b.stay);
+  const total = (list: RevenueWeek["hotels"][number]["bookings"], key: "roomInWeek" | "servicePrice") => Math.round(stays(list).reduce((t, b) => t + b[key], 0));
+  const summary = hotels.map((h): Cell[] => {
+    const room = total(h.bookings, "roomInWeek"), service = total(h.bookings, "servicePrice");
+    const apartRoom = total(h.excluded ?? [], "roomInWeek"), apartService = total(h.excluded ?? [], "servicePrice");
+    return [h.name, new Set(stays(h.bookings).map((b) => b.code)).size, room, service, room + service, apartRoom, apartService, room + apartRoom + service + apartService];
+  });
   const services = hotels.flatMap((h) => h.services.flatMap((d) => d.groups.map((g): Cell[] => [h.name, dmy(d.date), g.name, g.quantity, g.total])));
+  const serviceLines = hotels.flatMap((h) => h.services.flatMap((d) => d.groups.flatMap((g) => g.items.map((i): Cell[] => [h.name, dmy(d.date), g.name, i.name, i.unit, i.quantity, i.total]))));
+  const title = `BÁO CÁO DOANH THU TUẦN ${isoWeek(revenue.monday)} (TRẢ PHÒNG TỪ NGÀY ${vnDay(revenue.monday)}-${vnDay(revenue.end)})`;
   return [
-    { name: "Doanh thu theo đặt phòng", head: ["Khách sạn", "Mã đặt phòng", "Mã kênh", "Nguồn", "Hạng phòng", "Phòng", "Trạng thái", "Nhận phòng", "Trả phòng", "Đêm trong tuần", "Tổng đêm", "Tiền phòng (trong tuần)", "Dịch vụ", "Tổng tiền", "Đã thanh toán", "Còn lại", "Cọc", "Đối soát"], fmt: ["", "", "", "", "", "", "", "", "", INT, INT, INT, INT, INT, INT, INT, INT, ""], rows: bookings },
-    { name: "Dịch vụ theo ngày", head: ["Khách sạn", "Ngày", "Nhóm dịch vụ", "Số lượng", "Doanh thu"], fmt: ["", "", "", "#,##0.##", INT], rows: services },
+    { name: "Tổng hợp doanh thu", title, head: ["Khách sạn", "Số đặt phòng", "Tiền phòng", "Tiền dịch vụ", "Tổng tiền", "Tiền phòng M-Standard / Unassigned", "Dịch vụ M-Standard / Unassigned", "Tổng tiền gồm M-Standard / Unassigned"], fmt: ["", INT, INT, INT, INT, INT, INT, INT], rows: summary },
+    { name: "Doanh thu theo đặt phòng", title, head: ["Khách sạn", "Nhóm", "Mã đặt phòng", "Mã kênh", "Nguồn", "Hạng phòng", "Phòng", "Trạng thái", "Nhận phòng", "Trả phòng", "Số đêm", "Tiền phòng", "Dịch vụ", "Tổng tiền", "Đã thanh toán", "Còn lại", "Cọc", "Đối soát"], fmt: ["", "", "", "", "", "", "", "", "", "", INT, INT, INT, INT, INT, INT, INT, ""], rows: bookings },
+    { name: "Dịch vụ theo ngày", title, head: ["Khách sạn", "Ngày", "Nhóm dịch vụ", "Số lượng", "Doanh thu"], fmt: ["", "", "", "#,##0.##", INT], rows: services },
+    { name: "Chi tiết dịch vụ", title, head: ["Khách sạn", "Ngày", "Nhóm dịch vụ", "Dịch vụ", "ĐVT", "Số lượng", "Thành tiền"], fmt: ["", "", "", "", "", "#,##0.##", INT], rows: serviceLines },
   ];
 }
 
-export function workbookFor(report: WeeklyReport, scopeId: number | null = null, revenue: RevenueWeek | null = null): Buffer {
+// Two separate workbooks: the operations report counts nights in the week, the revenue report counts stays by check-out week, so they never share a file.
+export function workbookFor(report: WeeklyReport, scopeId: number | null = null, revenue: RevenueWeek | null = null, kind: "operations" | "revenue" = "operations"): Buffer {
   const records = report.hotels.filter((h) => !scopeId || h.id === scopeId);
   const wb = XLSX.utils.book_new();
-  for (const s of [...sheets(report, records), ...(revenue ? revenueSheets(revenue, scopeId) : [])]) {
-    const title = `BÁO CÁO VẬN HÀNH TUẦN ${isoWeek(report.monday)} (TỪ NGÀY ${vnDay(report.monday)}-${vnDay(report.end)})${scopeId && !s.all ? ` - ${records[0].name}` : ""}`;
+  for (const s of kind === "revenue" ? (revenue ? revenueSheets(revenue, scopeId) : []) : sheets(report, records)) {
+    const title = s.title ?? `BÁO CÁO VẬN HÀNH TUẦN ${isoWeek(report.monday)} (TỪ NGÀY ${vnDay(report.monday)}-${vnDay(report.end)})${scopeId && !s.all ? ` - ${records[0].name}` : ""}`;
     const ws = XLSX.utils.aoa_to_sheet([[title], s.head, ...s.rows]);
     s.rows.forEach((r, i) => r.forEach((v, j) => {
       const f = s.rowFmt ? (j ? s.rowFmt[i] : "") : s.fmt?.[j];

@@ -15,14 +15,15 @@ export async function GET(request: Request) {
   try { const db = serviceDb(); [report, revenue] = await Promise.all([readReport(db, monday), readRevenue(db, monday)]); } catch (e) {
     return new Response(`Không đọc được dữ liệu đã lưu: ${e instanceof Error ? e.message : e}`, { status: 500 });
   }
-  if (!report) return new Response("Chưa có dữ liệu cho tuần này.", { status: 404 });
+  const kind = q.get("type") === "revenue" ? "revenue" : "operations";
+  if (!report || (kind === "revenue" && !revenue)) return new Response("Chưa có dữ liệu cho tuần này.", { status: 404 });
   const scopeId = BLUEJAY_HOTELS.find((h) => String(h.id) === q.get("hotel"))?.id ?? null;
   // A hotel added after this week was stored is not in its report: nothing to export for it.
   if (scopeId && !report.hotels.some((h) => h.id === scopeId)) return new Response("Báo cáo tuần này chưa có khách sạn này.", { status: 404 });
-  return new Response(new Uint8Array(workbookFor(report, scopeId, revenue)), {
+  return new Response(new Uint8Array(workbookFor(report, scopeId, revenue, kind)), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="bao-cao-tuan-${report.weekNo}-${monday}${scopeId ? `-${scopeId}` : ""}.xlsx"`,
+      "Content-Disposition": `attachment; filename="bao-cao-${kind === "revenue" ? "doanh-thu" : "van-hanh"}-tuan-${report.weekNo}-${monday}${scopeId ? `-${scopeId}` : ""}.xlsx"`,
     },
   });
 }

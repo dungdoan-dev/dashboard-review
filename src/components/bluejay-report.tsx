@@ -155,7 +155,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, -7))}><ChevronLeft size={15} />Tuần trước</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, 7))}>Tuần sau<ChevronRight size={15} /></button>
           <button type="button" disabled={!monday || busy} onClick={() => void refresh()}><RefreshCw size={15} className={status === "refreshing" ? "spin" : undefined} />{status === "refreshing" ? "Đang lấy dữ liệu…" : report ? "Cập nhật từ Blue Jay" : "Lấy dữ liệu từ Blue Jay"}</button>
-          {report && monday && <a className="button button-outline" href={`/api/bluejay/export?week=${monday}${scopeId ? `&hotel=${scopeId}` : ""}`}><ArrowDownToLine size={15} />Xuất Excel</a>}
+          {report && monday && [["operations", "Xuất báo cáo vận hành"], ["revenue", "Xuất báo cáo doanh thu"]].map(([type, label]) => <a key={type} className="button button-outline" href={`/api/bluejay/export?week=${monday}&type=${type}${scopeId ? `&hotel=${scopeId}` : ""}`}><ArrowDownToLine size={15} />{label}</a>)}
         </div>
       </div>
       {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}

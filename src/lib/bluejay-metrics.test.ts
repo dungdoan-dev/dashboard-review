@@ -140,3 +140,22 @@ test("redactReservations drops guest names, notes and ID-paper links from a logg
   assert.equal((page.data.attributes.reservations[0] as Record<string, unknown>).guestName, "A");
   assert.equal(redactReservations(null), null);
 });
+
+test("revenue sheets: checkout-week title, M-Standard rows marked and kept out of the first totals, one line per service", async () => {
+  const { revenueBookings } = await import("./bluejay-revenue.ts");
+  const rows = [
+    { bookingCode: "001", roomType: "Deluxe", roomName: "R1", status: "Đã trả phòng", checkInTime: "2026-10-05", checkOutTime: "2026-10-07", night: 2, roomPrice: 2000000, servicePrice: 100000, totalPrice: 2100000, payment: 2100000, balance: 0 },
+    { bookingCode: "002", roomType: "M-Standard Room", roomName: "Unassigned", status: "Đã trả phòng", checkInTime: "2026-10-06", checkOutTime: "2026-10-07", night: 1, roomPrice: 700000, servicePrice: 0, totalPrice: 700000, payment: 700000, balance: 0 },
+  ];
+  const services = [{ date: "2026-10-06", total: 100000, groups: [{ name: "Minibar", quantity: 1, total: 100000, items: [{ name: "Nước", unit: "Chai", quantity: 1, total: 100000 }] }] }];
+  const revenue = { v: 1, monday: "2026-10-05", end: "2026-10-11", fetchedAt: "x", hotels: [{ id: 1, name: "A", bookings: revenueBookings(rows, "2026-10-05", "2026-10-11"), excluded: revenueBookings(rows, "2026-10-05", "2026-10-11", true), services, basis: "checkout" as const }] };
+  const wb = XLSX.read(workbookFor(weekly, null, revenue, "revenue"), { type: "buffer" });
+  const sum = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Tổng hợp doanh thu"], { header: 1 });
+  assert.match(String(sum[0][0]), /TRẢ PHÒNG/);
+  assert.deepEqual(sum[2], ["A", 1, 2000000, 100000, 2100000, 700000, 0, 2800000]);
+  const list = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Doanh thu theo đặt phòng"], { header: 1 });
+  assert.deepEqual(list.slice(2).map((r) => [r[2], r[1]]), [["001", "Tính doanh thu"], ["002", "M-Standard / Unassigned"]]);
+  assert.deepEqual(wb.SheetNames, ["Tổng hợp doanh thu", "Doanh thu theo đặt phòng", "Dịch vụ theo ngày", "Chi tiết dịch vụ"]); // no operations sheets in the revenue file
+  assert.equal(XLSX.read(workbookFor(weekly, null, revenue), { type: "buffer" }).SheetNames.includes("Tổng hợp doanh thu"), false); // and none of these in the operations file
+  assert.equal(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Chi tiết dịch vụ"], { header: 1 })[2][3], "Nước");
+});

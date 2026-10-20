@@ -165,14 +165,15 @@ export async function readReconcileBookings(db: SupabaseClient, hotelId: number,
   if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
   if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
   const { data, error } = await db.from("bluejay_revenue_weeks").select("week_start,revenue")
-    .gte("week_start", addDays(mondayOf(from), -63)).lte("week_start", mondayOf(to)).order("week_start");
+    .gte("week_start", addDays(mondayOf(from), -63)).lte("week_start", addDays(mondayOf(to), 28)).order("week_start"); // weeks hold a stay by its check-out week, so a stay inside the period can sit up to a month later
   if (error) throw new Error(error.message);
   const have = new Set<string>();
   const weeks: RevenueWeek[] = [];
   for (const row of data ?? []) {
     if (row.revenue?.v !== REVENUE_VERSION) continue;
     have.add(String(row.week_start));
-    weeks.push(row.revenue as RevenueWeek);
+    const week = row.revenue as RevenueWeek;
+    weeks.push({ ...week, hotels: week.hotels.map((h) => ({ ...h, bookings: [...h.bookings, ...(h.excluded ?? [])] })) }); // M-Standard / Unassigned stays are real cash in a ledger
   }
   const missingWeeks: string[] = [];
   for (let monday = mondayOf(from); monday <= to; monday = addDays(monday, 7)) if (!have.has(monday)) missingWeeks.push(monday);
