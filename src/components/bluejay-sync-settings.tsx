@@ -69,7 +69,7 @@ export function BluejaySyncSettings() {
   }
 
   return <details className="automatic-sync-section settings-panel" id="settings-bluejay-sync" aria-labelledby="bluejay-sync-title">
-    <summary className="automatic-sync-heading"><div className="section-kicker"><BedDouble size={14} /> CÀI ĐẶT · VẬN HÀNH</div><h2 id="bluejay-sync-title">Đồng bộ Blue Jay</h2><p>Tự chạy đầu mỗi khung giờ API (00:05, 08:05, 16:05 giờ VN): lấy tuần vừa xong nếu chưa có, sau đó lấy bù các tuần cũ còn thiếu trong khoảng bên dưới. Mỗi tuần được ghi một dòng log.</p></summary>
+    <summary className="automatic-sync-heading"><div className="section-kicker"><BedDouble size={14} /> CÀI ĐẶT · VẬN HÀNH</div><h2 id="bluejay-sync-title">Đồng bộ Blue Jay</h2><p>Tự chạy đầu mỗi khung giờ API (00:05, 08:05, 16:05 giờ VN): lấy tuần vừa xong nếu chưa có, sau đó lấy bù các tuần cũ còn thiếu trong khoảng bên dưới, rồi cập nhật tuần đang diễn ra (khoảng một lần mỗi ngày, thường vào khung giờ 16:00). Mỗi tuần được ghi một dòng log.</p></summary>
     {!data ? <p>{message || "Đang tải cấu hình…"}</p> : <div className="automatic-sync-controls">
       <label className="automatic-sync-toggle"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span>Bật đồng bộ tự động</span></label>
       <div className="automatic-sync-queue"><strong>Lấy bù các tuần cũ</strong><p>Chọn một ngày bất kỳ trong tuần đầu và tuần cuối; hệ thống tính theo tuần (thứ Hai–Chủ nhật). Để trống cả hai nếu không cần lấy bù.</p>

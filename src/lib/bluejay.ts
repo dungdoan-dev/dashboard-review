@@ -312,6 +312,14 @@ export async function syncWeeks(db: SupabaseClient, weeks: string[], trigger: Sy
   return result;
 }
 
+/** The week in progress moves until Sunday: its Monday when the stored copy is missing or older than minAgeMs (the cron passes ~a day), else null. */
+export async function currentWeekDue(db: SupabaseClient, minAgeMs: number) {
+  const monday = mondayOf(todayVN());
+  const { data, error } = await db.from("bluejay_weekly_reports").select("fetched_at").eq("week_start", monday).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !data || Date.parse(data.fetched_at as string) < Date.now() - minAgeMs ? monday : null;
+}
+
 /** Weeks the scheduled sync should pull now: the last full week if missing, then missing backfill weeks, newest first. */
 export async function plannedWeeks(db: SupabaseClient) {
   const { data: settings, error } = await db.from("bluejay_sync_settings").select("enabled, backfill_from, backfill_to").eq("id", 1).maybeSingle();

@@ -1,9 +1,10 @@
-import { plannedWeeks, pruneApiCalls, refreshPayments, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
+import { currentWeekDue, plannedWeeks, pruneApiCalls, refreshPayments, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
 import { inApiWindow } from "@/lib/bluejay-metrics";
 
 export const maxDuration = 300;
 
-// Runs at the start of each API window (00:05, 08:05, 16:05 VN): the last full week if missing, then missing backfill weeks, then the payment refresh.
+// Runs at the start of each API window (00:05, 08:05, 16:05 VN): the last full week if missing, then missing backfill weeks, then the week in progress
+// (once a day: with ~20 h between pulls it lands in the 16:xx window), then the payment refresh.
 // One path per window (/api/cron/bluejay/0, /8, /16) because Vercel Hobby allows each cron job to run only once a day;
 // the slot itself is not used, the API window check below decides.
 // Settings and the run log are in Cài đặt → Đồng bộ Blue Jay.
@@ -18,10 +19,12 @@ export async function GET(request: Request) {
     const weeks = await plannedWeeks(db);
     const deadline = Date.now() + 240_000;
     const synced = await syncWeeks(db, weeks, "cron", deadline);
+    const current = synced.stoppedBy ? null : await currentWeekDue(db, 20 * 3_600_000);
+    const currentWeek = current ? await syncWeeks(db, [current], "cron", deadline) : null;
     // Missing weeks come first; the time left goes to re-pulling payments of weeks that still show an open OTA debt.
-    const payments = synced.stoppedBy ? null : await refreshPayments(db, deadline, { trigger: "cron", minAgeMs: 20 * 3_600_000 }); // once a day per week is enough
+    const payments = synced.stoppedBy || currentWeek?.stoppedBy ? null : await refreshPayments(db, deadline, { trigger: "cron", minAgeMs: 20 * 3_600_000 }); // once a day per week is enough
     const pruned = await pruneApiCalls(db).then(() => "ok", (e) => (e instanceof Error ? e.message : String(e))); // housekeeping must not fail the sync that already succeeded
-    return Response.json({ planned: weeks.length, ...synced, payments, pruned });
+    return Response.json({ planned: weeks.length, ...synced, currentWeek: current ? { monday: current, ...currentWeek } : null, payments, pruned });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
