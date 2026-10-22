@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fmtDate } from "@/lib/format-date";
+import { ReachTable, type Col } from "@/components/reach-table";
 import { FLAG_LABELS, revenueTotals, serviceMatrix, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
@@ -73,30 +74,25 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
 
     <details className="summary-chart wide revenue-fold" open>
       <summary><h4>Theo nguồn</h4></summary>
-      <div className="summary-table summary-table-scroll"><table>
-        <thead><tr><th>Nguồn</th><th>Đặt phòng</th><th>Đêm</th><th>Tiền phòng</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Đã thanh toán</th><th>Còn phải thu</th></tr></thead>
-        <tbody>{totals.channels.map((c) => <tr key={c.name}><th scope="row">{c.name}</th><td>{num(c.bookings)}</td><td>{num(c.nights)}</td><td>{num(c.room)}</td><td>{num(c.service)}</td><td>{num(c.total)}</td><td>{num(c.payment)}</td><td>{num(c.balance)}</td></tr>)}</tbody>
-      </table></div>
+      <ReachTable rows={totals.channels} rowKey={(c) => c.name} columns={channelCols} />
     </details>
 
     <details className="summary-chart wide revenue-fold">
       <summary><h4>Doanh thu dịch vụ theo ngày</h4></summary>
       <p className="summary-note">Theo nhóm dịch vụ của Blue Jay. Blue Jay chỉ cho tổng theo ngày và nhóm, không chia theo từng phòng hay đặt phòng.</p>
-      {services.groups.length === 0 ? <p className="summary-note">Không có doanh thu dịch vụ trong {period} này.</p> : <div className="summary-table summary-table-scroll"><table>
-        <thead><tr><th>Ngày</th>{services.groups.map((g) => <th key={g.name}>{g.name}</th>)}<th>Tổng</th></tr></thead>
-        <tbody>
-          {services.days.map((d) => <tr key={d.date}><th scope="row">{dm(d.date)}</th>{services.groups.map((g) => <td key={g.name}>{d.byGroup[g.name] ? num(d.byGroup[g.name]) : "–"}</td>)}<td><strong>{num(d.total)}</strong></td></tr>)}
-          <tr><th scope="row">Cả {period}</th>{services.groups.map((g) => <td key={g.name}><strong>{num(g.total)}</strong></td>)}<td><strong>{num(services.total)}</strong></td></tr>
-        </tbody>
-      </table></div>}
+      {services.groups.length === 0 ? <p className="summary-note">Không có doanh thu dịch vụ trong {period} này.</p> : <ReachTable rows={services.days} rowKey={(d) => d.date} columns={[{ label: "Ngày", text: (d) => dm(d.date), sort: (d) => d.date }, ...services.groups.map((g): Col<(typeof services.days)[number]> => ({ label: g.name, value: (d) => d.byGroup[g.name] || null, text: (d) => (d.byGroup[g.name] ? num(d.byGroup[g.name]) : "–"), total: true })), { label: "Tổng", value: (d) => d.total, text: (d) => num(d.total), total: true }]} />}
     </details>
 
     <details className="summary-chart wide revenue-fold">
       <summary><h4>Chi tiết từng dịch vụ <small>{Math.min(serviceLines.length, LIMIT)}/{serviceLines.length} dòng</small></h4></summary>
-      {serviceLines.length === 0 ? <p className="summary-note">Không có dịch vụ trong {period} này.</p> : <div className="summary-table summary-table-scroll"><table>
-        <thead><tr><th>Ngày</th><th>Nhóm</th><th>Dịch vụ</th><th>ĐVT</th><th>Số lượng</th><th>Thành tiền</th></tr></thead>
-        <tbody>{serviceLines.slice(0, LIMIT).map((l, i) => <tr key={i}><th scope="row">{dm(l.date)}</th><td>{l.group}</td><td>{l.name}</td><td>{l.unit}</td><td>{num(l.quantity)}</td><td>{num(l.total)}</td></tr>)}</tbody>
-      </table></div>}
+      {serviceLines.length === 0 ? <p className="summary-note">Không có dịch vụ trong {period} này.</p> : <ReachTable rows={serviceLines.slice(0, LIMIT).map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} columns={[
+        { label: "Ngày", text: (l) => dm(l.date), sort: (l) => l.date },
+        { label: "Nhóm", text: (l) => l.group },
+        { label: "Dịch vụ", text: (l) => l.name },
+        { label: "ĐVT", text: (l) => l.unit },
+        { label: "Số lượng", value: (l) => l.quantity, text: (l) => num(l.quantity) },
+        { label: "Thành tiền", value: (l) => l.total, text: (l) => num(l.total), total: serviceLines.length <= LIMIT }, // a total of only the first LIMIT lines would mislead
+      ]} />}
     </details>
 
     <details className="summary-chart wide revenue-fold">
@@ -107,19 +103,41 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
         <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Lọc theo trạng thái"><option value="">Mọi trạng thái</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <label><input type="checkbox" checked={flaggedOnly} onChange={(event) => setFlaggedOnly(event.target.checked)} /> Chỉ dòng cần đối soát</label>
       </div>
-      <div className="summary-table summary-table-scroll"><table>
-        <thead><tr>{showHotel && <th>Khách sạn</th>}<th>Mã ĐP</th><th>Mã kênh</th><th>Nguồn</th><th>Hạng phòng</th><th>Phòng</th><th>Trạng thái</th><th>Nhận – trả</th><th>Đêm ({period}/tổng)</th><th>Tiền phòng ({period})</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Đã thanh toán</th><th>Còn lại</th><th>Cọc</th><th>Đối soát</th></tr></thead>
-        <tbody>{shown.slice(0, LIMIT).map((r, i) => <tr key={`${r.hotel}-${r.code}-${r.room}-${i}`} className={r.stay ? "" : "revenue-cancelled"}>
-          {showHotel && <td>{r.hotel}</td>}
-          <th scope="row">{r.code || "–"}</th><td>{r.ref || "–"}</td><td>{r.channel}</td><td>{r.roomType}</td><td>{r.room}</td><td>{r.status}</td>
-          <td>{dm(r.checkIn)} – {dm(r.checkOut)}</td><td>{r.nightsInWeek}/{r.nights}</td>
-          <td>{r.stay ? num(r.roomInWeek) : "–"}</td><td>{num(r.servicePrice)}</td><td>{num(r.totalPrice)}</td><td>{num(r.payment)}</td><td>{num(r.balance)}</td><td>{num(r.deposit)}</td>
-          <td>{r.flags.length ? r.flags.map((f: RevenueFlag) => <span key={f} className={`revenue-flag ${f}`}>{FLAG_LABELS[f]}</span>) : <span className="muted">–</span>}</td>
-        </tr>)}</tbody>
-      </table></div>
+      <ReachTable rows={shown.slice(0, LIMIT).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} rowClass={(r) => (r.stay ? undefined : "revenue-cancelled")} columns={bookingCols(showHotel, period, shown.length <= LIMIT)} />
       {shown.length > LIMIT && <p className="summary-note">Chỉ hiển thị {LIMIT} dòng đầu trong {shown.length} dòng. Dùng ô tìm kiếm hoặc bộ lọc để thu hẹp.</p>}
     </details>
   </section>;
+}
+
+type ChannelRow = ReturnType<typeof revenueTotals>["channels"][number];
+const channelCols: Col<ChannelRow>[] = [
+  { label: "Nguồn", text: (c) => c.name },
+  ...([["Đặt phòng", "bookings"], ["Đêm", "nights"], ["Tiền phòng", "room"], ["Dịch vụ", "service"], ["Tổng tiền", "total"], ["Đã thanh toán", "payment"], ["Còn phải thu", "balance"]] as const)
+    .map(([label, k]): Col<ChannelRow> => ({ label, value: (c) => c[k], text: (c) => num(c[k]), total: true })),
+];
+
+type BookingRow = Row & { i: number };
+/** allTotals: a total row only when every booking is on screen (the list is cut at LIMIT rows). */
+function bookingCols(showHotel: boolean, period: string, allTotals: boolean): Col<BookingRow>[] {
+  const money = (label: string, get: (r: BookingRow) => number, show: (r: BookingRow) => boolean = () => true): Col<BookingRow> => ({ label, value: (r) => (show(r) ? get(r) : null), text: (r) => (show(r) ? num(get(r)) : "–"), total: allTotals });
+  return [
+    ...(showHotel ? [{ label: "Khách sạn", text: (r: BookingRow) => r.hotel }] : []),
+    { label: "Mã ĐP", text: (r) => r.code || "–" },
+    { label: "Mã kênh", text: (r) => r.ref || "–" },
+    { label: "Nguồn", text: (r) => r.channel },
+    { label: "Hạng phòng", text: (r) => r.roomType },
+    { label: "Phòng", text: (r) => r.room },
+    { label: "Trạng thái", text: (r) => r.status },
+    { label: "Nhận – trả", text: (r) => `${dm(r.checkIn)} – ${dm(r.checkOut)}`, sort: (r) => r.checkIn },
+    { label: `Đêm (${period}/tổng)`, value: (r) => r.nightsInWeek, text: (r) => `${r.nightsInWeek}/${r.nights}` },
+    money(`Tiền phòng (${period})`, (r) => r.roomInWeek, (r) => r.stay),
+    money("Dịch vụ", (r) => r.servicePrice),
+    money("Tổng tiền", (r) => r.totalPrice),
+    money("Đã thanh toán", (r) => r.payment),
+    money("Còn lại", (r) => r.balance),
+    money("Cọc", (r) => r.deposit),
+    { label: "Đối soát", text: (r) => r.flags.map((f: RevenueFlag) => FLAG_LABELS[f]).join(", "), render: (r) => (r.flags.length ? <>{r.flags.map((f: RevenueFlag) => <span key={f} className={`revenue-flag ${f}`}>{FLAG_LABELS[f]}</span>)}</> : <span className="muted">–</span>) },
+  ];
 }
 
 /** Same date in several hotels: add the group totals together. */

@@ -911,10 +911,6 @@ tbody tr:hover { background: #fbfcfe; }
 .summary-table thead th { color: #6d7f9a; font-weight: 600; }
 .summary-table tbody th { font-weight: 600; }
 .summary-table tbody th small { display: block; color: #5f6f86; font-weight: 400; }
-.summary-badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.summary-badge.good { background: #e3f4ec; color: #247b5b; }
-.summary-badge.ok { background: #e6effb; color: #285ca9; }
-.summary-badge.bad { background: #fdecea; color: #c0392b; }
 @media (max-width: 720px) { .summary-grid { grid-template-columns: 1fr; } .summary-hero h1 { font-size: 22px; } }
 @media print {
   .sidebar, .dashboard-topbar, .summary-no-print { display: none !important; }
@@ -1249,3 +1245,27 @@ select { cursor: pointer; }
 .reach-table tfoot th, .reach-table tfoot td { border-top: 2px solid #dfe6f0; border-bottom: 0; background: #f8fafd; color: #172b4d; font-weight: 700; }
 .reach-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; margin: 10px 0 4px; }
 .reach-charts h4 { margin: 0 0 8px; color: #233a5a; font-size: 14px; }
+
+/* Gọn đầu trang: bộ lọc nền tảng và thang điểm trên một hàng; KPI 6 ô chia 3 cột đều. */
+.source-filters { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.source-filters .analytics-source-filter { margin: 0; }
+.source-filters .analytics-source-filter:first-child { flex: 1 1 520px; }
+.summary-kpis:has(> :nth-child(6):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .summary-kpis:has(> :nth-child(6):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.summary-report .summary-table th, .summary-report .summary-table td { padding-inline: 6px; font-size: 13px; }
+
+/* Bảng ReachTable dùng cho các trang Review */
+.reach-table.compact tbody th[scope="row"] { min-width: 0; white-space: nowrap; }
+.reach-table tbody tr.selected th, .reach-table tbody tr.selected td { background-color: #f2f6ff; }
+.reach-table td small { display: block; color: #5f6f86; font-size: 11px; white-space: nowrap; }
+.reach-table td.num .cell { display: grid; gap: 2px; justify-items: end; }
+.reach-table .scoreboard-link { display: block; padding: 0; border: 0; background: none; color: #233a5a; font: 700 13px 'Inter', sans-serif; text-align: left; }
+.reach-table .scoreboard-link:hover { color: #285ca9; text-decoration: underline; }
+.reach-table.compact thead th button { padding-inline: 8px; }
+.reach-table.compact tbody th, .reach-table.compact td, .reach-table.compact tfoot th { padding-inline: 8px; }
+.reach-table.compact thead th button { padding-inline: 6px; gap: 3px; font-size: 12px; }
+.reach-table.compact tbody th, .reach-table.compact td, .reach-table.compact tfoot th { padding-inline: 6px; }
+.reach-table.compact thead th .idle { display: none; }
+/* Finance report (bluejay-finance): section and total rows of the weekly table */
+.reach-table tr.report-total th, .reach-table tr.report-total td { font-weight: 700; background: #eef3fb; }
+.reach-table tr.report-section th { font-weight: 700; color: #344862; background: #f4f7fb; }

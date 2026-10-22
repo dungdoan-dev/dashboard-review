@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { AlertTriangle, CheckCircle2, FileBarChart, Printer } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AreaTrend, Donut, PALETTE, TrackBars, num } from "@/components/dashboard-charts";
+import { ReachTable } from "@/components/reach-table";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
-import { SUMMARY_SCALE, buildTrend, summarizeLocation, summarizeType, type Snapshot } from "@/lib/summary";
+import { SUMMARY_SCALE, buildTrend, summarizeLocation, summarizeType, type LocationSummary, type Snapshot } from "@/lib/summary";
 import type { LocationRecord, Platform } from "@/lib/types";
 
 export type SummarySection = { type: string; label: string; color: string; platforms: Platform[]; locations: LocationRecord[] };
@@ -16,12 +17,9 @@ export type SummarySection = { type: string; label: string; color: string; platf
 const DAY = 86_400_000;
 const GOOD = 9; // từ 9/10 trở lên: xuất sắc
 const WATCH = 8; // dưới 8/10: cần chú ý
-const AXIS = { fill: "#586b84", fontSize: 12 };
-const TOOLTIP = { contentStyle: { border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 13 }, labelStyle: { color: "#344862", fontWeight: 700 } };
 
 const vnToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 const daysBefore = (date: string, days: number) => new Date(new Date(`${date}T00:00:00Z`).getTime() - days * DAY).toISOString().slice(0, 10);
-const num = (value: number, digits = 1) => value.toLocaleString("vi-VN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toLocaleString("vi-VN")}`;
 const level = (score: number) => (score >= GOOD ? { text: "Xuất sắc", cls: "good" } : score >= WATCH ? { text: "Tốt", cls: "ok" } : { text: "Cần chú ý", cls: "bad" });
 
@@ -91,6 +89,10 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
     return { section, rows, summary: summarizeType(rows, section.platforms), trend };
   }), [sections, snapshots]);
 
+  const systemTrend = useMemo(() => {
+    const platformsOf = new Map(sections.flatMap((section) => section.locations.map((location) => [location.id, section.platforms] as const)));
+    return buildTrend(snapshots.filter((item) => platformsOf.get(item.locationId)?.includes(item.platform)));
+  }, [sections, snapshots]);
   const all = data.flatMap((item) => item.rows);
   const allScored = all.filter((row) => row.score != null);
   const overallScore = allScored.length ? allScored.reduce((sum, row) => sum + row.score!, 0) / allScored.length : null;
@@ -128,40 +130,19 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
         <Kpi label="Đánh giá mới trong kỳ" value={hasHistory ? signed(overallGained) : "—"} hint={`Trong ${days} ngày qua`} />
       </div>
       <div className="summary-grid">
-        <ChartCard title="Điểm trung bình theo loại hình" unit={`Thang ${SUMMARY_SCALE}`}>
-          <ResponsiveContainer width={chartWidth} height={Math.max(160, byType.length * 56 + 30)}>
-            <BarChart layout="vertical" data={byType.map((item) => ({ name: item.section.label, score: item.summary.avgScore, color: item.section.color }))} margin={{ left: 8, right: 44 }}>
-              <CartesianGrid horizontal={false} stroke="#e8edf4" />
-              <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
-              <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE}` : "—", "Điểm trung bình"]} />
-              <Bar isAnimationActive={!printing} dataKey="score" radius={[0, 4, 4, 0]} barSize={26}>
-                {byType.map((item) => <Cell key={item.section.type} fill={item.section.color} />)}
-                <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={13} fontWeight={700} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`} wide>
+          <AreaTrend points={systemTrend.points.map((p) => ({ date: p.date, value: p.gained }))} color="#16a34a" width={chartWidth} animate={!printing} id="grad-system" label="Đánh giá mới" format={signed} />
         </ChartCard>
-        <ChartCard title="Đánh giá mới theo loại hình" unit={`${days} ngày qua`}>
-          <ResponsiveContainer width={chartWidth} height={Math.max(160, byType.length * 56 + 30)}>
-            <BarChart layout="vertical" data={byType.map((item) => ({ name: item.section.label, gained: item.trend.gained, color: item.section.color }))} margin={{ left: 8, right: 44 }}>
-              <CartesianGrid horizontal={false} stroke="#e8edf4" />
-              <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
-              <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? signed(value) : "—", "Đánh giá mới"]} />
-              <Bar isAnimationActive={!printing} dataKey="gained" radius={[0, 4, 4, 0]} barSize={26}>
-                {byType.map((item) => <Cell key={item.section.type} fill={item.section.color} />)}
-                <LabelList dataKey="gained" position="right" formatter={(value) => (typeof value === "number" ? signed(value) : "")} fill="#233a5a" fontSize={13} fontWeight={700} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartCard title="Tỷ trọng đánh giá theo loại hình" unit="Tổng số đánh giá">
+          <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={byType.map((item) => ({ name: item.section.label, value: item.summary.totalReviews, color: item.section.color }))} />
+        </ChartCard>
+        <ChartCard title="Điểm trung bình theo loại hình" unit={`Thang ${SUMMARY_SCALE}`}>
+          <TrackBars max={SUMMARY_SCALE} width={chartWidth} animate={!printing} rows={byType.flatMap((item) => item.summary.avgScore == null ? [] : [{ name: item.section.label, value: item.summary.avgScore, color: item.section.color }])} />
         </ChartCard>
       </div>
       <div className="summary-insights">
         <h3>Điểm nổi bật</h3>
         <ul>
-          {overallScore != null && <li><CheckCircle2 size={15} className="ok" /> Điểm trung bình toàn hệ thống là <strong>{num(overallScore)}/{SUMMARY_SCALE}</strong> ({level(overallScore).text.toLowerCase()}).</li>}
-          {hasHistory && <li><CheckCircle2 size={15} className="ok" /> Trong {days} ngày qua, hệ thống nhận thêm <strong>{signed(overallGained)}</strong> đánh giá.</li>}
           {watchList.length > 0
             ? <li><AlertTriangle size={15} className="bad" /> <strong>{watchList.length} cơ sở</strong> dưới {WATCH}/{SUMMARY_SCALE} cần chú ý: {watchList.slice(0, 5).map((row) => `${row.name} (${num(row.score!)})`).join(", ")}{watchList.length > 5 ? "…" : ""}.</li>
             : allScored.length > 0 && <li><CheckCircle2 size={15} className="ok" /> Không có cơ sở nào dưới {WATCH}/{SUMMARY_SCALE}.</li>}
@@ -196,69 +177,25 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
             </ul>
           </div>
           <div className="summary-grid">
-            <ChartCard title="Điểm theo cơ sở" unit={`Thang ${SUMMARY_SCALE} · nét đứt: trung bình`} wide>
-              {bars.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width={chartWidth} height={Math.max(180, bars.length * 38 + 40)}>
-                <BarChart layout="vertical" data={bars} margin={{ left: 8, right: 44 }}>
-                  <CartesianGrid horizontal={false} stroke="#e8edf4" />
-                  <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="name" width={210} tick={AXIS} tickLine={false} axisLine={false} />
-                  <Tooltip {...TOOLTIP} formatter={(value) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE}` : "—", "Điểm"]} />
-                  {summary.avgScore != null && <ReferenceLine x={summary.avgScore} stroke="#586b84" strokeDasharray="5 4" />}
-                  <Bar isAnimationActive={!printing} dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
-                    <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={12} fontWeight={700} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>}
+            <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`} wide>
+              <AreaTrend points={trend.points.map((p) => ({ date: p.date, value: p.gained }))} color={section.color} width={chartWidth} animate={!printing} id={`grad-${section.type}`} label="Đánh giá mới" format={signed} />
             </ChartCard>
-            <ChartCard title="Điểm theo nền tảng" unit={`Thang ${SUMMARY_SCALE}`}>
-              {summary.platformAvg.length === 0 ? <p className="summary-note">Chưa có điểm để vẽ.</p> : <ResponsiveContainer width={chartWidth} height={Math.max(180, summary.platformAvg.length * 38 + 40)}>
-                <BarChart layout="vertical" data={summary.platformAvg.map((item) => ({ name: PLATFORM_LABELS[item.platform], score: item.score, locations: item.locations }))} margin={{ left: 8, right: 44 }}>
-                  <CartesianGrid horizontal={false} stroke="#e8edf4" />
-                  <XAxis type="number" domain={[0, SUMMARY_SCALE]} tick={AXIS} tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="name" width={96} tick={AXIS} tickLine={false} axisLine={false} />
-                  <Tooltip {...TOOLTIP} formatter={(value, _name, item) => [typeof value === "number" ? `${num(value)} / ${SUMMARY_SCALE} (${item.payload.locations} cơ sở)` : "—", "Điểm"]} />
-                  <Bar isAnimationActive={!printing} dataKey="score" fill={section.color} radius={[0, 4, 4, 0]} barSize={20}>
-                    <LabelList dataKey="score" position="right" formatter={(value) => (typeof value === "number" ? num(value) : "")} fill="#233a5a" fontSize={12} fontWeight={700} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>}
+            <ChartCard title="Tỷ trọng đánh giá theo nền tảng" unit="Tổng số đánh giá">
+              <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={section.platforms.map((platform, i) => ({ name: PLATFORM_LABELS[platform], value: section.locations.reduce((sum, location) => sum + (location[platform]?.reviewCount ?? 0), 0), color: PALETTE[i % PALETTE.length] })).filter((slice) => slice.value > 0)} />
             </ChartCard>
-            <ChartCard title="Diễn biến điểm" unit={`${days} ngày qua`}>
-              {trend.points.filter((point) => point.score != null).length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width={chartWidth} height={240}>
-                <LineChart data={trend.points} margin={{ left: 0, right: 16, top: 8 }}>
-                  <CartesianGrid vertical={false} stroke="#e8edf4" />
-                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
-                  <YAxis domain={[(min: number) => Math.max(0, Math.floor(min * 10 - 3) / 10), (max: number) => Math.min(SUMMARY_SCALE, Math.ceil(max * 10 + 3) / 10)]} tickFormatter={(value: number) => num(value)} tick={AXIS} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip {...TOOLTIP} labelFormatter={(value) => fmtDate(String(value))} formatter={(value) => [typeof value === "number" ? `${num(value, 2)} / ${SUMMARY_SCALE}` : "—", "Điểm trung bình"]} />
-                  <Line isAnimationActive={!printing} type="monotone" dataKey="score" stroke={section.color} strokeWidth={2.5} dot={{ r: 3, fill: section.color, stroke: "#fff", strokeWidth: 2 }} connectNulls />
-                </LineChart>
-              </ResponsiveContainer>}
-            </ChartCard>
-            <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`}>
-              {trend.points.length < 2 ? <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p> : <ResponsiveContainer width={chartWidth} height={240}>
-                <AreaChart data={trend.points} margin={{ left: 0, right: 16, top: 8 }}>
-                  <CartesianGrid vertical={false} stroke="#e8edf4" />
-                  <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} minTickGap={24} />
-                  <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip {...TOOLTIP} labelFormatter={(value) => fmtDate(String(value))} formatter={(value) => [typeof value === "number" ? signed(value) : "—", "Đánh giá mới"]} />
-                  <Area isAnimationActive={!printing} type="monotone" dataKey="gained" stroke={section.color} strokeWidth={2.5} fill={section.color} fillOpacity={0.18} />
-                </AreaChart>
-              </ResponsiveContainer>}
+            <ChartCard title="Điểm theo cơ sở" unit={`Thang ${SUMMARY_SCALE}`}>
+              <TrackBars max={SUMMARY_SCALE} width={chartWidth} animate={!printing} rows={bars.map((bar) => ({ name: bar.name, value: bar.score!, color: section.color }))} />
             </ChartCard>
           </div>
           <details className="summary-table" open>
             <summary>Bảng số liệu chi tiết · {section.label}</summary>
-            <div className="summary-table-scroll"><table>
-              <thead><tr><th>Cơ sở</th><th>Điểm /{SUMMARY_SCALE}</th><th>Mức</th>{section.platforms.map((platform) => <th key={platform}>{PLATFORM_LABELS[platform]}</th>)}<th>Tổng đánh giá</th><th>Mới trong kỳ</th></tr></thead>
-              <tbody>{sorted.map((row) => <tr key={row.id}>
-                <th scope="row">{row.name}<small>{row.area}</small></th>
-                <td>{row.score == null ? "—" : <strong>{num(row.score)}</strong>}</td>
-                <td>{row.score == null ? "—" : <span className={`summary-badge ${level(row.score).cls}`}>{level(row.score).text}</span>}</td>
-                {section.platforms.map((platform) => <td key={platform}>{row.platformScores[platform] == null ? "—" : num(row.platformScores[platform]!)}</td>)}
-                <td>{row.reviews == null ? "—" : row.reviews.toLocaleString("vi-VN")}</td>
-                <td>{hasHistory && row.id in trend.byLocation ? signed(trend.byLocation[row.id]) : "—"}</td>
-              </tr>)}</tbody>
-            </table></div>
+            <ReachTable compact rows={sorted} rowKey={(row) => row.id} columns={[
+              { label: "Cơ sở", text: (row) => row.name, render: (row) => <>{row.name}<small>{row.area}</small></> },
+              { label: `Điểm /${SUMMARY_SCALE}`, text: (row) => (row.score == null ? "—" : num(row.score)), value: (row) => row.score },
+              ...section.platforms.map((platform) => ({ label: PLATFORM_LABELS[platform], text: (row: LocationSummary) => (row.platformScores[platform] == null ? "—" : num(row.platformScores[platform]!)), value: (row: LocationSummary) => row.platformScores[platform] ?? null })),
+              { label: "Tổng đánh giá", text: (row) => (row.reviews == null ? "—" : row.reviews.toLocaleString("vi-VN")), value: (row) => row.reviews, total: true },
+              { label: "Mới trong kỳ", text: (row) => (hasHistory && row.id in trend.byLocation ? signed(trend.byLocation[row.id]) : "—"), value: (row) => (hasHistory && row.id in trend.byLocation ? trend.byLocation[row.id] : null), total: true },
+            ]} />
           </details>
         </>}
       </section>;

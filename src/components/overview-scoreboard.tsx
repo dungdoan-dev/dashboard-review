@@ -5,11 +5,10 @@ import { AlertTriangle, Gauge, MessageSquareQuote, Star, TrendingDown } from "lu
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, parseDmy } from "@/lib/format-date";
 import { DatePicker } from "@/components/date-picker";
+import { ReachTable, type Col } from "@/components/reach-table";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import { computeScoreRow, normalize, type Baseline, type ScoreRow } from "@/lib/scoreboard";
 import type { LocationRecord, Platform } from "@/lib/types";
-
-type Sort = "attention" | "best" | "reviews" | "name";
 
 const DAY = 86_400_000;
 const EPSILON = 0.05;
@@ -32,7 +31,6 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
   locations: LocationRecord[]; platforms: Platform[]; scale: 5 | 10; userId: string | null;
   selectedId: string | null; typeLabel: string; onSelect: (id: string) => void;
 }) {
-  const [sort, setSort] = useState<Sort>("attention");
   const [baseline, setBaseline] = useState<Baseline>({});
   const [dateInput, setDateInput] = useState("");
   const [compareDate, setCompareDate] = useState(""); // rỗng = lần chốt gần nhất trước hôm nay
@@ -66,13 +64,27 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
 
   const rows = useMemo<ScoreRow[]>(() => locations.map((location) => computeScoreRow(location, platforms, scale, baseline)), [locations, platforms, scale, baseline]);
 
-  const sorted = useMemo(() => [...rows].sort((a, b) => {
-    if (sort === "name") return a.location.name.localeCompare(b.location.name, "vi");
-    if (sort === "reviews") return (b.total ?? -1) - (a.total ?? -1);
-    // Cơ sở không có điểm xếp cuối ở mọi kiểu sắp theo điểm.
-    if (a.avg == null || b.avg == null) return (a.avg == null ? 1 : 0) - (b.avg == null ? 1 : 0);
-    return sort === "best" ? b.avg - a.avg : a.avg - b.avg;
-  }), [rows, sort]);
+  // Mặc định điểm thấp nhất trước (cơ sở không có điểm xếp cuối); bấm tiêu đề cột để đổi.
+  const sorted = useMemo(() => [...rows].sort((a, b) => (a.avg == null || b.avg == null ? (a.avg == null ? 1 : 0) - (b.avg == null ? 1 : 0) : a.avg - b.avg)), [rows]);
+  const columns: Col<ScoreRow>[] = [
+    { label: "Cơ sở", text: (row) => row.location.name, render: (row) => <><button type="button" className="scoreboard-link" onClick={() => onSelect(row.location.id)} title="Xem chi tiết cơ sở này">{row.location.name}</button><small>{row.location.area}</small></> },
+    { label: "Điểm TB", text: (row) => (row.avg == null ? "—" : num(row.avg)), value: (row) => row.avg, render: (row) => (row.avg == null ? <span className="muted">—</span> : <span className={`score ${tone(row.avg, scale)}`}>{num(row.avg)}</span>) },
+    ...platforms.map((platform): Col<ScoreRow> => ({
+      label: PLATFORM_LABELS[platform],
+      text: (row) => { const score = row.cells[platform]?.score; return score == null ? "—" : num(score); },
+      value: (row) => row.cells[platform]?.score ?? null,
+      render: (row) => {
+        const cell = row.cells[platform];
+        if (cell?.score == null && cell?.count == null) return <span className="muted">—</span>;
+        return <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <small>{cell.count.toLocaleString("vi-VN")} lượt</small>}
+          {cell?.dScore != null && Math.abs(cell.dScore) > EPSILON && <small className={`delta ${trend(cell.dScore, EPSILON)}`}><Star size={11} fill="currentColor" aria-hidden="true" />{signed(cell.dScore)} điểm</small>}
+          {cell?.dCount != null && cell.dCount !== 0 && <small className={`delta ${trend(cell.dCount, 0)}`}><MessageSquareQuote size={11} aria-hidden="true" />{signed(cell.dCount, 0)} đánh giá</small>}
+        </div>;
+      },
+    })),
+    { label: "Tổng đánh giá", text: (row) => (row.total == null ? "—" : row.total.toLocaleString("vi-VN")), value: (row) => row.total, total: true },
+    { label: "Cập nhật", text: (row) => ageText(row.latest).text, sort: (row) => row.latest ?? "", render: (row) => { const age = ageText(row.latest); return <span className={`age ${age.stale ? "stale" : ""}`}>{age.text}</span>; } },
+  ];
 
   const baselineDates = [...new Set(Object.values(baseline).map((item) => item.date).filter((date): date is string => !!date))].sort();
   const baselineText = baselineDates.length === 0 ? "chưa có mốc" : baselineDates.length === 1 ? fmtDate(baselineDates[0]) : `${fmtDate(baselineDates[0])} – ${fmtDate(baselineDates[baselineDates.length - 1])}`;
@@ -90,13 +102,10 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
     <header className="scoreboard-head">
       <div><div className="section-kicker"><Gauge size={14} /> BẢNG ĐIỂM · {typeLabel.toUpperCase()}</div>
         <h2 id="scoreboard-title">Tất cả cơ sở {typeLabel} ({rows.length})</h2>
-        <p>Số liệu mới nhất vừa lấy (chưa chốt sổ), điểm quy đổi về thang {scale}. Thay đổi nằm ngay dưới từng nền tảng, so với {compareDate ? `số chốt tới ngày ${fmtDate(compareDate)}` : "lần chốt gần nhất trước hôm nay"}.</p></div>
+        <p>Điểm thang {scale}, số liệu chưa chốt. Thay đổi so với {compareDate ? `số chốt tới ${fmtDate(compareDate)}` : "lần chốt gần nhất"}.</p></div>
       <div className="scoreboard-dates"><span>Ngày mốc: <strong>{baselineText}</strong></span><span>Ngày so sánh: <strong>{currentText}</strong></span></div>
       <label className="scoreboard-sort"><span>So sánh với ngày</span><DatePicker label="Ngày so sánh" text={dateInput} onText={(text) => { setDateInput(text); const iso = parseDmy(text); setCompareDate(iso && iso < vnToday() ? iso : ""); }} max={daysBefore(vnToday(), 1)} />
         {compareDate && <button type="button" onClick={() => { setCompareDate(""); setDateInput(""); }}>Gần nhất</button>}</label>
-      <label className="scoreboard-sort"><span>Sắp xếp</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Sắp xếp bảng điểm">
-        <option value="attention">Điểm thấp nhất trước</option><option value="best">Điểm cao nhất trước</option>
-        <option value="reviews">Nhiều đánh giá nhất</option><option value="name">Tên A–Z</option></select></label>
     </header>
     {rows.length === 0 ? <p className="scoreboard-empty">Chưa có cơ sở loại {typeLabel}. Thêm cơ sở trong Cài đặt.</p> : <>
       <div className="scoreboard-highlights">
@@ -104,21 +113,7 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
         <div className="highlight">{biggestDrop ? <><span className="tone bad"><TrendingDown size={15} /></span><div><small>Giảm mạnh nhất</small><strong>{biggestDrop.row.location.name}</strong><em>{PLATFORM_LABELS[biggestDrop.platform]}: {signed(biggestDrop.d)} điểm</em></div></> : <div><small>Giảm mạnh nhất</small><strong>Không có cơ sở giảm điểm</strong></div>}</div>
         <div className="highlight"><span className={`tone ${noData + stale ? "warn" : "good"}`}><AlertTriangle size={15} /></span><div><small>Cần cập nhật</small><strong>{noData + stale === 0 ? "Tất cả đều mới" : `${noData} thiếu dữ liệu · ${stale} chưa cập nhật ≥2 ngày`}</strong></div></div>
       </div>
-      <div className="scoreboard-scroll"><table>
-        <thead><tr><th>Cơ sở</th><th>Điểm TB</th>{platforms.map((platform) => <th key={platform}>{PLATFORM_LABELS[platform]}</th>)}<th>Tổng đánh giá</th><th>Cập nhật</th></tr></thead>
-        <tbody>{sorted.map((row) => {
-          const age = ageText(row.latest);
-          return <tr key={row.location.id} className={row.location.id === selectedId ? "selected" : ""}>
-            <th scope="row"><button type="button" onClick={() => onSelect(row.location.id)} title="Xem chi tiết cơ sở này">{row.location.name}</button><small>{row.location.area}</small></th>
-            <td>{row.avg == null ? <span className="muted">—</span> : <span className={`score ${tone(row.avg, scale)}`}>{num(row.avg)}</span>}</td>
-            {platforms.map((platform) => { const cell = row.cells[platform]; return <td key={platform}>{cell?.score == null && cell?.count == null ? <span className="muted">—</span> : <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <small>{cell.count.toLocaleString("vi-VN")} đánh giá</small>}
-              {cell?.dScore != null && <small className={`delta ${trend(cell.dScore, EPSILON)}`}><Star size={11} fill="currentColor" aria-hidden="true" />{Math.abs(cell.dScore) <= EPSILON ? "Không đổi" : `${signed(cell.dScore)} điểm`}</small>}
-              {cell?.dCount != null && <small className={`delta ${trend(cell.dCount, 0)}`}><MessageSquareQuote size={11} aria-hidden="true" />{cell.dCount === 0 ? "Không đổi" : `${signed(cell.dCount, 0)} đánh giá`}</small>}
-              </div>}</td>; })}
-            <td>{row.total == null ? <span className="muted">—</span> : <strong>{row.total.toLocaleString("vi-VN")}</strong>}</td>
-            <td><span className={`age ${age.stale ? "stale" : ""}`}>{age.text}</span></td>
-          </tr>; })}</tbody>
-      </table></div>
+      <ReachTable compact rows={sorted} columns={columns} rowKey={(row) => row.location.id} rowClass={(row) => (row.location.id === selectedId ? "selected" : undefined)} />
     </>}
   </section>;
 }

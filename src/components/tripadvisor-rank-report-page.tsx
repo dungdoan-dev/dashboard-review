@@ -4,6 +4,7 @@ import { LoaderCircle, Medal } from "lucide-react";
 import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmtDate } from "@/lib/format-date";
+import { ReachTable } from "@/components/reach-table";
 
 export type TripadvisorRankReportRow = {
   date: string;
@@ -73,9 +74,12 @@ export default function TripadvisorRankReportPage({ locationName, rows, loading,
             </article>}
             <article className="report-card rank-history-card">
               <header><div><h3>Lịch sử xếp hạng đã chốt</h3><p>Giữ nguyên tên danh mục Tripadvisor trả về để đối chiếu theo ngày.</p></div><span className="report-scale-badge">{locationName}</span></header>
-              <div className="rank-history-scroll"><table className="rank-history-table"><thead><tr><th>NGÀY</th><th>XẾP HẠNG</th><th>ĐIỂM TRIPADVISOR</th><th>LƯỢT ĐÁNH GIÁ</th></tr></thead><tbody>
-                {[...rows].reverse().map((row) => <tr key={row.date}><th scope="row">{fmtDate(row.date)}</th><td><strong>{row.rankLabel || "—"}</strong></td><td>{row.rating == null ? "—" : `${row.rating.toFixed(1).replace(".", ",")} / ${row.ratingScale}`}</td><td>{row.reviewCount == null ? "—" : countText(row.reviewCount)}</td></tr>)}
-              </tbody></table></div>
+              <ReachTable compact rows={[...rows].reverse()} rowKey={(row) => row.date} columns={[
+                { label: "Ngày", text: (row) => fmtDate(row.date), sort: (row) => row.date },
+                { label: "Xếp hạng", text: (row) => row.rankLabel || "—", sort: (row) => String(row.position ?? 999999).padStart(6, "0"), render: (row) => <strong>{row.rankLabel || "—"}</strong> },
+                { label: "Điểm Tripadvisor", text: (row) => (row.rating == null ? "—" : `${row.rating.toFixed(1).replace(".", ",")} / ${row.ratingScale}`), value: (row) => row.rating },
+                { label: "Lượt đánh giá", text: (row) => (row.reviewCount == null ? "—" : countText(row.reviewCount)), value: (row) => row.reviewCount },
+              ]} />
             </article>
           </>}
   </section>;

@@ -1,4 +1,4 @@
-// Text and layout of the "Hướng dẫn" sheet of the ledger template (bluejay-ledger-template.ts): how to use, what to type in every cell and column,
+// Text and layout of the "Hướng dẫn thu" sheet of the ledger template (bluejay-ledger-template.ts): how to use, what to type in every cell and column,
 // how the reconcile page reads it, how to read the result. Kept next to the parser's rules (bluejay-reconcile.ts): change both together.
 import type ExcelJS from "exceljs";
 

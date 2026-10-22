@@ -10,8 +10,12 @@ const OTA = new Set(OTA_CHANNELS);
 const PRIOR = /tháng\s*\d{1,2}|kỳ trước/i; // "Agoda tt tháng 6": settlement of an earlier stay
 
 export type LedgerLine = { row: number; date: string; id: string; platform: string; service: string; note: string; stayMonth: string; isRoom: boolean; settlement: boolean; advance: number; collected: number; counted: number }; // stayMonth: yyyy-mm of the stay a room payment is for, or ""
+export type Funds = { cash: number; bank: number; card: number };
+/** Every dated row, with or without a booking id, money split by fund: what the finance summary adds up. taken = deposits of guests already staying + cash, account, card; deposit = the deposit part of taken ("Cọc ... đã ở", received earlier); advance = "Cọc ... chưa ở". */
+export type LedgerEntry = { row: number; date: string; id: string; platform: string; service: string; note: string; taken: Funds; deposit: Funds; advance: Funds; pos: number; commission: number; otherDeduction: number };
 export type Ledger = {
   lines: LedgerLine[];
+  entries: LedgerEntry[];
   noId: { rows: number; collected: number; deductions: number }; // card totals, commissions, interest: summary lines without a booking id
   countedByDay: Record<string, number>;                           // "Tiền so Bluejay" per day, every dated row (with or without id)
   daily: { date: string; value: number }[] | null;               // the sheet's own "doanh thu theo ngày" block, when present
@@ -69,10 +73,13 @@ export function parseLedger(rows: unknown[][]): Ledger {
   const takingStart = cols(/^thu tien khach san$/);
   if (takingStart < 0) throw new Error("Bảng kê thiếu cột: THU TIỀN KHÁCH SẠN.");
   const words = (c: number) => [head, head + 1, head + 2].flatMap((i) => norm(rows[i]?.[c]).split(" "));
+  const fundOf = (c: number): keyof Funds => { const t = [head, head + 1, head + 2].map((i) => norm(rows[i]?.[c])).join(" "); return /(^| )the( |$)/.test(t) ? "card" : /(^| )tk( |$)/.test(t) ? "bank" : "cash"; };
+  const posCols: number[] = [];
   const takingCols: number[] = [], advanceCols: number[] = []; // advance: "Cọc ... chưa ở", the deposit of a guest who has not stayed yet (not counted, but a line with only that is a deposit for a later period)
   for (let c = col.deposit; c < moneyEnd; c++) {
     if (c < takingStart || !words(c).some((w) => w === "coc" || w === "pos")) takingCols.push(c);
     else if (words(c).includes("coc")) advanceCols.push(c);
+    else posCols.push(c);
   }
   const deductEnd = col.counted > col.deduct ? col.counted : col.deduct + 2; // hoa hồng nền tảng + các khoản giảm trừ khác
 
@@ -91,6 +98,7 @@ export function parseLedger(rows: unknown[][]): Ledger {
   const month = monthOf(meta(/^ky bao cao(?: \(thang\/nam\))?\s*:?\s*(.*)$/));
 
   const lines: LedgerLine[] = [];
+  const entries: LedgerEntry[] = [];
   const noId = { rows: 0, collected: 0, deductions: 0 };
   const warnings: string[] = [];
   const countedByDay: Record<string, number> = {};
@@ -108,6 +116,9 @@ export function parseLedger(rows: unknown[][]): Ledger {
     const counted = col.counted >= 0 ? num(r[col.counted]) : 0;
     countedByDay[date] = (countedByDay[date] ?? 0) + counted;
     const id = cleanId(r[col.id]);
+    const funds = (cs: number[]): Funds => { const f = { cash: 0, bank: 0, card: 0 }; for (const c of cs) f[fundOf(c)] += num(r[c]); return f; };
+    const commission = num(r[col.deduct]);
+    entries.push({ row: i + 1, date, id, platform: String(r[col.platform] ?? "").trim(), service: String(r[col.service] ?? "").trim(), note: col.note >= 0 ? String(r[col.note] ?? "").trim() : "", taken: funds(takingCols), deposit: funds(takingCols.filter((c) => c < takingStart)), advance: funds(advanceCols), pos: posCols.reduce((x, c) => x + num(r[c]), 0), commission, otherDeduction: deductions - commission });
     if (!id) { noId.rows++; noId.collected += collected; noId.deductions += deductions; continue; }
     const service = String(r[col.service] ?? "").trim(); // "Tiền phòng" and "Cọc phòng" (room deposit) are room money, the rest is service
     lines.push({
@@ -129,7 +140,7 @@ export function parseLedger(rows: unknown[][]): Ledger {
       if (date && typeof rows[i][valueCol] === "number") daily.push({ date, value: rows[i][valueCol] as number });
     }
   }
-  return { lines, noId, countedByDay, daily, hotel, month, hasCounted: col.counted >= 0, from, to, warnings };
+  return { lines, entries, noId, countedByDay, daily, hotel, month, hasCounted: col.counted >= 0, from, to, warnings };
 }
 
 /** Cheap checks of the file against what the user selected: wrong hotel, dates outside the stated month. */

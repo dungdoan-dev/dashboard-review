@@ -4,6 +4,7 @@
 import ExcelJS from "exceljs";
 import { BLUEJAY_HOTELS } from "./bluejay-metrics.ts";
 import { buildGuideSheet } from "./bluejay-ledger-guide.ts";
+import { addIncomePanel } from "./fund-panel.ts";
 
 export const TEMPLATE_SHEET = "BK THU TIỀN KS";
 const ROWS = 500; // data rows prepared with borders, formats and the "Tổng tiền" formula
@@ -43,12 +44,11 @@ const thin = { style: "thin" as const, color: { argb: "FFB8C2D0" } };
 const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
 const fill = (hex: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: `FF${hex}` } });
 
-export function buildLedgerTemplate(): ExcelJS.Workbook {
-  const book = new ExcelJS.Workbook();
+export function buildLedgerTemplate(book = new ExcelJS.Workbook()): ExcelJS.Workbook { // book: add the tabs to a workbook that already has others
   book.calcProperties.fullCalcOnLoad = true; // the "Tổng tiền" formulas carry no cached value
   const sheet = book.addWorksheet(TEMPLATE_SHEET, { views: [{ state: "frozen", xSplit: 2, ySplit: 3 }] });
-  const guide = book.addWorksheet("Hướng dẫn");
-  const list = book.addWorksheet("Danh mục");
+  const guide = book.addWorksheet("Hướng dẫn thu");
+  const list = book.addWorksheet("Danh mục thu");
 
   sheet.getCell("A1").value = "BẢNG KÊ THU TIỀN KHÁCH SẠN";
   sheet.getCell("A1").font = { bold: true, size: 14, color: { argb: "FF1F3A5F" } };
@@ -57,7 +57,7 @@ export function buildLedgerTemplate(): ExcelJS.Workbook {
   const input = (ref: string) => { const c = sheet.getCell(ref); c.fill = fill("FEF3C7"); c.border = BORDER; c.font = { bold: true }; c.alignment = { horizontal: "left", vertical: "middle" }; return c; };
   label("D1", "KHÁCH SẠN");
   sheet.mergeCells("E1:F1");
-  input("E1").dataValidation = { type: "list", allowBlank: true, formulae: [`'Danh mục'!$D$2:$D$${BLUEJAY_HOTELS.length + 1}`], showErrorMessage: true, errorStyle: "warning", errorTitle: "Khách sạn", error: "Tên khách sạn không có trong danh mục; vẫn có thể giữ nếu đúng." };
+  input("E1").dataValidation = { type: "list", allowBlank: true, formulae: [`'Danh mục thu'!$D$2:$D$${BLUEJAY_HOTELS.length + 1}`], showErrorMessage: true, errorStyle: "warning", errorTitle: "Khách sạn", error: "Tên khách sạn không có trong danh mục; vẫn có thể giữ nếu đúng." };
   sheet.getCell("F1").border = BORDER;
   label("H1", "KỲ BÁO CÁO (tháng/năm)");
   sheet.mergeCells("H1:I1");
@@ -102,12 +102,13 @@ export function buildLedgerTemplate(): ExcelJS.Workbook {
     type: "list", allowBlank: true, formulae: [source], showErrorMessage: true, errorStyle: "warning", errorTitle: what, error: `${what} không có trong danh mục; vẫn có thể giữ nếu đúng.`,
   });
   const lists = [
-    { col: 3, rule: rule(3, `'Danh mục'!$A$2:$A$${PLATFORMS.length + 1}`, "Nền tảng") },
-    { col: 4, rule: rule(4, `'Danh mục'!$C$2:$C$${PAYMENTS.length + 1}`, "Hình thức thanh toán") },
-    { col: 5, rule: rule(5, `'Danh mục'!$B$2:$B$${SERVICES.length + 1}`, "Dịch vụ") },
+    { col: 3, rule: rule(3, `'Danh mục thu'!$A$2:$A$${PLATFORMS.length + 1}`, "Nền tảng") },
+    { col: 4, rule: rule(4, `'Danh mục thu'!$C$2:$C$${PAYMENTS.length + 1}`, "Hình thức thanh toán") },
+    { col: 5, rule: rule(5, `'Danh mục thu'!$B$2:$B$${SERVICES.length + 1}`, "Dịch vụ") },
   ];
   for (let r = FIRST; r < FIRST + ROWS; r++) for (const l of lists) sheet.getCell(r, l.col).dataValidation = l.rule;
 
+  addIncomePanel(sheet); // the day-by-day check of cash and bank, to the right of the ledger (columns V..AH)
   buildGuideSheet(guide);
 
   list.columns = [{ width: 14 }, { width: 28 }, { width: 16 }, { width: 30 }];

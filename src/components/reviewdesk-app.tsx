@@ -6,6 +6,9 @@ import {
   BedDouble,
   Banknote,
   Scale,
+  Wallet,
+  Landmark,
+  Package,
   HandCoins,
   BadgeCheck,
   PanelLeftClose,
@@ -40,6 +43,8 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import { AreaTrend, Donut, TrackBars } from "@/components/dashboard-charts";
+import { ReachTable, type Col } from "@/components/reach-table";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +63,10 @@ import { OverviewScoreboard } from "@/components/overview-scoreboard";
 import { SummaryReport } from "@/components/summary-report";
 import { BluejayReport } from "@/components/bluejay-report";
 import { BluejayReconcile } from "@/components/bluejay-reconcile";
+import { BluejayFinance } from "@/components/bluejay-finance";
+import { BluejayDaily } from "@/components/bluejay-daily";
+import { BluejayPnl } from "@/components/bluejay-pnl";
+import { BluejayStock } from "@/components/bluejay-stock";
 import { BluejayDebt } from "@/components/bluejay-debt";
 import { BluejayPaid } from "@/components/bluejay-paid";
 import { GoogleProfile } from "@/components/google-profile";
@@ -250,6 +259,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isSummaryPage = pathname === "/summary";
   const isBluejayRevenuePage = pathname === "/bluejay-revenue";
   const isBluejayReconcilePage = pathname === "/bluejay-reconcile";
+  const isBluejayFinancePage = pathname === "/bluejay-finance";
+  const isBluejayDailyPage = pathname === "/bluejay-daily";
+  const isBluejayPnlPage = pathname === "/bluejay-pnl";
+  const isBluejayStockPage = pathname === "/bluejay-stock";
   const isBluejayDebtPage = pathname === "/bluejay-debt";
   const isBluejayPaidPage = pathname === "/bluejay-paid";
   const isGoogleProfilePage = pathname === "/google-profile";
@@ -259,7 +272,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isGoogleAdsPage = pathname === "/google-ads";
   const isTiktokPage = pathname === "/tiktok";
   const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isGoogleAdsPage || isTiktokPage;
-  const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
+  const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayFinancePage || isBluejayDailyPage || isBluejayPnlPage || isBluejayStockPage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
   const [collapsed, setCollapsed] = useState(false); // desktop sidebar shrunk to icons; remembered per browser
@@ -705,7 +718,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     <ShopeefoodImportButton key={type} label={filterTypeOptions.find(([value]) => value === type)?.[1] ?? type} locations={locations.filter((location) => filterTypeOf(location.type) === type)} onSave={saveShopeefood} />
   ));
 
-  const platformFilter = (<>
+  const platformFilter = (<div className="source-filters">
     <fieldset className="analytics-source-filter daily-report-source-filter overview-source-filter"><legend>Nền tảng</legend><div className="analytics-source-options">
       <button type="button" className={`analytics-source-chip ${selectedReportPlatforms.length === reportPlatformOrder.length ? "active" : ""}`} aria-pressed={selectedReportPlatforms.length === reportPlatformOrder.length} onClick={() => setDailyReportPlatformFilter(reportPlatformOrder)}>Tất cả nguồn</button>
       {reportPlatformOrder.map((platform) => <label className={`analytics-source-chip ${selectedReportPlatforms.includes(platform) ? "active" : ""}`} key={platform}>
@@ -719,7 +732,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     <fieldset className="analytics-source-filter daily-report-source-filter overview-source-filter"><legend>Thang điểm</legend><div className="analytics-source-options">
       {([5, 10] as const).map((scale) => <button type="button" key={scale} className={`analytics-source-chip ${reportScale === scale ? "active" : ""}`} aria-pressed={reportScale === scale} onClick={() => setReportScale(scale)}>{scale} điểm</button>)}
     </div></fieldset>
-  </>);
+  </div>);
 
   const reportData = useMemo(() => {
     const selectedPlatforms = selectedReportPlatforms;
@@ -963,6 +976,19 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       chartRow[platform] = row.metrics[platform]?.reviewCount ?? null;
     });
     return chartRow;
+  }), [dailyAnalyticsRows, dailyAnalyticsPlatforms]);
+
+  // Tổng lượt đánh giá theo ngày: ngày nền tảng thiếu số thì giữ số gần nhất để tổng không tụt giả.
+  const dailyReviewTrend = useMemo(() => {
+    const last: Partial<Record<Platform, number>> = {};
+    return dailyAnalyticsRows.map((row) => {
+      dailyAnalyticsPlatforms.forEach((platform) => { const count = row.metrics[platform]?.reviewCount; if (count != null) last[platform] = count; });
+      return { date: row.date, value: Object.values(last).reduce((sum, count) => sum + count, 0) };
+    });
+  }, [dailyAnalyticsRows, dailyAnalyticsPlatforms]);
+  const dailyReviewGains = useMemo(() => dailyAnalyticsPlatforms.flatMap((platform) => {
+    const counts = dailyAnalyticsRows.flatMap((row) => row.metrics[platform]?.reviewCount ?? []);
+    return counts.length > 1 ? [{ name: platformLabels[platform], value: Math.max(0, counts[counts.length - 1] - counts[0]), color: reportPlatformColors[platform] }] : [];
   }), [dailyAnalyticsRows, dailyAnalyticsPlatforms]);
 
   const historicalReportSummary = useMemo(() => {
@@ -1753,6 +1779,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
           <Link className={`nav-link ${isBluejayRevenuePage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
           <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
+          <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} href="/bluejay-daily" data-tip="Doanh thu theo ngày"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
+          <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
+          <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
+          <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
           <Link className={`nav-link ${isBluejayDebtPage ? "active" : ""}`} href="/bluejay-debt" data-tip="Công nợ OTA"><HandCoins size={17} /><span>Công nợ OTA</span></Link>
           <Link className={`nav-link ${isBluejayPaidPage ? "active" : ""}`} href="/bluejay-paid" data-tip="Đã thanh toán"><BadgeCheck size={17} /><span>Đã thanh toán</span></Link>
           <span className="nav-label nav-label-spaced">TIẾP CẬN</span>
@@ -1773,7 +1803,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <main className="main-area" id="overview">
         <header className={`dashboard-topbar ${isReachPage ? "topbar-hidden" : ""}`}>
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
-          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          <div className="topbar-title"><span className="topbar-overline">{isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ HĐKD" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
           {supabaseConfigured && !isBluejayPage && <MissingReportsBell userId={user?.id ?? null} locations={locations.flatMap((location) => { const type = filterTypeOf(location.type); return type === "entertainment" ? [] : [{ id: location.id, name: location.name, kind: type === "hotel" ? "hotel" as const : "fnb" as const }]; })} />}
@@ -1806,7 +1836,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isFacebookAdsPage && <FacebookAds />}
           {isGoogleAdsPage && <GoogleAds />}
           {isTiktokPage && <TiktokPage />}
-          {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
+          {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
           {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
 
@@ -1817,7 +1847,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           <section className="stats-grid overview-stats" aria-label="Chỉ số tổng quan">
             <StatCard icon={<Star size={18} />} label="Điểm trung bình các kênh" value={reportData.averageScore == null ? "—" : reportData.averageScore.toFixed(1).replace(".", ",")} suffix={`/ ${reportScale}`} meta={dashboardLocation ? `Chuẩn hóa trên ${dashboardLocation.name}` : "Chưa có dữ liệu điểm"} tone="blue" />
-            <StatCard icon={<TrendingUp size={18} />} label="Tổng lượt đánh giá" value={moneyless(reportData.reviewTotal)} meta="Cộng snapshot mới nhất trên các kênh đã chọn" tone="green" />
+            <StatCard icon={<TrendingUp size={18} />} label="Tổng lượt đánh giá" value={moneyless(reportData.reviewTotal)} meta="Cộng các kênh đã chọn" tone="green" />
             <StatCard icon={<Link2 size={18} />} label="Kênh có dữ liệu" value={`${reportData.platformCoverage}`} suffix={`/ ${reportData.selectedPlatforms.length}`} meta="Các nền tảng có snapshot hiện tại" tone="violet" />
             <StatCard icon={<Clock3 size={18} />} label="Cập nhật gần nhất" value={reportData.latestCapture ? fmtDateTime(reportData.latestCapture) : "—"} meta={dashboardLocation?.name ?? "Chưa chọn cơ sở"} tone="amber" />
           </section>
@@ -1828,7 +1858,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           <section className="report-dashboard" aria-labelledby="report-dashboard-title">
             <header className="report-dashboard-head">
-              <div><div className="section-kicker"><span className="live-mark" /> HIỆU SUẤT THEO NỀN TẢNG</div><h2 id="report-dashboard-title">Kênh đánh giá · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Số liệu mới nhất vừa lấy, chưa chốt sổ. Điểm quy đổi về thang {reportScale}.</p></div>
+              <div><div className="section-kicker"><span className="live-mark" /> HIỆU SUẤT THEO NỀN TẢNG</div><h2 id="report-dashboard-title">Kênh đánh giá · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Số liệu mới nhất, chưa chốt sổ.</p></div>
               <div className="report-dashboard-actions">
                 <button className="button button-primary" onClick={() => dashboardLocation && triggerCrawl("all", dashboardLocation.id, "/api/crawl/bulk")} disabled={crawling || !dashboardLocation}>
                   {crawling && crawlingPlatform === "all" ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
@@ -1842,28 +1872,15 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             </header>
             {reportData.locationRows[0] ? <div className="report-dashboard-grid">
               <article className="report-card chart-card">
-                <header><div><h3>Điểm theo nền tảng</h3><p>Điểm hiện tại quy đổi về thang {reportScale}</p></div><span className="report-scale-badge">{dashboardLocation?.name}</span></header>
-                <div className="report-rows">
-                  {reportData.locationRows[0].platformMetrics.map(({ platform, metric, normalizedScore }) => <div className="report-score-row" key={platform}>
-                    <div className="report-row-label"><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}</div>
-                    <div className="report-track"><span style={{ width: `${Math.max(0, Math.min(100, ((normalizedScore ?? 0) / reportScale) * 100))}%`, backgroundColor: reportPlatformColors[platform] }} /></div>
-                    <strong>{normalizedScore == null ? "—" : `${normalizedScore.toFixed(1).replace(".", ",")} / ${reportScale}`}</strong>
-                    <small>Gốc: {metric?.rating == null ? "Chưa có điểm" : `${metric.rating.toFixed(1).replace(".", ",")} / ${metric.ratingScale}`}</small>
-                  </div>)}
-                  {reportData.selectedPlatforms.length === 0 && <p className="report-empty">Chọn ít nhất một nền tảng trong cấu hình báo cáo.</p>}
-                </div>
-                <p className="report-footnote">Điểm quy đổi giúp so sánh các nền tảng có thang điểm khác nhau.</p>
+                <header><div><h3>Điểm theo nền tảng</h3><p>Quy đổi về thang {reportScale}</p></div><span className="report-scale-badge">{dashboardLocation?.name}</span></header>
+                {reportData.selectedPlatforms.length === 0 ? <p className="report-empty">Chọn ít nhất một nền tảng trong cấu hình báo cáo.</p>
+                  : <TrackBars max={reportScale} width="100%" animate rows={reportData.locationRows[0].platformMetrics.flatMap(({ platform, normalizedScore }) => normalizedScore == null ? [] : [{ name: platformLabels[platform], value: normalizedScore, color: reportPlatformColors[platform] }])} />}
               </article>
               <article className="report-card chart-card">
-                <header><div><h3>Lượt đánh giá theo nền tảng</h3><p>Số liệu snapshot mới nhất của cơ sở</p></div><span className="report-total-badge">{moneyless(reportData.reviewTotal)}</span></header>
-                <div className="report-rows">
-                  {reportData.locationRows[0].platformMetrics.map(({ platform, metric }) => <div className="report-volume-row" key={platform}>
-                    <div className="report-volume-label"><span><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}</span><strong>{metric?.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong></div>
-                    <div className="report-track"><span style={{ width: `${Math.max(0, Math.min(100, ((metric?.reviewCount ?? 0) / Math.max(1, ...reportData.locationRows[0].platformMetrics.map((item) => item.metric?.reviewCount ?? 0))) * 100))}%`, backgroundColor: reportPlatformColors[platform] }} /></div>
-                  </div>)}
-                  {reportData.selectedPlatforms.length === 0 && <p className="report-empty">Chọn ít nhất một nền tảng trong cấu hình báo cáo.</p>}
-                </div>
-                <p className="report-footnote">Tổng lượt là phép cộng các kênh đã chọn; một khách hàng có thể xuất hiện trên nhiều nền tảng.</p>
+                <header><div><h3>Tỷ trọng lượt đánh giá</h3><p>Theo nền tảng</p></div><span className="report-total-badge">{moneyless(reportData.reviewTotal)}</span></header>
+                {reportData.selectedPlatforms.length === 0 ? <p className="report-empty">Chọn ít nhất một nền tảng trong cấu hình báo cáo.</p>
+                  : <Donut unit="đánh giá" width="100%" animate slices={reportData.locationRows[0].platformMetrics.flatMap(({ platform, metric }) => (metric?.reviewCount ?? 0) > 0 ? [{ name: platformLabels[platform], value: metric!.reviewCount!, color: reportPlatformColors[platform] }] : [])} />}
+                <p className="report-footnote">Một khách có thể đánh giá trên nhiều nền tảng.</p>
               </article>
             </div> : <article className="report-card report-empty-dashboard"><p className="report-empty">Chưa có cơ sở để lập báo cáo. Hãy thêm cơ sở và chọn cơ sở cần xem.</p></article>}
           </section>
@@ -1920,25 +1937,27 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               {timelineLoading ? <div className="timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải lịch sử snapshot…</div>
                 : timelineError ? <div className="timeline-empty timeline-error">Không tải được lịch sử: {timelineError}</div>
                   : timelineRows.length === 0 ? <div className="timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu báo cáo đã chốt</strong><span>Chốt dữ liệu hôm nay ở trang tổng quan để bắt đầu lịch sử cho {dashboardLocation?.name ?? "chi nhánh này"}.</span></div></div>
-                    : <div className="timeline-table-scroll"><table className="timeline-table"><thead>
-                      <tr><th className="timeline-date">NGÀY</th>{selectedReportPlatforms.map((platform) => <th key={platform}>{platformLabels[platform]}</th>)}</tr>
-                    </thead><tbody>
-                      {timelineRows.map((row) => <tr key={row.date}>
-                        <th className="timeline-date-value"><time dateTime={row.date}>{fmtDate(row.date)}</time><small className="timeline-date-coverage">Đã chốt {selectedReportPlatforms.filter((platform) => row.metrics[platform]).length}/{selectedReportPlatforms.length} nguồn</small></th>
-                        {selectedReportPlatforms.map((platform) => {
-                          const metric = row.metrics[platform];
-                          const normalizedScore = metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale;
-                          return <td className="timeline-metric-cell" key={`${row.date}-${platform}`}>
-                            {!metric ? <span className="timeline-no-data">Chưa chốt</span> : <>
-                              <div className="timeline-normalized"><strong>{normalizedScore == null ? "—" : normalizedScore.toFixed(1).replace(".", ",")}</strong><span>/{reportScale} chuẩn hóa</span></div>
-                              <div className="timeline-raw">Điểm gốc <strong>{metric.rating == null ? "—" : `${metric.rating.toFixed(1).replace(".", ",")} / ${metric.ratingScale}`}</strong></div>
-                              {platform === "tripadvisor" && metric.tripadvisorRank && <div className="tripadvisor-rank-label">{metric.tripadvisorRank}</div>}
-                              <div className="timeline-review-count"><strong>{metric.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong><span>lượt đánh giá</span></div>
-                            </>}
-                          </td>;
-                        })}
-                      </tr>)}
-                    </tbody></table></div>}
+                    : <ReachTable compact rows={timelineRows} rowKey={(row) => row.date} columns={[
+                      { label: "Ngày", text: (row) => fmtDate(row.date), sort: (row) => row.date, render: (row) => <><time dateTime={row.date}>{fmtDate(row.date)}</time><small>Đã chốt {selectedReportPlatforms.filter((platform) => row.metrics[platform]).length}/{selectedReportPlatforms.length} nguồn</small></> },
+                      ...selectedReportPlatforms.map((platform): Col<(typeof timelineRows)[number]> => {
+                        const score = (row: (typeof timelineRows)[number]) => { const metric = row.metrics[platform]; return metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale; };
+                        return {
+                          label: platformLabels[platform],
+                          text: (row) => { const value = score(row); return value == null ? "—" : value.toFixed(1).replace(".", ","); },
+                          value: score,
+                          render: (row) => {
+                            const metric = row.metrics[platform];
+                            if (!metric) return <span className="timeline-no-data">Chưa chốt</span>;
+                            const value = score(row);
+                            return <div className="cell" title={metric.rating == null ? undefined : `Điểm gốc ${metric.rating.toFixed(1).replace(".", ",")} / ${metric.ratingScale}`}>
+                              <strong>{value == null ? "—" : value.toFixed(1).replace(".", ",")}</strong>
+                              <small>{metric.reviewCount == null ? "—" : moneyless(metric.reviewCount)} đánh giá</small>
+                              {platform === "tripadvisor" && metric.tripadvisorRank && <small>{metric.tripadvisorRank}</small>}
+                            </div>;
+                          },
+                        };
+                      }),
+                    ]} />}
               {timelineRows.length > 0 && <footer className="timeline-footer">Đang xem {dashboardLocation?.name} · {timelineRows.length} ngày đã chốt</footer>}
             </div>
           </section>}
@@ -1984,23 +2003,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                 </>
                 : dailyAnalyticsRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu đã chốt</strong><span>Chốt dữ liệu hôm nay từ trang tổng quan, sau đó báo cáo sẽ xuất hiện tại đây.</span></div></div>
                   : <>
-                    <div className="analytics-summary-grid">
-                      <article className="analytics-summary-card"><span>Ngày có số liệu đã chốt</span><strong>{dailyAnalyticsRows.length.toLocaleString("vi-VN")}</strong><small>{fmtDate(dailyAnalyticsRows[0].date)} – {fmtDate(dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date)}</small></article>
-                      <article className="analytics-summary-card"><span>Nền tảng có dữ liệu</span><strong>{dailyAnalyticsPlatforms.length}</strong><small>Trong {selectedReportPlatforms.length} nền tảng được chọn</small></article>
-                      <article className="analytics-summary-card"><span>Lần chốt gần nhất</span><strong>{fmtDate(dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date)}</strong><small>{dashboardLocation?.name}</small></article>
-                    </div>
-                    <div className="analytics-platform-grid">
-                      {dailyAnalyticsPlatforms.map((platform) => {
-                        const recent = [...dailyAnalyticsRows].reverse().find((row) => row.metrics[platform]);
-                        const metric = recent?.metrics[platform];
-                        const score = metric?.rating == null ? null : (metric.rating / metric.ratingScale) * reportScale;
-                        return <article className="analytics-platform-card" key={platform}>
-                          <header><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} /><strong>{platformLabels[platform]}</strong></header>
-                          <div className="analytics-platform-values"><div><span>Điểm chuẩn hóa</span><strong>{score == null ? "—" : `${score.toFixed(1).replace(".", ",")} / ${reportScale}`}</strong></div><div><span>Lượt đánh giá</span><strong>{metric?.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong></div></div>
-                          <footer>Chốt ngày {recent?.date ? fmtDate(recent.date) : "—"}{metric?.rating != null ? ` · gốc ${metric.rating.toFixed(1).replace(".", ",")}/${metric.ratingScale}` : ""}</footer>
-                        </article>;
-                      })}
-                    </div>
+                    <article className="report-card analytics-chart-card">
+                      <header><div><h3>Tổng lượt đánh giá</h3><p>{fmtDate(dailyAnalyticsRows[0].date)} – {fmtDate(dailyAnalyticsRows[dailyAnalyticsRows.length - 1].date)} · cộng các nền tảng đã chọn.</p></div><span className="report-total-badge">{moneyless(dailyReviewTrend[dailyReviewTrend.length - 1]?.value ?? 0)} · {dailyAnalyticsRows.length} ngày</span></header>
+                      <AreaTrend points={dailyReviewTrend} color="#16a34a" width="100%" animate id="grad-trend-reviews" label="Tổng lượt đánh giá" format={moneyless} />
+                    </article>
                     <article className="report-card analytics-chart-card">
                       <header><div><h3>Diễn biến điểm sao</h3><p>Điểm quy đổi về thang {reportScale}; trục dọc tự căn theo vùng điểm để dễ thấy thay đổi.</p></div><span className="report-scale-badge">{dailyAnalyticsRows.length} ngày</span></header>
                       {dailyAnalyticsPlatforms.some((platform) => dailyAnalyticsRows.some((row) => row.metrics[platform]?.rating != null)) ? <>
@@ -2012,27 +2018,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                               <YAxis domain={[dailyAnalyticsScoreDomain.min, dailyAnalyticsScoreDomain.max]} tickFormatter={(value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} width={48} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
                               <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
                               <Legend verticalAlign="bottom" height={34} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#5f7086" }} formatter={(value) => platformLabels[value as Platform] ?? String(value)} />
-                              {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="linear" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
+                              {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="monotone" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={dailyAnalyticsRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
                       </> : <p className="report-empty">Khoảng thời gian này chưa có điểm sao để vẽ biểu đồ.</p>}
                     </article>
-                    <article className="report-card analytics-chart-card">
-                      <header><div><h3>{"Di\u1ec5n bi\u1ebfn l\u01b0\u1ee3t \u0111\u00e1nh gi\u00e1"}</h3><p>{"S\u1ed1 l\u01b0\u1ee3t \u0111\u00e1nh gi\u00e1 \u0111\u01b0\u1ee3c ch\u1ed1t theo ng\u00e0y, hi\u1ec3n th\u1ecb ri\u00eang cho t\u1eebng n\u1ec1n t\u1ea3ng."}</p></div><span className="report-total-badge">{dailyAnalyticsRows.length} {"ng\u00e0y"}</span></header>
-                      {dailyAnalyticsPlatforms.some((platform) => dailyAnalyticsRows.some((row) => row.metrics[platform]?.reviewCount != null)) ? <div className="analytics-chart-scroll">
-                        <ResponsiveContainer width="100%" height={340}>
-                          <LineChart data={dailyAnalyticsReviewChartData} margin={{ top: 12, right: 18, bottom: 8, left: 8 }}>
-                            <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                            <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
-                            <YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} \u0111\u00e1nh gi\u00e1` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
-                            <Legend verticalAlign="bottom" height={34} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#5f7086" }} formatter={(value) => platformLabels[value as Platform] ?? String(value)} />
-                            {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="linear" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div> : <p className="report-empty">{"Kho\u1ea3ng th\u1eddi gian n\u00e0y ch\u01b0a c\u00f3 s\u1ed1 l\u01b0\u1ee3t \u0111\u00e1nh gi\u00e1 \u0111\u01b0\u1ee3c ch\u1ed1t."}</p>}
-                    </article>
+                    {dailyReviewGains.length > 0 && <article className="report-card analytics-chart-card">
+                      <header><div><h3>Đánh giá mới theo nền tảng</h3><p>Tăng từ ngày đầu đến ngày cuối đã chốt trong kỳ.</p></div></header>
+                      <TrackBars max={Math.max(1, ...dailyReviewGains.map((item) => item.value))} width="100%" animate rows={dailyReviewGains} format={(value) => `+${moneyless(value)}`} />
+                    </article>}
                   </>}
           </section>}
 
@@ -2051,22 +2046,28 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             {platformFilter}
             {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải báo cáo đã chốt…</div> : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được báo cáo: {timelineError}</div> : hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho lựa chọn này.</div> : <>
               <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{selectedReportPlatforms.length} nguồn đang chọn</span></div>
-              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
-              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, comparisonLocations.length * 24)) }}><ResponsiveContainer width="100%" height={390}><BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}</BarChart></ResponsiveContainer></div></div></article>}
+              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><ResponsiveContainer width="100%" height={340}><LineChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} minTickGap={24} /><YAxis domain={[(min: number) => Math.max(0, Math.floor(min * 2 - 1) / 2), reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(2).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Line key={location.id} type="monotone" dataKey={location.id} name={location.name} stroke={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} strokeWidth={2.5} dot={hotelComparisonData.scoreRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer></article>}
+              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><ResponsiveContainer width="100%" height={340}><LineChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} minTickGap={24} /><YAxis domain={[(min: number) => Math.floor(min * 0.95), "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Line key={location.id} type="monotone" dataKey={location.id} name={location.name} stroke={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} strokeWidth={2.5} dot={hotelComparisonData.reviewRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer></article>}
               <DailyComparisonChanges locations={comparisonLocations} scoreRows={hotelComparisonData.scoreRows} reviewRows={hotelComparisonData.reviewRows} snapshots={timelineSnapshots} platforms={selectedReportPlatforms} ratingScale={reportScale} />
-              <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><div className="compare-table-scroll"><table><thead><tr><th>Cơ sở</th><th>Điểm / {reportScale}</th><th>Ngày chốt điểm</th><th>Lượt đánh giá</th><th>Ngày chốt lượt</th></tr></thead><tbody>{comparisonLocations.map((location) => {
-                const scoreRow = [...hotelComparisonData.scoreRows].reverse().find((row) => row[location.id] != null);
-                const reviewRow = [...hotelComparisonData.reviewRows].reverse().find((row) => row[location.id] != null);
-                return <tr key={location.id}><th scope="row">{location.name}</th><td>{typeof scoreRow?.[location.id] === "number" ? `${(scoreRow[location.id] as number).toFixed(1).replace(".", ",")}` : "—"}</td><td>{scoreRow ? fmtDate(String(scoreRow.date)) : "—"}</td><td>{typeof reviewRow?.[location.id] === "number" ? moneyless(reviewRow[location.id] as number) : "—"}</td><td>{reviewRow ? fmtDate(String(reviewRow.date)) : "—"}</td></tr>;
-              })}</tbody></table></div></article>
+              <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><ReachTable compact rows={comparisonLocations.map((location) => ({
+                location,
+                scoreRow: [...hotelComparisonData.scoreRows].reverse().find((row) => row[location.id] != null),
+                reviewRow: [...hotelComparisonData.reviewRows].reverse().find((row) => row[location.id] != null),
+              }))} rowKey={(item) => item.location.id} columns={[
+                { label: "Cơ sở", text: (item) => item.location.name },
+                { label: `Điểm / ${reportScale}`, text: (item) => (typeof item.scoreRow?.[item.location.id] === "number" ? (item.scoreRow[item.location.id] as number).toFixed(1).replace(".", ",") : "—"), value: (item) => (typeof item.scoreRow?.[item.location.id] === "number" ? (item.scoreRow[item.location.id] as number) : null) },
+                { label: "Ngày chốt điểm", text: (item) => (item.scoreRow ? fmtDate(String(item.scoreRow.date)) : "—"), sort: (item) => String(item.scoreRow?.date ?? "") },
+                { label: "Lượt đánh giá", text: (item) => (typeof item.reviewRow?.[item.location.id] === "number" ? moneyless(item.reviewRow[item.location.id] as number) : "—"), value: (item) => (typeof item.reviewRow?.[item.location.id] === "number" ? (item.reviewRow[item.location.id] as number) : null), total: true },
+                { label: "Ngày chốt lượt", text: (item) => (item.reviewRow ? fmtDate(String(item.reviewRow.date)) : "—"), sort: (item) => String(item.reviewRow?.date ?? "") },
+              ]} /></article>
             </>}
           </section>}
 
           {isTripadvisorRankPage && <TripadvisorRankReportPage locationName={dashboardLocation?.name ?? null} rows={tripadvisorRankRows} loading={timelineLoading} error={timelineError} />}
 
-          {!isReportDataPage && !isSettingsPage && !isSummaryPage && !isBluejayPage && !isReachPage && <>
+          {isDetailPage && <>
         <section className="locations-section" id="locations">
-            <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2><p>Mỗi thẻ là một nền tảng, chỉ hiển thị dữ liệu của cơ sở đang chọn.</p></div></div>
+            <div className="section-header"><div><div className="section-kicker"><Building2 size={14} strokeWidth={1.8} />CHI TIẾT CHI NHÁNH</div><h2>Nền tảng · {dashboardLocation?.name ?? "Chưa chọn cơ sở"}</h2></div></div>
             <div className="platform-detail-grid">
             {(["google", "tripadvisor", "agoda", "booking", "tripcom", "expedia", "traveloka", "grabfood", "shopeefood"] as const).filter((platform) => selectedReportPlatforms.includes(platform)).map((platform) => {
               const platformLabel = platformLabels[platform];

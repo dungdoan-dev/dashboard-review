@@ -7,6 +7,7 @@ import { BluejayRevenue, RevenueView } from "@/components/bluejay-revenue";
 import { MAX_RANGE_DAYS, rangeSummary, type RangeData } from "@/lib/bluejay-range";
 import { fmtDate, fmtDateTime, parseDmy } from "@/lib/format-date";
 import { DatePicker } from "@/components/date-picker";
+import { ReachTable, type Col } from "@/components/reach-table";
 import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, type WeeklyReport } from "@/lib/bluejay-metrics";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
@@ -66,14 +67,38 @@ function Card({ title, note, wide, children }: { title: string; note?: string; w
   return <article className={`summary-chart ${wide ? "wide" : ""}`}><h4>{title}</h4>{note && <p className="summary-note">{note}</p>}{children}</article>;
 }
 
-function Rows({ head, rows }: { head: string[]; rows: (string | number)[][] }) { // table view of a chart, reachable without hovering
-  return (
-    <details className="summary-table"><summary>Bảng số liệu</summary>
-      <div className="summary-table-scroll"><table><thead><tr>{head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r) => <tr key={String(r[0])}>{r.map((c, i) => <td key={i}>{c}</td>)}</tr>)}</tbody></table></div>
-    </details>
-  );
+type Cell = string | number | null;
+
+/** Table view of a chart, reachable without hovering. A number is sortable and added up in the total row, except in pctCols (shown as a percentage, not added). */
+function Rows({ head, rows, pctCols = [], totals = true }: { head: string[]; rows: Cell[][]; pctCols?: number[]; totals?: boolean }) {
+  const columns: Col<Cell[]>[] = head.map((label, i) => i === 0 ? { label, text: (r) => String(r[0]) } : {
+    label,
+    value: (r) => (typeof r[i] === "number" ? (r[i] as number) : null),
+    text: (r) => (r[i] == null ? "–" : typeof r[i] === "number" ? (pctCols.includes(i) ? pct(r[i] as number) : num(r[i] as number)) : String(r[i])),
+    total: totals && !pctCols.includes(i),
+  });
+  return <details className="summary-table"><summary>Bảng số liệu</summary><ReachTable rows={rows} columns={columns} rowKey={(r) => String(r[0])} /></details>;
 }
+
+type SummaryRow = ReturnType<typeof summarize>;
+const METRICS: { label: string; get: (x: SummaryRow) => number; percent?: boolean }[] = [
+  { label: "Công suất (%)", get: (x) => x.rate, percent: true },
+  { label: "Tổng số đêm lưu trú", get: (x) => x.nights },
+  { label: "Giá phòng TB (ADR)", get: (x) => x.adr },
+  { label: "Hiệu quả doanh thu phòng", get: (x) => x.revpar },
+  { label: "Pickup tuần sau", get: (x) => x.pickup1, percent: true },
+  { label: "Pickup tuần sau nữa", get: (x) => x.pickup2, percent: true },
+];
+
+type RangeRow = { name: string; x: ReturnType<typeof rangeSummary> };
+const RANGE_COLS: Col<RangeRow>[] = [
+  { label: "Khách sạn", text: (r) => r.name },
+  { label: "Công suất", value: (r) => r.x.rate, text: (r) => pct(r.x.rate) },
+  { label: "Đêm lưu trú", value: (r) => r.x.nights, text: (r) => num(r.x.nights), total: true },
+  { label: "Giá phòng TB", value: (r) => r.x.adr, text: (r) => num(r.x.adr) },
+  { label: "RevPAR", value: (r) => r.x.revpar, text: (r) => num(r.x.revpar) },
+  { label: "Tiền phòng", value: (r) => r.x.room, text: (r) => num(r.x.room), total: true },
+];
 
 type WeekResponse = { monday?: string; report?: WeeklyReport | null; history?: WeeklyReport[]; message?: string };
 
@@ -199,38 +224,24 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
         <div className="summary-grid">
           <Card title="Tiền phòng theo nguồn">
             <HBars data={bars(c.bySource)} name="Tiền phòng" color={barColor} label="Tiền phòng theo nguồn" />
-            <Rows head={["Nguồn", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={c.bySource.map((g) => [g.name, num(g.bookings), num(g.nights), num(g.value)])} />
+            <Rows head={["Nguồn", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={c.bySource.map((g) => [g.name, g.bookings, g.nights, g.value])} />
           </Card>
           <Card title="Tiền phòng theo hạng phòng">
             <HBars data={bars(c.byRoomType)} name="Tiền phòng" color={barColor} label="Tiền phòng theo hạng phòng" />
-            <Rows head={["Hạng phòng", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={c.byRoomType.map((g) => [g.name, num(g.bookings), num(g.nights), num(g.value)])} />
+            <Rows head={["Hạng phòng", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={c.byRoomType.map((g) => [g.name, g.bookings, g.nights, g.value])} />
           </Card>
           <Card title="Đặt phòng theo trạng thái" note="Gồm cả hủy và no-show.">
             <HBars data={c.statuses.slice(0, 8).map((g) => ({ name: g.name, value: g.bookings }))} name="Đặt phòng" color={barColor} money={false} label="Đặt phòng theo trạng thái" />
-            <Rows head={["Trạng thái", "Đặt phòng"]} rows={c.statuses.map((g) => [g.name, num(g.bookings)])} />
+            <Rows head={["Trạng thái", "Đặt phòng"]} rows={c.statuses.map((g) => [g.name, g.bookings])} />
           </Card>
           <Card title="Dịch vụ theo nhóm">
             <HBars data={c.services.slice(0, 8).map((g) => ({ name: g.name, value: g.total }))} name="Doanh thu dịch vụ" color={barColor} label="Doanh thu dịch vụ theo nhóm" />
-            <Rows head={["Nhóm", "Số lượng", "Doanh thu"]} rows={c.services.map((g) => [g.name, num(g.quantity), num(g.total)])} />
+            <Rows head={["Nhóm", "Số lượng", "Doanh thu"]} rows={c.services.map((g) => [g.name, g.quantity, g.total])} />
           </Card>
         </div>
 
         <Card title="Bảng tổng hợp theo khách sạn">
-          <div className="summary-table summary-table-scroll">
-            <table>
-              <thead><tr><th>Đơn vị</th>{report.hotels.map((h) => <th key={h.id}>{h.name}</th>)}</tr></thead>
-              <tbody>
-                {([
-                  ["Công suất (%)", (x) => pct(x.rate)],
-                  ["Tổng số đêm lưu trú", (x) => num(x.nights)],
-                  ["Giá phòng TB (ADR)", (x) => num(x.adr)],
-                  ["Hiệu quả doanh thu phòng", (x) => num(x.revpar)],
-                  ["Pickup tuần sau", (x) => pct(x.pickup1)],
-                  ["Pickup tuần sau nữa", (x) => pct(x.pickup2)],
-                ] as [string, (x: ReturnType<typeof summarize>) => string][]).map(([label, f]) => <tr key={label}><th scope="row">{label}</th>{report.hotels.map((h) => <td key={h.id}>{f(summarize([h]))}</td>)}</tr>)}
-              </tbody>
-            </table>
-          </div>
+          <ReachTable rows={METRICS} rowKey={(m) => m.label} columns={[{ label: "Đơn vị", text: (m) => m.label } as Col<(typeof METRICS)[number]>, ...report.hotels.map((h): Col<(typeof METRICS)[number]> => ({ label: h.name, value: (m) => m.get(summarize([h])), text: (m) => { const v = m.get(summarize([h])); return m.percent ? pct(v) : num(v); } }))]} />
         </Card>
         </>}
         {view === "revenue" && <BluejayRevenue monday={monday} scopeId={scopeId} />}
@@ -341,14 +352,11 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
 
         <Card title="Công suất theo ngày" note="Mỗi điểm là công suất của một ngày; ngày thiếu dữ liệu để trống.">
           <LineTrend data={daily} series={series} label="Công suất theo ngày" />
-          <Rows head={["Ngày", ...hotels.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...hotels.map((h) => (d[`h${h.id}`] == null ? "–" : pct(Number(d[`h${h.id}`]))))])} />
+          <Rows head={["Ngày", ...hotels.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...hotels.map((h) => (d[`h${h.id}`] == null ? null : Number(d[`h${h.id}`])))])} pctCols={hotels.map((_, i) => i + 1)} totals={false} />
         </Card>
 
         {!scopeId && hotels.length > 1 && <Card title="Theo khách sạn">
-          <div className="summary-table summary-table-scroll"><table>
-            <thead><tr><th>Khách sạn</th><th>Công suất</th><th>Đêm lưu trú</th><th>Giá phòng TB</th><th>RevPAR</th><th>Tiền phòng</th></tr></thead>
-            <tbody>{hotels.map((h) => { const x = rangeSummary([h], data.dates.length); return <tr key={h.id}><th scope="row">{h.name}</th><td>{pct(x.rate)}</td><td>{num(x.nights)}</td><td>{num(x.adr)}</td><td>{num(x.revpar)}</td><td>{num(x.room)}</td></tr>; })}</tbody>
-          </table></div>
+          <ReachTable rows={hotels.map((h) => ({ name: h.name, x: rangeSummary([h], data.dates.length) }))} columns={RANGE_COLS} rowKey={(r) => r.name} />
         </Card>}
 
         </>}

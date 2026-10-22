@@ -2,6 +2,7 @@
 
 import type { LocationRecord, Platform } from "@/lib/types";
 import { fmtDate } from "@/lib/format-date";
+import { ReachTable } from "@/components/reach-table";
 
 type ComparisonRow = Record<string, string | number | null>;
 type Snapshot = {
@@ -67,8 +68,13 @@ export function DailyComparisonChanges({ locations, scoreRows, reviewRows, snaps
   }));
 
   return <article className="report-card compare-table-card"><header><div><h3>Tăng giảm giữa các ngày</h3><p>So với ngày lịch liền trước. Dấu — nghĩa là thiếu ngày trước hoặc hai ngày không có cùng nguồn đã chốt.</p></div></header>
-    <div className="compare-table-scroll"><table><thead><tr><th>Ngày</th><th>Cơ sở</th><th>Điểm / {ratingScale}</th><th>Thay đổi điểm</th><th>Lượt đánh giá</th><th>Thay đổi lượt</th></tr></thead><tbody>
-      {rows.map((row) => <tr key={`${row.date}-${row.location.id}`}><td>{fmtDate(row.date)}</td><th scope="row">{row.location.name}</th><td>{row.score == null ? "—" : row.score.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td><Change current={row.score} previous={row.priorScore} kind="score" /></td><td>{row.review == null ? "—" : row.review.toLocaleString("vi-VN")}</td><td><Change current={row.review} previous={row.priorReview} kind="reviews" /></td></tr>)}
-    </tbody></table></div>
+    <ReachTable compact rows={rows} rowKey={(row) => `${row.date}-${row.location.id}`} columns={[
+      { label: "Ngày", text: (row) => fmtDate(row.date), sort: (row) => row.date },
+      { label: "Cơ sở", text: (row) => row.location.name },
+      { label: `Điểm / ${ratingScale}`, text: (row) => (row.score == null ? "—" : row.score.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })), value: (row) => row.score },
+      { label: "Thay đổi điểm", text: (row) => (row.score == null || row.priorScore == null ? "—" : String(row.score - row.priorScore)), value: (row) => (row.score == null || row.priorScore == null ? null : row.score - row.priorScore), render: (row) => <Change current={row.score} previous={row.priorScore} kind="score" /> },
+      { label: "Lượt đánh giá", text: (row) => (row.review == null ? "—" : row.review.toLocaleString("vi-VN")), value: (row) => row.review },
+      { label: "Thay đổi lượt", text: (row) => (row.review == null || row.priorReview == null ? "—" : String(row.review - row.priorReview)), value: (row) => (row.review == null || row.priorReview == null ? null : row.review - row.priorReview), render: (row) => <Change current={row.review} previous={row.priorReview} kind="reviews" /> },
+    ]} />
   </article>;
 }

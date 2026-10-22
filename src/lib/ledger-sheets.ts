@@ -1,4 +1,4 @@
-// One cash-ledger spreadsheet per hotel, shared (view only) with the service account in GOOGLE_SERVICE_ACCOUNT_JSON. Add a hotel here when its sheet is ready.
+// One spreadsheet per hotel (cash ledger tabs and the kho tabs MINIBAR/AMENITIES/VẬT TƯ/ĐỒ VẢI of each month), shared (view only) with the service account in GOOGLE_SERVICE_ACCOUNT_JSON. Add a hotel here when its sheet is ready.
 // Only ids (not secret), no imports: the page uses this to link to the sheet.
 export const LEDGER_SHEETS: Record<number, string> = {
   5381: "1HvweFPj0RlzUA3qUaBYVQOoHh8PrBLpuTvDIqIelTmU", // Sontra Sea
