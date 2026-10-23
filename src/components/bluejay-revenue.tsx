@@ -70,6 +70,7 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
       <Kpi label="Còn phải thu" value={num(t.balance)} hint="cả đặt phòng, gồm OTA thanh toán sau" />
       <Kpi label="Tiền cọc" value={num(t.deposit)} hint="cả đặt phòng, Blue Jay ghi cọc riêng" />
       <Kpi label="Hủy / no-show đã thu" value={num(totals.cancelled.payment)} hint={`${num(totals.cancelled.bookings)} đặt phòng`} />
+      <Kpi label="Hủy / no-show chưa thu" value={num(totals.cancelled.balance)} hint="Blue Jay vẫn tính giá phòng, OTA chưa trả" />
     </div>
 
     <details className="summary-chart wide revenue-fold" open>

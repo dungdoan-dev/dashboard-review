@@ -16,29 +16,19 @@ const monthEnd = (month: string) => { const [y, m] = month.split("-").map(Number
 const daysIn = (month: string) => Number(monthEnd(month).slice(8));
 
 type Daily = { rooms: number; room: number; services: Record<string, number> };
-type Cash = { open: number; thu: number; minimart: number; chi: number };
-type Ledger = { commission: number; otherDeduction: number; expenses: ExpenseLine[]; cash: Cash; bank: Cash };
+type Ledger = { commission: number; otherDeduction: number; expenses: ExpenseLine[] };
 type Sheets = { name: string; rows: unknown[][] }[];
 
-/** One month of the hotel's ledger tabs: deductions, expenses and the movement of the cash book and the bank account. null: no tab for the month. */
+/** One month of the hotel's ledger tabs: deductions and expenses. */
 function readLedger(sheets: Sheets, month: string): Ledger {
   const ledger = parseLedgerWorkbook(sheets);
   let expenses: ExpenseLine[] = [];
   for (const s of sheets) { try { expenses = parseExpenses(s.rows); break; } catch { /* not the expense tab */ } }
   const s = summarizeFinance(ledger.entries, expenses, { from: `${month}-01`, to: monthEnd(month) });
-  const rows = sheets.find((x) => x.name === ledger.sheet)?.rows ?? [];
-  const n = (v: unknown) => (typeof v === "number" ? v : 0);
-  // the panel of the BK THU tab: W1 and Y1 are the opening balances, X4:X34 the minimart of each day (typed)
-  const minimart = rows.slice(3, 34).reduce((x, r) => x + n(r?.[23]), 0);
-  const { taken, deposit, advance } = s.income;
-  return {
-    commission: s.income.commission, otherDeduction: s.income.otherDeduction, expenses,
-    cash: { open: n(rows[0]?.[22]), thu: taken.cash - deposit.cash + advance.cash, minimart, chi: s.expense.total.cash },
-    bank: { open: n(rows[0]?.[24]), thu: taken.bank - deposit.bank + advance.bank, minimart: 0, chi: s.expense.total.bank },
-  };
+  return { commission: s.income.commission, otherDeduction: s.income.otherDeduction, expenses };
 }
 
-/** The yearly result of one hotel like the accountant's sheet: result by month, nights and occupancy, cash and bank. Revenue comes from Blue Jay (by day of stay), the rest from the month tabs of the hotel's Google Sheet. */
+/** The yearly result of one hotel like the accountant's sheet: result by month, nights and occupancy. Revenue comes from Blue Jay (by day of stay), the rest from the month tabs of the hotel's Google Sheet. */
 export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
   const [year, setYear] = useState(() => String(new Date().getFullYear()));
   const [daily, setDaily] = useState<Record<string, Daily | null>>({});
@@ -113,16 +103,6 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
     ...(["Tiền phòng", "Minibar", "Giặt ủi", "Dịch vụ ngoài", "Thu khác"] as const).map((label): Col<Month> => ({ label: `Doanh thu ${label.toLowerCase()}`, value: (r) => (r.d ? revenueLines(r.d)[label] : 0), text: (r) => num(r.d ? revenueLines(r.d)[label] : 0), total: true })),
     { label: "Giảm trừ doanh thu", value: (r) => (r.l ? r.l.commission + r.l.otherDeduction : 0), text: (r) => num(r.l ? r.l.commission + r.l.otherDeduction : 0), total: true },
   ];
-  const close = (c: Cash) => c.open + c.thu + c.minimart - c.chi;
-  const fundCols = (key: "cash" | "bank"): Col<Month>[] => [
-    { label: "Tháng", text: (r) => `Tháng ${Number(r.m.slice(5))}`, sort: (r) => r.m },
-    { label: "Số dư đầu kỳ", value: (r) => r.l?.[key].open ?? 0, text: (r) => num(r.l?.[key].open ?? 0) },
-    { label: "Thu khách sạn", value: (r) => r.l?.[key].thu ?? 0, text: (r) => num(r.l?.[key].thu ?? 0), total: true },
-    ...(key === "cash" ? [{ label: "Thu − chi minimart", value: (r: Month) => r.l?.cash.minimart ?? 0, text: (r: Month) => signed(r.l?.cash.minimart ?? 0), total: true } as Col<Month>] : []),
-    { label: "Chi khách sạn", value: (r) => r.l?.[key].chi ?? 0, text: (r) => num(r.l?.[key].chi ?? 0), total: true },
-    { label: "Số dư cuối kỳ", value: (r) => (r.l ? close(r.l[key]) : 0), text: (r) => (r.l ? num(close(r.l[key])) : "–") },
-  ];
-  const ledgerMonths = monthRows.filter((r) => r.l);
 
   return (
     <section className="summary-report">
@@ -151,17 +131,6 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
           {!HOTEL_ROOMS[scopeId] && <p className="summary-note">Chưa khai số phòng của khách sạn này nên chưa tính công suất.</p>}
           <ReachTable rows={monthRows} rowKey={(r) => r.m} columns={balanceCols} sortable={false} />
         </details>
-        {ledgerMonths.length > 0 && <>
-          <details className="summary-chart wide revenue-fold" open>
-            <summary><h4>Sổ quỹ tiền mặt</h4></summary>
-            <p className="summary-note">Số dư đầu kỳ và thu − chi minimart lấy từ bảng đối chiếu trong tab BK THU (ô vàng nhập tay).</p>
-            <ReachTable rows={ledgerMonths} rowKey={(r) => r.m} columns={fundCols("cash")} sortable={false} />
-          </details>
-          <details className="summary-chart wide revenue-fold" open>
-            <summary><h4>Sổ tiền gửi ngân hàng</h4></summary>
-            <ReachTable rows={ledgerMonths} rowKey={(r) => r.m} columns={fundCols("bank")} sortable={false} />
-          </details>
-        </>}
       </>}
     </section>
   );

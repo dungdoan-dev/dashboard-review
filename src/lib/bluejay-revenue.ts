@@ -94,7 +94,7 @@ export function revenueTotals(rows: RevenueBooking[]) {
   return {
     all: { ...stays.reduce(add, zero()), bookings: codes(stays) },
     channels: [...byChannel.entries()].map(([name, list]) => ({ name, ...list.reduce(add, zero()), bookings: codes(list) })).sort((a, b) => b.total - a.total),
-    cancelled: { bookings: codes(cancelled), payment: cancelled.reduce((s, r) => s + r.payment, 0) },
+    cancelled: { bookings: codes(cancelled), payment: cancelled.reduce((s, r) => s + r.payment, 0), balance: cancelled.reduce((s, r) => s + r.balance, 0) }, // balance: price Blue Jay still counts that nobody has paid yet
     flagged: rows.filter((r) => r.flags.length).length,
   };
 }

@@ -242,7 +242,15 @@ export async function runTripadvisorScraper(targets: TripadvisorTarget[]) {
   }
 
   const results: TripadvisorResult[] = [];
-  for (const target of targets) results.push(await scrapeTripadvisorTarget(target, apiKey));
+  for (const target of targets) {
+    let result = await scrapeTripadvisorTarget(target, apiKey);
+    // ZenRows hay trả 408/422/5xx tạm thời; thử lại tối đa 2 lần. Không thử lại timeout (180 giây) hay hết hạn mức (402).
+    for (let retry = 0; retry < 2 && !result.success && result.status != null && (result.status === 408 || result.status === 422 || result.status === 429 || result.status >= 500); retry++) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      result = await scrapeTripadvisorTarget(target, apiKey);
+    }
+    results.push(result);
+  }
   return {
     success: results.some((result) => result.success),
     totalTargets: targets.length,

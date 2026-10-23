@@ -4,7 +4,6 @@
 import ExcelJS from "exceljs";
 import { BLUEJAY_HOTELS } from "./bluejay-metrics.ts";
 import { EXPENSES } from "./expense-kinds.ts";
-import { addExpensePanel } from "./fund-panel.ts";
 
 /** The monthly tab. The name carries the month so the app finds it (it accepts 08/2026 and 08-2026). An Excel file cannot have "/" in a sheet name, so the template says "BK CHI 08-2026";
  * in Google Sheets the tab is named "BK CHI 08/2026" (the BK THU panel finds it either way). */
@@ -92,7 +91,6 @@ export function buildExpenseTemplate(month = thisMonth(), book = new ExcelJS.Wor
     row.getCell(2).dataValidation = kinds;
   }
 
-  addExpensePanel(sheet); // the balance and the difference of every day, read from the income tab (columns L..P)
 
   guide.columns = [{ width: 32 }, { width: 110 }];
   GUIDE.forEach((line, i) => {

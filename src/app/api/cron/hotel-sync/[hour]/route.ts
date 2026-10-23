@@ -9,10 +9,11 @@ type Notice = { level: "error" | "warning" | "info"; platform: string | null; ti
 // Thông báo là phụ: lỗi khi ghi thông báo không được làm hỏng đồng bộ.
 async function notify(db: SupabaseClient, ownerId: string, locationId: string, notices: Notice[]) {
   if (!notices.length) return;
-  await db.from("notifications").insert(notices.map((notice) => ({
+  const { error } = await db.from("notifications").insert(notices.map((notice) => ({
     owner_id: ownerId, location_id: locationId, source: "auto-sync", level: notice.level, platform: notice.platform,
     title: notice.title.slice(0, 200), message: notice.message.slice(0, 1000),
   })));
+  if (error) console.error("notifications insert failed:", error.message);
 }
 
 function vietnamTime() {
@@ -52,17 +53,19 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
       if (vietnamTime().date !== now.date) return Response.json({ completed, failed, remaining: true });
       const { data: previous } = await db.from("automatic_sync_runs").select("id,status,started_at")
         .eq("owner_id", setting.owner_id).eq("location_id", locationId).eq("report_date", now.date).maybeSingle();
-      if (previous && previous.status !== "running") continue; // đã chạy hôm nay (success, partial hoặc failed)
+      // Lần chạy partial/failed được thử lại trong 3 giờ sau giờ hẹn (chỉ các nguồn chưa chốt); sau đó, hoặc khi success, bỏ qua.
+      const retrying = !!previous && (previous.status === "partial" || previous.status === "failed") && now.hour <= setting.run_hour + 3;
+      if (previous && previous.status !== "running" && !retrying) continue;
       const { data: location, error: locationError } = await db.from("locations").select("id,name,type,owner_id")
         .eq("id", locationId).eq("owner_id", setting.owner_id).eq("type", setting.location_type).maybeSingle();
       if (locationError) return Response.json({ error: locationError.message, completed, failed }, { status: 500 });
       if (!location) continue;
       let runId: number;
       if (previous) {
-        if (Date.now() - new Date(previous.started_at).getTime() < 20 * 60_000) break;
+        if (previous.status === "running" && Date.now() - new Date(previous.started_at).getTime() < 20 * 60_000) break;
         const { data: claimed } = await db.from("automatic_sync_runs")
-          .update({ started_at: new Date().toISOString(), message: null })
-          .eq("id", previous.id).eq("status", "running").eq("started_at", previous.started_at).select("id").maybeSingle();
+          .update({ status: "running", started_at: new Date().toISOString(), finished_at: null, message: null })
+          .eq("id", previous.id).eq("status", previous.status).eq("started_at", previous.started_at).select("id").maybeSingle();
         if (!claimed) break;
         runId = claimed.id;
       } else {
@@ -75,8 +78,12 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
 
       try {
         // GrabFood is not run automatically (its login failed on Vercel and held up the other sources); it is crawled by hand in Cài đặt.
-        const sources = (await listSources(db, locationId, setting.location_type as SyncType)).filter((source) => source.platform !== "grabfood");
-        if (!sources.length) throw new Error("Cơ sở chưa có nguồn đồng bộ.");
+        const allSources = (await listSources(db, locationId, setting.location_type as SyncType)).filter((source) => source.platform !== "grabfood");
+        if (!allSources.length) throw new Error("Cơ sở chưa có nguồn đồng bộ.");
+        // Thử lại: bỏ các nguồn đã chốt hôm nay để không tốn thêm lượt gọi.
+        const { data: doneToday } = retrying ? await db.from("daily_report_snapshots").select("platform").eq("location_id", locationId).eq("report_date", now.date) : { data: [] };
+        const donePlatforms = new Set((doneToday ?? []).map((row) => row.platform as string));
+        const sources = allSources.filter((source) => !donePlatforms.has(source.platform));
         const metrics = [];
         const reports = [];
         const errors: { platform: string; message: string }[] = [];
@@ -107,9 +114,10 @@ export async function GET(request: Request, context: { params: Promise<{ hour: s
           const { error: reportError } = await db.from("daily_report_snapshots").upsert(reports, { onConflict: "location_id,platform,report_date" });
           if (reportError) throw reportError;
         }
-        const status = !metrics.length ? "failed" : errors.length ? "partial" : "success";
+        const finalized = metrics.length + (allSources.length - sources.length);
+        const status = !finalized ? "failed" : errors.length ? "partial" : "success";
         const summary = [
-          metrics.length ? `${metrics.length} nguồn đã chốt sổ` : "Không nguồn nào lấy được số liệu",
+          finalized ? `${finalized} nguồn đã chốt sổ` : "Không nguồn nào lấy được số liệu",
           ...(errors.length ? [`lỗi: ${errors.map((item) => `${item.platform}: ${item.message}`).join("; ")}`] : []),
         ].join(" · ");
         await db.from("automatic_sync_runs").update({ status, message: summary.slice(0, 500), finished_at: new Date().toISOString() }).eq("id", runId);

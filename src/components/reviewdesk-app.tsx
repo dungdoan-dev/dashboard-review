@@ -9,8 +9,6 @@ import {
   Wallet,
   Landmark,
   Package,
-  HandCoins,
-  BadgeCheck,
   PanelLeftClose,
   PanelLeftOpen,
   ArrowDownToLine,
@@ -1777,14 +1775,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           <span className="nav-label nav-label-spaced">VẬN HÀNH</span>
           <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
-          <Link className={`nav-link ${isBluejayRevenuePage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
+          <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
           <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
           <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} href="/bluejay-daily" data-tip="Doanh thu theo ngày"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
           <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
           <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
           <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
-          <Link className={`nav-link ${isBluejayDebtPage ? "active" : ""}`} href="/bluejay-debt" data-tip="Công nợ OTA"><HandCoins size={17} /><span>Công nợ OTA</span></Link>
-          <Link className={`nav-link ${isBluejayPaidPage ? "active" : ""}`} href="/bluejay-paid" data-tip="Đã thanh toán"><BadgeCheck size={17} /><span>Đã thanh toán</span></Link>
           <span className="nav-label nav-label-spaced">TIẾP CẬN</span>
           <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
           <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
@@ -1836,6 +1832,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isFacebookAdsPage && <FacebookAds />}
           {isGoogleAdsPage && <GoogleAds />}
           {isTiktokPage && <TiktokPage />}
+          {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
           {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}

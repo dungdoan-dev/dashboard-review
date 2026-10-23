@@ -15,14 +15,14 @@ test("OTA site names map to the short names used in the finance sheets", () => {
 
 test("a stay counts whole in the week it checks out; cancelled rows are listed but not counted", () => {
   const straddle = res({ bookingCode: "002", checkInTime: "2026-10-03", checkOutTime: "2026-10-07", night: 4, roomPrice: 4000000, totalPrice: 4100000, payment: 4100000 });
-  const rows = revenueBookings([res(), straddle, res({ bookingCode: "003", status: "Đã huỷ", payment: 500000 }), res({ bookingCode: "004", roomType: "M-Standard" })], ...W);
-  assert.equal(rows.length, 3); // M-Standard left out
+  const rows = revenueBookings([res(), straddle, res({ bookingCode: "003", status: "Đã huỷ", payment: 500000 }), res({ bookingCode: "004", roomType: "M-Standard" }), res({ bookingCode: "006", status: "Không đến", roomPrice: 1232500, totalPrice: 1232500, payment: 0, balance: 1232500 })], ...W);
+  assert.equal(rows.length, 4); // M-Standard left out
   const t = revenueTotals(rows);
   assert.equal(t.all.bookings, 2);
   assert.equal(t.all.room, 2000000 + 4000000); // the stay that began the week before counts all 4 nights
   assert.equal(t.all.nights, 6);
   assert.equal(revenueBookings([res({ bookingCode: "005", checkOutTime: "2026-10-12" })], ...W)[0].roomInWeek, 0); // checks out next week
-  assert.deepEqual(t.cancelled, { bookings: 1, payment: 500000 });
+  assert.deepEqual(t.cancelled, { bookings: 2, payment: 500000, balance: 1232500 }); // the no-show nobody has paid yet is still owed
 });
 
 test("flags: balance, overpaid, mismatch and paid-but-cancelled; clean rows have none", () => {
