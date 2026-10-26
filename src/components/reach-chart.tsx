@@ -23,7 +23,7 @@ export function ReachChart<R, D>({ rows, columns, nameOf, daily, dailyColumns, d
   const place = byPlace.find((c) => c.label === placeMetric) ?? byPlace[0];
   const day = byDay.find((c) => c.label === dayMetric) ?? byDay[0];
   if (!place || !day) return null;
-  const chartHeight = Math.max(240, rows.length * 36 + 24); // both charts the same height
+  const chartHeight = 360; // both charts the same height; place names are tilted under the columns
   const placeData = rows.map((r) => ({ name: nameOf(r), value: place.value!(r) ?? 0 })).sort((a, b) => b.value - a.value);
   const sums = new Map<string, number>();
   for (const r of daily) sums.set(dayOf(r), (sums.get(dayOf(r)) ?? 0) + (day.value!(r) ?? 0));
@@ -35,12 +35,12 @@ export function ReachChart<R, D>({ rows, columns, nameOf, daily, dailyColumns, d
         <Metrics labels={byPlace.map((c) => c.label)} value={place.label} onChange={setPlaceMetric} name="Chỉ số theo nơi" />
         <div role="img" aria-label={`${place.label} theo từng nơi`} style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={placeData} layout="vertical" margin={{ top: 0, right: 24, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#edf1f6" horizontal={false} />
-              <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} />
-              <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} width={170} interval={0} tickFormatter={(v: string) => (v.length > 26 ? `${v.slice(0, 25)}…` : v)} />
+            <BarChart data={placeData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="#edf1f6" vertical={false} />
+              <XAxis dataKey="name" tick={AXIS} tickLine={false} interval={0} angle={-35} textAnchor="end" height={110} tickFormatter={(v: string) => (v.length > 24 ? `${v.slice(0, 23)}…` : v)} />
+              <YAxis tick={AXIS} tickLine={false} axisLine={false} width={52} tickFormatter={compact} />
               <Tooltip {...TOOLTIP} formatter={(v) => num(Number(v))} cursor={{ fill: "#f4f6f9" }} />
-              <Bar dataKey="value" name={place.label} fill="#285ca9" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false} />
+              <Bar dataKey="value" name={place.label} fill="#285ca9" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
