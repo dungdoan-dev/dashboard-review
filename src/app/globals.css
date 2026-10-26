@@ -1269,3 +1269,36 @@ select { cursor: pointer; }
 /* Finance report (bluejay-finance): section and total rows of the weekly table */
 .reach-table tr.report-total th, .reach-table tr.report-total td { font-weight: 700; background: #eef3fb; }
 .reach-table tr.report-section th { font-weight: 700; color: #344862; background: #f4f7fb; }
+
+/* Nhân sự */
+.hr-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #eef2f7; color: #46586f; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.hr-badge.green { background: #eaf8f1; color: #1f7a5c; }
+.hr-badge.azure { background: #e8f1fb; color: #2563a8; }
+.hr-badge.orange { background: #fff5df; color: #a8650f; }
+.hr-badge.red { background: #fdecec; color: #b42318; }
+.hr-badge.purple { background: #f2efff; color: #6a56b5; }
+.hr-two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 900px) { .hr-two { grid-template-columns: minmax(0, 1fr); } }
+.hr-list { display: grid; gap: 0; margin: 8px 0 0; padding: 0; list-style: none; }
+.hr-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #edf1f6; }
+.hr-list li:last-child { border-bottom: 0; }
+.hr-list strong { display: block; font-size: 14px; }
+.hr-list small { color: #5f6f86; font-size: 12px; }
+.hr-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.hr-toolbar .range-presets { margin: 0; }
+.hr-cv { color: #285ca9; font-weight: 600; }
+
+.hr-toolbar .range-presets button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.hr-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.hr-actions { display: inline-flex; gap: 6px; }
+.hr-act { display: inline-grid; width: 30px; height: 30px; place-items: center; border: 1px solid #e1e7ef; border-radius: 8px; background: #fff; color: #52647c; cursor: pointer; }
+.hr-act:hover { border-color: #cbd6e4; background: #f4f7fb; }
+.hr-act.danger:hover { border-color: #f2d3d0; background: #fff5f3; color: #b42318; }
+.hr-act:focus-visible { outline: 2px solid #285ca9; outline-offset: 2px; }
+.hr-danger { background: #b42318; box-shadow: none; }
+.hr-danger:hover:not(:disabled) { background: #8f1c12; }
+.hr-confirm { margin: 0; padding: 18px 23px; color: #46586f; font-size: 14px; }
+.field textarea { width: 100%; padding: 8px 10px; border: 1px solid #e1e7ef; border-radius: 8px; outline: 0; background: #f9fbfd; font: inherit; resize: vertical; }
+.field textarea:focus { border-color: #819fe0; box-shadow: 0 0 0 3px #6384d317; }
+
