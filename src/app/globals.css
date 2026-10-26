@@ -1301,4 +1301,16 @@ select { cursor: pointer; }
 .hr-confirm { margin: 0; padding: 18px 23px; color: #46586f; font-size: 14px; }
 .field textarea { width: 100%; padding: 8px 10px; border: 1px solid #e1e7ef; border-radius: 8px; outline: 0; background: #f9fbfd; font: inherit; resize: vertical; }
 .field textarea:focus { border-color: #819fe0; box-shadow: 0 0 0 3px #6384d317; }
+.nav-group-toggle { display: flex; width: calc(100% - 20px); align-items: center; justify-content: space-between; padding: 0; border: 0; background: none; font-family: inherit; text-align: left; cursor: pointer; }
+.nav-group-toggle:hover { color: #233a5a; }
+.nav-group-toggle:focus-visible { outline: 2px solid #285ca9; outline-offset: 2px; border-radius: 4px; }
+.nav-group-toggle svg { transition: transform .15s; }
+.nav-group-toggle svg.folded { transform: rotate(-90deg); }
+.app-shell.collapsed .nav-group-toggle svg { display: none; }
+
+.nav-group-body { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .26s ease, opacity .2s ease; }
+.nav-group-body[data-open="false"] { grid-template-rows: 0fr; opacity: 0; }
+.nav-group-inner { display: grid; gap: 4px; min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .nav-group-body, .nav-group-toggle svg { transition: none; } }
+
 

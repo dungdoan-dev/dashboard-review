@@ -276,6 +276,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayFinancePage || isBluejayDailyPage || isBluejayPnlPage || isBluejayStockPage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
+  const pageGroup = isHrPage ? "nhan-su" : isReachPage ? "tiep-can" : isBluejayPage ? "van-hanh" : "review";
+  const [openGroup, setOpenGroup] = useState(pageGroup); // sidebar accordion: one group open at a time
+  const [groupPath, setGroupPath] = useState(pathname);
+  if (groupPath !== pathname) { setGroupPath(pathname); setOpenGroup(pageGroup); } // moving to another page opens that page's group
   const [collapsed, setCollapsed] = useState(false); // desktop sidebar shrunk to icons; remembered per browser
   useEffect(() => { try { setCollapsed(localStorage.getItem("sidebar-collapsed") === "1"); } catch { /* private window: stays expanded */ } }, []);
   const [tip, setTip] = useState<{ text: string; top: number } | null>(null); // name of the hovered icon while the sidebar is collapsed
@@ -286,6 +290,14 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     setTip({ text: item.dataset.tip ?? "", top: box.top + box.height / 2 });
   };
   const toggleSidebar = () => { setTip(null); setCollapsed((value) => { try { localStorage.setItem("sidebar-collapsed", value ? "0" : "1"); } catch { /* not remembered */ } return !value; }); };
+  /** A sidebar heading that folds its links with a short slide; opening one closes the others. A sidebar shrunk to icons always shows them. */
+  const navGroup = (id: string, label: string, spaced: boolean, links: ReactNode) => {
+    const open = collapsed || openGroup === id;
+    return <>
+      <button type="button" className={`nav-label nav-group-toggle${spaced ? " nav-label-spaced" : ""}`} aria-expanded={open} onClick={() => setOpenGroup(open ? "" : id)}><span>{label}</span><ChevronDown size={13} className={open ? "" : "folded"} aria-hidden="true" /></button>
+      <div className="nav-group-body" data-open={open} inert={!open}><div className="nav-group-inner">{links}</div></div>
+    </>;
+  };
   const bluejayHotel = BLUEJAY_HOTELS.find((hotel) => hotel.id === bluejayHotelId) ?? null;
   const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isBluejayPage && !isReachPage && !isHrPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
@@ -1771,28 +1783,32 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
         </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          <span className="nav-label">REVIEW</span>
-          <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
-          <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
-          <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
-          <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
-          <span className="nav-label nav-label-spaced">VẬN HÀNH</span>
-          <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
-          <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
-          <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
-          <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} href="/bluejay-daily" data-tip="Doanh thu theo ngày"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
-          <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
-          <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
-          <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
-          <span className="nav-label nav-label-spaced">TIẾP CẬN</span>
-          <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
-          <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
-          <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
-          <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
-          <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
-          <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
-          <span className="nav-label nav-label-spaced">NHÂN SỰ</span>
-          <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
+          {navGroup("review", "REVIEW", false, <>
+            <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
+            <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
+            <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
+            <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
+          </>)}
+          {navGroup("van-hanh", "VẬN HÀNH", true, <>
+            <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
+            <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
+            <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
+            <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} href="/bluejay-daily" data-tip="Doanh thu theo ngày"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
+            <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
+            <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
+            <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
+          </>)}
+          {navGroup("tiep-can", "TIẾP CẬN", true, <>
+            <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
+            <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
+            <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
+            <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
+            <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
+            <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
+          </>)}
+          {navGroup("nhan-su", "NHÂN SỰ", true, <>
+            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
+          </>)}
         </nav>
         <div className="sidebar-bottom">
           <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>
