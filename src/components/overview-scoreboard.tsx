@@ -32,6 +32,7 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
   selectedId: string | null; typeLabel: string; onSelect: (id: string) => void;
 }) {
   const [baseline, setBaseline] = useState<Baseline>({});
+  const [lastCounts, setLastCounts] = useState<Record<string, number>>({});
   const [dateInput, setDateInput] = useState("");
   const [compareDate, setCompareDate] = useState(""); // rỗng = lần chốt gần nhất trước hôm nay
   const idsKey = useMemo(() => locations.map((location) => location.id).sort().join(","), [locations]);
@@ -62,7 +63,23 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
     return () => { active = false; };
   }, [userId, idsKey, platformsKey, scale, compareDate]);
 
-  const rows = useMemo<ScoreRow[]>(() => locations.map((location) => computeScoreRow(location, platforms, scale, baseline)), [locations, platforms, scale, baseline]);
+  // Số đánh giá gần nhất của mỗi nguồn trong 10 ngày: bù cho lần cào mới nhất chỉ có điểm.
+  useEffect(() => {
+    if (!userId || !idsKey) return;
+    let active = true;
+    createClient().from("daily_report_snapshots").select("location_id,platform,review_count")
+      .in("location_id", idsKey.split(",")).in("platform", platformsKey.split(",")).not("review_count", "is", null)
+      .gte("report_date", daysBefore(vnToday(), 10)).order("report_date", { ascending: false }).limit(5000)
+      .then(({ data }) => {
+        if (!active) return;
+        const next: Record<string, number> = {};
+        for (const row of data ?? []) { const key = `${row.location_id}|${row.platform}`; if (!(key in next)) next[key] = Number(row.review_count); }
+        setLastCounts(next);
+      });
+    return () => { active = false; };
+  }, [userId, idsKey, platformsKey]);
+
+  const rows = useMemo<ScoreRow[]>(() => locations.map((location) => computeScoreRow(location, platforms, scale, baseline, lastCounts)), [locations, platforms, scale, baseline, lastCounts]);
 
   // Mặc định điểm thấp nhất trước (cơ sở không có điểm xếp cuối); bấm tiêu đề cột để đổi.
   const sorted = useMemo(() => [...rows].sort((a, b) => (a.avg == null || b.avg == null ? (a.avg == null ? 1 : 0) - (b.avg == null ? 1 : 0) : a.avg - b.avg)), [rows]);
