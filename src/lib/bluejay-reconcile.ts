@@ -77,6 +77,7 @@ export function parseLedger(rows: unknown[][]): Ledger {
   const posCols: number[] = [];
   const takingCols: number[] = [], advanceCols: number[] = []; // advance: "Cọc ... chưa ở", the deposit of a guest who has not stayed yet (not counted, but a line with only that is a deposit for a later period)
   for (let c = col.deposit; c < moneyEnd; c++) {
+    if (c >= takingStart && words(c).includes("ota")) continue; // "Tiền OTA chưa thanh toán": typed to compare with Blue Jay, not takings
     if (c < takingStart || !words(c).some((w) => w === "coc" || w === "pos")) takingCols.push(c);
     else if (words(c).includes("coc")) advanceCols.push(c);
     else posCols.push(c);

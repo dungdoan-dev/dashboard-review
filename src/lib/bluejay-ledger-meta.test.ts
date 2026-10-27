@@ -20,7 +20,7 @@ const roomLine = (ws: ExcelJS.Worksheet, row: number, id: string, stay?: Date) =
   ws.getCell(`C${row}`).value = "Agoda";
   ws.getCell(`E${row}`).value = "Tiền phòng";
   ws.getCell(`M${row}`).value = 520000;
-  if (stay) ws.getCell(`T${row}`).value = stay;
+  if (stay) ws.getCell(`U${row}`).value = stay;
 };
 const booking = (o: Partial<RevenueBooking> = {}): RevenueBooking => ({
   code: "009001", ref: "", source: "Walking", channel: "Khách lẻ", roomType: "Deluxe", room: "P - 101", status: "Đã trả phòng", bookDate: "2026-08-01", checkIn: "2026-09-10", checkOut: "2026-09-12",

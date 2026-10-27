@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtDate } from "@/lib/format-date";
 import { ReachTable, type Col } from "@/components/reach-table";
-import { FLAG_LABELS, revenueTotals, serviceMatrix, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
+import { FLAG_LABELS, revenueTotals, serviceMatrix, upgradeTotal, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => (date ? fmtDate(date) : "–"); // dd/mm/yyyy
@@ -51,7 +51,8 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
   const q = query.trim().toLowerCase();
   const shown = rows.filter((r) => (!q || [r.code, r.ref, r.room].some((v) => v.toLowerCase().includes(q))) && (!channel || r.channel === channel) && (!status || r.status === status) && (!flaggedOnly || r.flags.length > 0));
 
-  const t = totals.all;
+  const upgrade = upgradeTotal(serviceDays);
+  const t = { ...totals.all, room: totals.all.room + upgrade, service: totals.all.service - upgrade }; // upgrades move from service to room; the total stays
   const excludedRoom = hotels.every((h) => h.excludedRoom !== undefined) ? hotels.reduce((s, h) => s + (h.excludedRoom ?? 0), 0) : null;
   const excludedService = hotels.reduce((s, h) => s + (h.excludedService ?? 0), 0); // null: some week was stored before M-Standard was kept
   const LIMIT = 400; // a 3-month range can hold thousands of rows; the filters narrow them down
@@ -61,7 +62,7 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
     <p className="summary-note">Tính theo ngày trả phòng: đặt phòng trả phòng trong {period} được tính cả đợt ở, bỏ hủy, no-show, hạng M-Standard và phòng Unassigned. (Tuần chưa lấy lại sau thay đổi này vẫn tính theo đêm ở.) Đã thanh toán, còn lại và cọc là số của cả đặt phòng. Tiền dịch vụ là dịch vụ gắn từng đặt phòng trả phòng trong {period} (gồm phụ thu, check in/out muộn, đền bù…); Tổng tiền = Tiền phòng + Tiền dịch vụ. Bảng dịch vụ bên dưới tính theo ngày phát sinh nên có thể khác số này. Blue Jay chỉ trả tổng thanh toán, không có hình thức (tiền mặt, chuyển khoản, thẻ) hay ngày thu từng khoản.</p>
     <div className="summary-kpis">
       <Kpi label="Số đặt phòng" value={num(t.bookings)} hint={`${num(t.nights)} đêm ở, trả phòng trong ${period}`} />
-      <Kpi label={`Tiền phòng (trả phòng trong ${period})`} value={num(t.room)} hint="cả đợt ở của đặt phòng" />
+      <Kpi label={`Tiền phòng (trả phòng trong ${period})`} value={num(t.room)} hint="cả đợt ở của đặt phòng, gồm nâng hạng phòng" />
       <Kpi label="Tiền dịch vụ" value={num(t.service)} hint="dịch vụ gắn các đặt phòng trả phòng trong kỳ" />
       <Kpi label="Tổng tiền" value={num(t.room + t.service)} hint="tiền phòng + tiền dịch vụ, không tính M-Standard / Unassigned" />
       <Kpi label="Tiền phòng có M-Standard / Unassigned" value={excludedRoom === null ? "–" : num(t.room + excludedRoom)} hint={excludedRoom === null ? "cần lấy lại dữ liệu từ Blue Jay" : `gồm ${num(excludedRoom)} của M-Standard / Unassigned`} />

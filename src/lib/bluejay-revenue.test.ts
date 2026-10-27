@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { channelOf, revenueBookings, revenueTotals, serviceDay, serviceMatrix } from "./bluejay-revenue.ts";
+import { channelOf, revenueBookings, revenueTotals, serviceDay, serviceMatrix, upgradeTotal } from "./bluejay-revenue.ts";
 import type { Reservation } from "./bluejay-metrics.ts";
 
 const W = ["2026-10-05", "2026-10-11"] as const;
@@ -66,4 +66,9 @@ test("M-Standard bookings are kept apart so room money can be shown with and wit
   const none = res({ bookingCode: "006", roomName: "Unassigned", roomType: "Superior King", roomPrice: 560000, night: 1, checkOutTime: "2026-10-06" });
   assert.deepEqual(revenueBookings([none], ...W), []); // no room assigned: out of the totals, in the with-column
   assert.deepEqual(revenueBookings([none], ...W, true).map((b) => b.code), ["006"]);
+});
+
+test("room upgrades are found by name in the service lines, whatever their group", () => {
+  const day = serviceDay("2026-10-23", { data: [{ GroupService: "Dịch vụ khác", TotalQuantity: 3, TotalPriceSale: 700000, Service: [{ ServiceName: "Nâng hạng phòng từ tiêu chuẩn sáng núi", Quantity: 1, PriceSale: 200000 }, { ServiceName: "Snack", Quantity: 2, PriceSale: 500000 }] }] });
+  assert.equal(upgradeTotal([day, day]), 400000);
 });

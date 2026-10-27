@@ -24,7 +24,7 @@ function doPost(e) {
     var p = JSON.parse(e.postData.contents);
     var token = PropertiesService.getScriptProperties().getProperty('TOKEN');
     if (!token || p.token !== token) return out({ ok: false, message: 'Sai mã bí mật.' });
-    var id = SHEETS[p.hotel];
+    var id = p.sheetId || SHEETS[p.hotel]; // the app sends the sheet id from Cài đặt → Link Google Sheet; SHEETS is only the fallback
     if (!id) return out({ ok: false, message: 'Khách sạn chưa có trong script.' });
     if (!/^\d{4}-\d{2}$/.test(p.month || '')) return out({ ok: false, message: 'Tháng không hợp lệ.' });
     var sheet = findTab(SpreadsheetApp.openById(id), p.month);

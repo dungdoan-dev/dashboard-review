@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { ArrowDownToLine, ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS, addDays, mondayOf } from "@/lib/bluejay-metrics";
-import { ledgerSheetUrl } from "@/lib/ledger-sheets";
+import { useSheetUrl } from "@/components/use-sheet-url";
 import { KIND_LABELS, ledgerWarnings, parseLedgerWorkbook, reconcile, type Item, type Kind, type Ledger } from "@/lib/bluejay-reconcile";
 import type { RevenueBooking } from "@/lib/bluejay-revenue";
 
@@ -31,7 +31,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const [lockBusy, setLockBusy] = useState("");
   const [lockMessage, setLockMessage] = useState("");
   const lockMonth = ledger?.month || month;
-  const sheetUrl = scopeId ? ledgerSheetUrl(scopeId) : null; // the link is always there for a hotel that has a sheet
+  const sheetUrl = useSheetUrl(scopeId);
 
   const key = ledger && scopeId ? `${scopeId}|${ledger.from}|${ledger.to}` : "";
   useEffect(() => {

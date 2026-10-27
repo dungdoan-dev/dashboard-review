@@ -99,6 +99,9 @@ export function revenueTotals(rows: RevenueBooking[]) {
   };
 }
 
+/** Room upgrades (nâng hạng phòng) are room money for the finance team, but Blue Jay books them as a service; only the day report names them, so this is by service date, not by booking. */
+export const upgradeTotal = (days: ServiceDay[]) => days.reduce((s, d) => s + d.groups.reduce((g, x) => g + x.items.filter((i) => /nâng hạng/i.test(i.name)).reduce((t, i) => t + i.total, 0), 0), 0);
+
 /** Service revenue per group across the days of the week, biggest first; `days` keeps the day-by-group matrix for the table. */
 export function serviceMatrix(days: ServiceDay[]) {
   const totals = new Map<string, { name: string; quantity: number; total: number }>();

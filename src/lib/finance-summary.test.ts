@@ -130,3 +130,11 @@ test("the report counts an unlisted expense in its own row, so its total always 
   assert.equal(row("3. TỔNG CHI"), s.expense.total.all); // 107: the unclassified 7 is in the total
   assert.equal(s.income.byService[0].name, "Tiền phòng");
 });
+
+test("an expense sheet without the commission and card fee columns still reads (they are kept in the income sheet)", () => {
+  const rows = expenseRows.map((r) => r.slice(0, 6)); // the two deduction columns cut off
+  const lines = parseExpenses(rows);
+  assert.equal(lines.length, 4);
+  assert.deepEqual(lines.map((l) => [l.commission, l.cardFee]), [[0, 0], [0, 0], [0, 0], [0, 0]]);
+  assert.equal(lines[0].cash, 450000);
+});

@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import { GUIDE_FIELD_KEYS } from "./bluejay-ledger-guide.ts";
 import { buildLedgerTemplate } from "./bluejay-ledger-template.ts";
 
-const LETTERS = "ABCDEFGHIJKLMNOPQRST".split(""); // the template's columns A..T
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTU".split(""); // the template's columns A..U
 
 // "Cột H, I, J" -> H I J; "Cột K đến P" -> K..P; "Cột A" -> A
 const expand = (key: string) => {
@@ -26,5 +26,5 @@ test("the guide sheet has its sections, and no cell the reconcile page could tak
     assert.ok(cells.some((c) => c.startsWith(section)), `missing section ${section}`);
   }
   assert.ok(!cells.some((c) => c.trim().toUpperCase() === "ID HỆ THỐNG"));
-  assert.ok(cells.some((c) => c === "Cột T") && cells.some((c) => c.startsWith("Khớp")));
+  assert.ok(cells.some((c) => c === "Cột U") && cells.some((c) => c.startsWith("Khớp")));
 });

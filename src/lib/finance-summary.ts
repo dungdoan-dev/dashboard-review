@@ -18,7 +18,7 @@ export function parseExpenses(rows: unknown[][]): ExpenseLine[] {
   if (head < 0) throw new Error("Không nhận ra bảng kê chi: không thấy cột “Hạng mục” và “Nội dung chi”.");
   const at = (re: RegExp) => { for (let i = head; i <= head + 1 && i < rows.length; i++) { const c = rows[i].findIndex((cell) => re.test(norm(cell))); if (c >= 0) return c; } return -1; };
   const col = { date: at(/^ngay$/), kind: at(/^hang muc$/), note: at(/^noi dung chi$/), cash: at(/^chi tien mat$/), bank: at(/^chi tien ck$/), visa: at(/^chi tien ck the visa$/), commission: at(/^hoa hong nen tang$/), cardFee: at(/^phi quet the$/) };
-  const missing = Object.entries({ "Ngày": col.date, "Chi tiền mặt": col.cash, "Chi tiền CK": col.bank, "Chi tiền CK thẻ visa": col.visa, "Hoa hồng nền tảng": col.commission, "Phí quẹt thẻ": col.cardFee }).filter(([, c]) => c < 0).map(([name]) => name);
+  const missing = Object.entries({ "Ngày": col.date, "Chi tiền mặt": col.cash, "Chi tiền CK": col.bank, "Chi tiền CK thẻ visa": col.visa }).filter(([, c]) => c < 0).map(([name]) => name);
   if (missing.length) throw new Error(`Bảng kê chi thiếu cột: ${missing.join(", ")}.`);
   const lines: ExpenseLine[] = [];
   for (let i = head + 1; i < rows.length; i++) {

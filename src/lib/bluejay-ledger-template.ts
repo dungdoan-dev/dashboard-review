@@ -14,7 +14,7 @@ const PLATFORMS = ["Agoda", "Booking", "Expedia", "Trip", "Traveloka", "Khách L
 const PAYMENTS = ["TT trực tiềp", "TT OTA", "Tiền thẻ", "Tiền pos"];
 const SERVICES = ["Tiền phòng", "Minibar", "Giặt Ủi", "Dịch Vụ Ngoài", "DỊCH VỤ KS", "Phụ thu", "Cọc phòng", "Nâng hạng phòng", "Combo ăn sáng", "Tiền pos cafe", "Cọc tiền TK", "Cọc tiền TM", "Lãi tiền gửi", "Tiền quẹt thẻ tháng này", "Tiền quẹt thẻ tháng trước", "Rút tiền tài khoản", "Thu khác"];
 
-// Column letters A..T. Money columns H..P are what the tool adds up; Q is the sheet's own total and is not counted twice; T is the stay month an OTA room payment is for.
+// Column letters A..U. Money columns H..P are what the tool adds up; Q (Tiền OTA chưa thanh toán) is typed by the staff to compare with Blue Jay and R is the sheet's own total, neither counted; U is the stay month an OTA room payment is for.
 const COLUMNS: { head: string; group: string; width: number; color: string }[] = [
   { head: "NGÀY THÁNG", group: "NGÀY THÁNG", width: 13, color: "1F3A5F" },
   { head: "ID HỆ THỐNG", group: "ID HỆ THỐNG", width: 22, color: "1F3A5F" },
@@ -32,13 +32,14 @@ const COLUMNS: { head: string; group: string; width: number; color: string }[] =
   { head: "Cọc tiền TK\nchưa ở", group: "", width: 14, color: "15803D" },
   { head: "Tiền quẹt thẻ", group: "", width: 14, color: "15803D" },
   { head: "Tiền POS cafe", group: "", width: 14, color: "15803D" },
+  { head: "Tiền OTA\nchưa thanh toán", group: "", width: 14, color: "15803D" },
   { head: "", group: "Tổng tiền", width: 15, color: "475569" },
   { head: "Hoa hồng\nnền tảng", group: "GIẢM TRỪ DOANH THU", width: 14, color: "B91C1C" },
   { head: "Các khoản\ngiảm trừ khác", group: "", width: 14, color: "B91C1C" },
   { head: "KỲ LƯU TRÚ\nĐƯỢC THANH TOÁN", group: "KỲ LƯU TRÚ ĐƯỢC THANH TOÁN", width: 17, color: "7C3AED" },
 ];
-const STAY_COL = 20;
-const MONEY_COLS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19]; // H..P, R, S (1-based)
+const STAY_COL = 21;
+const MONEY_COLS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20]; // H..Q, S, T (1-based)
 
 const thin = { style: "thin" as const, color: { argb: "FFB8C2D0" } };
 const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
@@ -78,10 +79,10 @@ export function buildLedgerTemplate(book = new ExcelJS.Workbook()): ExcelJS.Work
     sheet.getColumn(i + 1).width = col.width;
   });
   // Single-row headers (A..G), the total and the stay month take the full header height; the groups above the money columns are merged.
-  for (const c of [1, 2, 3, 4, 5, 6, 7, 17, STAY_COL]) { sheet.mergeCells(2, c, 3, c); }
+  for (const c of [1, 2, 3, 4, 5, 6, 7, 18, STAY_COL]) { sheet.mergeCells(2, c, 3, c); }
   sheet.mergeCells(2, 8, 2, 10);
-  sheet.mergeCells(2, 11, 2, 16);
-  sheet.mergeCells(2, 18, 2, 19);
+  sheet.mergeCells(2, 11, 2, 17);
+  sheet.mergeCells(2, 19, 2, 20);
 
   for (let r = FIRST; r < FIRST + ROWS; r++) {
     const row = sheet.getRow(r);
@@ -94,8 +95,9 @@ export function buildLedgerTemplate(book = new ExcelJS.Workbook()): ExcelJS.Work
     row.getCell(2).numFmt = "@"; // keeps the leading zeros of 009465
     for (const c of MONEY_COLS) row.getCell(c).numFmt = "#,##0";
     row.getCell(STAY_COL).numFmt = "mm/yyyy";
-    row.getCell(17).value = { formula: `SUM(H${r}:P${r})`, result: 0 };
-    row.getCell(17).font = { bold: true };
+    row.getCell(17).fill = fill("FEF3C7"); // typed by the staff: the OTA money not paid yet, to compare with Blue Jay
+    row.getCell(18).value = { formula: `SUM(H${r}:P${r})`, result: 0 };
+    row.getCell(18).font = { bold: true };
   }
   // Drop-downs are warnings, not blocks: a value outside the list can still be kept.
   const rule = (col: number, source: string, what: string): ExcelJS.DataValidation => ({
@@ -108,7 +110,7 @@ export function buildLedgerTemplate(book = new ExcelJS.Workbook()): ExcelJS.Work
   ];
   for (let r = FIRST; r < FIRST + ROWS; r++) for (const l of lists) sheet.getCell(r, l.col).dataValidation = l.rule;
 
-  addIncomePanel(sheet); // the day-by-day check of cash and bank, to the right of the ledger (columns V..AH)
+  addIncomePanel(sheet); // the day-by-day check of cash and bank, to the right of the ledger (columns V..AI)
   buildGuideSheet(guide);
 
   list.columns = [{ width: 14 }, { width: 28 }, { width: 16 }, { width: 30 }];

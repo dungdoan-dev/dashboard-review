@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
-import { ledgerSheetUrl } from "@/lib/ledger-sheets";
+import { useSheetUrl } from "@/components/use-sheet-url";
 import { ledgerWarnings, parseLedgerWorkbook, type Ledger } from "@/lib/bluejay-reconcile";
 import { financeReport, parseExpenses, summarizeFinance, type ExpenseLine, type ReportRow } from "@/lib/finance-summary";
 import { parseOutsideServices } from "@/lib/outside-services";
@@ -42,7 +42,7 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
   const [busy, setBusy] = useState(false);
   const [sheetLink, setSheetLink] = useState<{ url: string; gid: number } | null>(null);
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-  const sheetUrl = scopeId ? ledgerSheetUrl(scopeId) : null;
+  const sheetUrl = useSheetUrl(scopeId);
 
   const report = useMemo(() => (income ? financeReport(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
   const summary = useMemo(() => (income ? summarizeFinance(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);

@@ -1,11 +1,17 @@
-// One spreadsheet per hotel (cash ledger tabs and the kho tabs MINIBAR/AMENITIES/VẬT TƯ/ĐỒ VẢI of each month), shared (view only) with the service account in GOOGLE_SERVICE_ACCOUNT_JSON. Add a hotel here when its sheet is ready.
-// Only ids (not secret), no imports: the page uses this to link to the sheet.
-export const LEDGER_SHEETS: Record<number, string> = {
-  5381: "1HvweFPj0RlzUA3qUaBYVQOoHh8PrBLpuTvDIqIelTmU", // Sontra Sea
-  6836: "1LJgUrctGwBPcynAjdHZlG4u8kbhCpuZGk4R9GWxciOk", // Vistara Gia Lai
-  6495: "1b_38S409K5glxanqYGUU8IpsKroV0Gq8h5ppeK006Tc", // Vistara Quy Nhon
-  6209: "15_6wGXPamuVApuTmyeUDH01J2OFHgr-d0GeTWVUhcIo", // Yzistel Hoi An
-};
+// Google Sheet links of a branch (a Blue Jay hotel): "hotel" = the hotel's thu chi and kho, "fnb" = Ăn sáng, cafe, mini mart.
+// The links live in the table branch_sheets (Cài đặt → Link Google Sheet, read by src/lib/branch-sheets.ts); this file only has the pure helpers.
+// Only ids (not secret), no imports: the page and the tests use it.
+export type SheetKind = "hotel" | "fnb";
+export const SHEET_KINDS: { kind: SheetKind; label: string }[] = [{ kind: "hotel", label: "Khách sạn" }, { kind: "fnb", label: "Ăn sáng, cafe, mini mart" }];
+export const isSheetKind = (v: unknown): v is SheetKind => v === "hotel" || v === "fnb";
 
-/** Address of a hotel's ledger spreadsheet (no tab), to open it in the browser. */
-export const ledgerSheetUrl = (hotel: number) => (LEDGER_SHEETS[hotel] ? `https://docs.google.com/spreadsheets/d/${LEDGER_SHEETS[hotel]}/edit` : null);
+/** Address of a spreadsheet (no tab), to open it in the browser. */
+export const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
+
+/** The id from what an admin pastes: a docs.google.com link or the bare id; null when it is neither. */
+export function sheetIdFromLink(text: string): string | null {
+  const t = text.trim();
+  const link = t.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})(?:[/?#].*)?$/);
+  if (link) return link[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(t) ? t : null;
+}

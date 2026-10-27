@@ -56,3 +56,26 @@ test("the sold quantities of the sheet are set against Blue Jay's, item by item,
   const check = salesCheck(parseInventorySheet(oneSheet), { Snack: 21, "Nước suối 500ml": 26 }, oct);
   assert.deepEqual(check, [{ item: "Snack", bluejayName: "Snack", sheet: 23, bluejay: 21, diff: 2 }]);
 });
+
+test("an item with the Loại \"Mua xuất luôn\" is still booked, but what went out costs what was bought and nothing is left", () => {
+  const marked = sheet([nhap, xuat, kiem, { ...stock, rows: stock.rows.map((r, k) => (k === 0 ? [r[0], "Mua xuất luôn", ...r.slice(2)] : r)) }], 46296);
+  const inv = parseInventorySheet(marked), all = stockReport(parseInventorySheet(oneSheet), oct), report = stockReport(inv, oct);
+  assert.deepEqual([inv.items[0].immediate, inv.items[1].immediate], [true, false]);
+  const snack = report.lines[0];
+  assert.deepEqual([report.lines.length, snack.receiptValue, snack.issueValue, snack.avgPrice, snack.closingQty, snack.closingValue, snack.count], [2, 135_000, 302_400 + 135_000, 4500, 0, 0, null]);
+  assert.deepEqual(report.unknown, all.unknown);
+  assert.equal(report.totals.closingValue, all.lines[1].closingValue);
+});
+
+test("an item whose name cell is red is treated the same way", () => {
+  const inv = parseInventorySheet(oneSheet, new Set(["4,17"])); // first row of the item list, column R
+  const snack = stockReport(inv, oct).lines[0];
+  assert.deepEqual([inv.items[0].immediate, inv.items[1].immediate ?? false, snack.closingQty, snack.issueValue], [true, false, 0, 302_400 + 135_000]);
+});
+
+test("the Blue Jay name and the fixed price are read wherever their columns sit, also left of the item list", () => {
+  const bj = { col: 17, headers: ["Tên trong Blue Jay", "Đơn giá cố định"], rows: [["Snack BJ", ""], ["", 3125]] };
+  const items = { col: 19, headers: stock.headers.slice(0, 5), rows: stock.rows.map((r) => r.slice(0, 5)) };
+  const inv = parseInventorySheet(sheet([nhap, xuat, kiem, bj, items], 46296));
+  assert.deepEqual(inv.items.map((i) => [i.name, i.bluejay, i.fixedPrice]), [["Snack", "Snack BJ", 0], ["Nước suối (miễn phí)", "", 3125]]);
+});

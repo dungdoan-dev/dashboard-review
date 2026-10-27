@@ -8,7 +8,7 @@ import { ledgerDate } from "./bluejay-reconcile.ts";
 const norm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/đ/g, "d").replace(/\s+/g, " ").trim();
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-export type StockItem = { name: string; kind: string; unit: string; openQty: number; openValue: number; fixedPrice: number; bluejay: string }; // kind: "Bán" or "Miễn phí"; fixedPrice: 0 = the weighted average; bluejay: how Blue Jay names the item ("" = not sold through Blue Jay)
+export type StockItem = { name: string; kind: string; unit: string; openQty: number; openValue: number; fixedPrice: number; bluejay: string; immediate?: boolean }; // immediate: name cell is red or Loại is "Mua xuất luôn" = bought and used at once: still booked, but issue price = purchase price and no stock is left; kind: "Bán" or "Miễn phí"; fixedPrice: 0 = the weighted average; bluejay: how Blue Jay names the item ("" = not sold through Blue Jay)
 export type Receipt = { row: number; date: string; item: string; qty: number; amount: number; note: string };
 export type Issue = { row: number; date: string; room: string; item: string; qty: number; note: string };
 export type Count = { row: number; date: string; item: string; qty: number };
@@ -27,7 +27,7 @@ const text = (v: unknown) => String(v ?? "").trim();
  * One sheet of a kho. Its blocks sit side by side, found by their headers: receipts "Ngày | Mặt hàng | Số lượng | Thành tiền", issues "Ngày | Phòng | Mặt hàng | Số lượng", counts "Ngày kiểm | Mặt hàng | Số lượng đếm",
  * and the item list "Mặt hàng | Loại | ĐVT | Tồn đầu (SL) | Tồn đầu (giá trị) | Tên trong Blue Jay | Đơn giá cố định" (more columns follow, computed). A block on a sheet of its own (the old four-tab layout) reads the same way.
  */
-export function parseInventorySheet(rows: Rows): Inventory {
+export function parseInventorySheet(rows: Rows, red: Set<string> = new Set()): Inventory { // red: "row,col" (0-based) of the cells with a red background
   const inv: Inventory = { items: [], receipts: [], issues: [], counts: [], month: "" };
   const list = (b: { row: number; col: number }, width: number) => rows.slice(b.row + 1).map((r, i) => ({ r: r.slice(b.col, b.col + width), row: b.row + i + 2 }));
 
@@ -39,8 +39,8 @@ export function parseInventorySheet(rows: Rows): Inventory {
   if (counts) for (const { r, row } of list(counts, 4)) { const date = ledgerDate(r[0]), item = text(r[1]); if (date && item) inv.counts.push({ row, date, item, qty: num(r[2]) }); }
   const head = findBlock(rows, ["mat hang", "loai", "dvt", "ton dau (sl)", "ton dau (gia tri)"]);
   if (head) {
-    const header = rows[head.row].slice(head.col, head.col + 12).map(norm), at = (w: string) => header.indexOf(w);
-    for (const { r } of list(head, 12)) { const n = text(r[0]); if (n && !/^(cong|tong)$/.test(norm(n))) inv.items.push({ name: n, kind: text(r[1]), unit: text(r[2]), openQty: num(r[3]), openValue: num(r[4]), fixedPrice: at("don gia co dinh") >= 0 ? num(r[at("don gia co dinh")]) : 0, bluejay: at("ten trong blue jay") >= 0 ? text(r[at("ten trong blue jay")]) : "" }); }
+    const header = rows[head.row].map(norm), at = (w: string) => header.indexOf(w); // Blue Jay name and fixed price may sit left or right of the item list: found on the whole header row
+    for (const { r, row } of list(head, 12)) { const n = text(r[0]); if (n && !/^(cong|tong)$/.test(norm(n))) inv.items.push({ name: n, kind: text(r[1]), unit: text(r[2]), openQty: num(r[3]), openValue: num(r[4]), fixedPrice: at("don gia co dinh") >= 0 ? num(rows[row - 1][at("don gia co dinh")]) : 0, bluejay: at("ten trong blue jay") >= 0 ? text(rows[row - 1][at("ten trong blue jay")]) : "", immediate: red.has(`${row - 1},${head.col}`) || norm(text(r[1])) === "mua xuat luon" }); }
   }
   // the month of the item list: a cell "Tháng" with the first day of the month next to it
   for (let r = 0; r < Math.min(rows.length, 4) && !inv.month; r++) for (let c = 0; c + 1 < rows[r].length; c++) if (norm(rows[r][c]).startsWith("thang")) { const d = ledgerDate(rows[r][c + 1]); if (d) { inv.month = d.slice(0, 7); break; } }
@@ -83,6 +83,7 @@ export function stockReport(inv: Inventory, range: { from: string; to: string })
     const rs = mine(receipts), is = mine(issues), cs = mine(counts);
     const receiptQty = rs.reduce((s, r) => s + r.qty, 0), receiptValue = rs.reduce((s, r) => s + r.amount, 0), issueQty = is.reduce((s, i) => s + i.qty, 0);
     const base = item.openQty + receiptQty, avgPrice = item.fixedPrice > 0 ? item.fixedPrice : base > 0 ? (item.openValue + receiptValue) / base : 0, issueValue = issueQty * avgPrice;
+    if (item.immediate) return { item, receiptQty, receiptValue, issueQty, avgPrice: receiptQty > 0 ? receiptValue / receiptQty : 0, issueValue: item.openValue + receiptValue, closingQty: 0, closingValue: 0, count: null }; // bought and used at once: what went out costs what was bought, nothing stays
     const last = cs.reduce<Count | null>((m, c) => (!m || c.date >= m.date ? c : m), null);
     const expected = last ? item.openQty + rs.filter((r) => r.date <= last.date).reduce((s, r) => s + r.qty, 0) - is.filter((i) => i.date <= last.date).reduce((s, i) => s + i.qty, 0) : 0;
     return {

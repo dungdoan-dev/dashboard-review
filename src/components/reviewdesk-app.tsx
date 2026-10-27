@@ -80,6 +80,7 @@ import { TiktokPage } from "@/components/tiktok-page";
 import { HrPage } from "@/components/hr-page";
 import { NhanSuPage } from "@/components/nhan-su-page";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
+import { BranchSheetsSettings } from "@/components/branch-sheets-settings";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
@@ -2130,6 +2131,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="mart" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="entertainment" />
             <BluejaySyncSettings />
+            <BranchSheetsSettings />
           </>}
           {isSettingsPage && <details className="location-settings-section settings-panel" id="settings-locations" aria-labelledby="location-settings-title" open>
             <summary className="location-settings-heading">

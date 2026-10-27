@@ -19,10 +19,9 @@ test("a kho is one sheet: the stock block sums the three lists on the same sheet
   assert.equal(formula(ws, "AC5"), 'IF($R5="","",AA5*AB5)');
   assert.equal(formula(ws, "AD5"), 'IF($R5="","",$U5+Y5-AA5)');
   assert.equal(formula(ws, "AE5"), 'IF($R5="","",$V5+Z5-AC5)');
-  assert.match(formula(ws, "AG5"), /^IF\(\$R5="","",IF\(MAXIFS\(\$M\$5:\$M\$2004,\$N\$5:\$N\$2004,\$R5,/); // the date of the latest count in the month
-  assert.match(formula(ws, "AH5"), /"<="&\$AG5/); // what the books say on that day
-  assert.equal(formula(ws, "AI5"), 'IF(OR($R5="",AG5=""),"",AF5-AH5)');
-  assert.equal(formula(ws, "AJ5"), 'IF(OR($R5="",AG5=""),"",AI5*AB5)');
+  assert.match(formula(ws, "AF5"), /^IF\(\$R5="","",IF\(SUMPRODUCT\(MAX\(\(\$N\$5:\$N\$2004=\$R5\)/); // the last count of the month: no MAXIFS, no LOOKUP(2,1/..) (Google Sheets needs ARRAYFORMULA for that)
+  assert.equal(formula(ws, "AG5"), 'IF(OR($R5="",AF5=""),"",AF5-AD5)'); // counted - closing stock, like the finance team's sheet
+  assert.equal(formula(ws, "AH5"), 'IF(OR($R5="",AF5=""),"",AG5*AB5)');
   assert.equal((ws.getCell("B5").dataValidation as { formulae: string[] }).formulae[0], "$R$5:$R$44"); // the item drop-downs point at the item list of the same sheet
   assert.equal((ws.getCell("I5").dataValidation as { formulae: string[] }).formulae[0], "$R$5:$R$44");
 });

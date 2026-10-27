@@ -43,7 +43,22 @@ test("the template has the formatting that makes it easy to fill: coloured heade
   assert.equal(header.fill.type, "pattern");
   assert.equal(header.alignment?.wrapText, true);                    // "Cọc tiền mặt\nĐã ở" wraps instead of running together
   assert.equal(ws.getCell("K10").border.top?.style, "thin");
-  assert.equal((ws.getCell("Q10").value as ExcelJS.CellFormulaValue).formula, "SUM(H10:P10)");
+  assert.equal((ws.getCell("R10").value as ExcelJS.CellFormulaValue).formula, "SUM(H10:P10)");
   assert.equal(ws.getCell("E10").dataValidation.type, "list");
   assert.equal(ws.views[0].state, "frozen");
+});
+
+test("the typed column Q (Tiền OTA chưa thanh toán) and is not counted as takings", async () => {
+  const book = buildLedgerTemplate();
+  const ws = book.getWorksheet(TEMPLATE_SHEET)!;
+  assert.equal(ws.getCell("Q3").value, "Tiền OTA\nchưa thanh toán");
+  assert.equal(ws.getCell("Q10").value, null);
+  ws.getCell("A4").value = new Date(Date.UTC(2026, 8, 2));
+  ws.getCell("B4").value = "5857018827";
+  ws.getCell("D4").value = "TT OTA";
+  ws.getCell("E4").value = "Tiền phòng";
+  ws.getCell("M4").value = 800000;
+  ws.getCell("Q4").value = 800000; // typed by the staff
+  const parsed = parseLedgerWorkbook(await reopen(book));
+  assert.equal(parsed.lines[0].collected, 800000);
 });

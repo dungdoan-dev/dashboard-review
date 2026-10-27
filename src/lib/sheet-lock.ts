@@ -1,6 +1,6 @@
 // Talks to the Apps Script web app (scripts/apps-script/khoa-tuan.gs) that protects the rows of a week in the hotel's Google Sheet.
 // Needs SHEETS_LOCK_URL (the web app /exec address) and SHEETS_LOCK_TOKEN (same as the script's TOKEN property).
-type Call = { action: "status" | "lock" | "unlock"; hotel: number; month: string; week?: string };
+type Call = { action: "status" | "lock" | "unlock"; hotel: number; sheetId: string; month: string; week?: string }; // sheetId: the hotel's sheet from branch_sheets, so the script needs no list of its own
 
 export async function sheetLock(call: Call): Promise<{ weeks?: string[]; rows?: number }> {
   const url = process.env.SHEETS_LOCK_URL?.trim(), token = process.env.SHEETS_LOCK_TOKEN?.trim();

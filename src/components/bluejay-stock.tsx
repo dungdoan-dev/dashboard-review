@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
-import { ledgerSheetUrl } from "@/lib/ledger-sheets";
+import { useSheetUrl } from "@/components/use-sheet-url";
 import { parseInventorySheet, salesCheck, stockReport, type Inventory, type SalesCheck, type StockLine } from "@/lib/inventory";
 import { ReachTable, type Col } from "@/components/reach-table";
 
@@ -15,7 +15,7 @@ const monthEnd = (month: string) => { const [y, m] = month.split("-").map(Number
 
 type Kho = { sheet: string; inv: Inventory };
 type Loaded = { name: string; khos: Kho[]; sold: Record<string, number> | null; storedWeeks: number };
-const sheetsOf = (sheets: { name: string; rows: unknown[][] }[]): Kho[] => sheets.map((s) => ({ sheet: s.name, inv: parseInventorySheet(s.rows) })).filter((k) => k.inv.items.length > 0);
+const sheetsOf = (sheets: { name: string; rows: unknown[][]; red?: [number, number][] }[]): Kho[] => sheets.map((s) => ({ sheet: s.name, inv: parseInventorySheet(s.rows, new Set((s.red ?? []).map(([r, c]) => `${r},${c}`))) })).filter((k) => k.inv.items.length > 0);
 
 /** The stock of one hotel for a month, kho by kho (MINIBAR, AMENITIES, VẬT TƯ, ĐỒ VẢI): opening + in - out = closing at the finance team's price, the counts against the books, and for the minibar what was sold against Blue Jay. */
 export function BluejayStock({ scopeId }: { scopeId: number | null }) {
@@ -25,7 +25,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-  const sheetUrl = scopeId ? ledgerSheetUrl(scopeId) : null;
+  const sheetUrl = useSheetUrl(scopeId);
   const from = `${month}-01`, to = monthEnd(month);
 
   const kho = loaded ? loaded.khos.find((k) => k.sheet === khoName) ?? loaded.khos[0] : null;
@@ -112,6 +112,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
         </div>
         <p className="summary-note">Nguồn: <strong>{loaded.name}</strong> · sheet {kho.sheet} · {report.lines.length} mặt hàng · {kho.inv.receipts.length} dòng nhập, {kho.inv.issues.length} dòng xuất, {kho.inv.counts.length} dòng kiểm kê · kỳ {fmtDate(from)} – {fmtDate(to)}.</p>
         {kho.inv.month && kho.inv.month !== month && <p className="summary-note bad" role="alert">Bảng TỒN KHO trong sheet {kho.sheet} đang để tháng {kho.inv.month.slice(5)}/{kho.inv.month.slice(0, 4)}: tồn đầu nhập tay là của tháng đó. Số của tháng {month.slice(5)}/{month.slice(0, 4)} chỉ đúng nếu tồn đầu cũng là của tháng này.</p>}
+        {kho.inv.items.some((i) => i.immediate) && <p className="summary-note">{kho.inv.items.filter((i) => i.immediate).length} mặt hàng mua xuất luôn (bôi đỏ hoặc Loại “Mua xuất luôn”): giá xuất bằng giá mua, không để tồn: {kho.inv.items.filter((i) => i.immediate).map((i) => i.name).join(", ")}.</p>}
         {report.unknown.length > 0 && <p className="summary-note bad" role="alert">{report.unknown.length} dòng có mặt hàng không có trong danh sách TỒN KHO (không được tính): {report.unknown.slice(0, 6).map((u) => `${u.sheet} dòng ${u.row} “${u.item}”`).join(", ")}.</p>}
         <div className="summary-kpis">
           <div className="summary-kpi"><span>Giá trị tồn đầu</span><strong>{num(report.totals.openValue)}</strong></div>

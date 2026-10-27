@@ -2,6 +2,7 @@
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
 import { dailyRevenue } from "./bluejay-daily.ts";
+import { checkoutRevenue } from "./bluejay-checkout.ts";
 import { latestBookings, openDebts, paymentCheck, weeksWithDebt } from "./bluejay-debt.ts";
 import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, redactReservations, todayVN, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
@@ -173,13 +174,15 @@ export async function readServiceItems(db: SupabaseClient, hotelId: number, from
   return { items, weeks: weeks.map((w) => w.monday) };
 }
 
-/** Revenue per day of stay for [from, to] from the stored revenue weeks. A stay that ends after the range still has nights in it, so weeks up to 5 weeks after the range are read too. */
-export async function readDailyRevenue(db: SupabaseClient, from: string, to: string) {
+/** Revenue per day for [from, to] from the stored revenue weeks: by night slept (default; a stay that ends after the range still has nights in it, so weeks up to 5 weeks after the range are read too) or by check-out day (the finance team's rule, only the weeks of the range). */
+export async function readDailyRevenue(db: SupabaseClient, from: string, to: string, basis: "stay" | "checkout" = "stay") {
   if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
   if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
-  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(from)).lte("week_start", addDays(mondayOf(to), 35));
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(from)).lte("week_start", basis === "checkout" ? mondayOf(to) : addDays(mondayOf(to), 35));
   if (error) throw new Error(error.message);
-  return dailyRevenue((data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION), from, to);
+  const weeks = (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
+  if (basis === "checkout") return checkoutRevenue(weeks, from, to);
+  return dailyRevenue(weeks, from, to);
 }
 
 /**

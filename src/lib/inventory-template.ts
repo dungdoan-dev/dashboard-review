@@ -8,7 +8,7 @@ import ExcelJS from "exceljs";
 const FIRST = 5;                                       // first data row; row 4 holds the headers, row 3 the block titles
 const NHAP_LAST = 1504, XUAT_LAST = 6004, KIEM_LAST = 2004; // rows the formulas read (1500 receipts, 6000 issues, 2000 counts a year)
 const FORMAT_ROWS = { nhap: 400, xuat: 2000, kiem: 800 };    // rows prepared with borders and drop-downs; more can be typed below
-const ITEM_ROWS = 40, ITEM_LAST = FIRST + ITEM_ROWS - 1;
+const MIN_ITEM_ROWS = 40; // rows of the item list; a kho with more items gets 10 spare rows below the last one
 const NAVY = "1F3A5F";
 const thin = { style: "thin" as const, color: { argb: "FFB8C2D0" } };
 const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
@@ -23,9 +23,9 @@ export type KhoSeed = { sheet: string; title: string; items: ItemSeed[] };
 export const KHO_SHEETS = ["MINIBAR", "AMENITIES", "VẬT TƯ", "ĐỒ VẢI"] as const;
 
 const range = (col: string, last: number) => `$${col}$${FIRST}:$${col}$${last}`;
-const inMonth = (dateCol: string, last: number) => `${range(dateCol, last)},">="&$S$2,${range(dateCol, last)},"<="&EOMONTH($S$2,0)`;
 
 function addKho(book: ExcelJS.Workbook, kho: KhoSeed, month: string) {
+  const itemRows = Math.max(MIN_ITEM_ROWS, kho.items.length + 10), ITEM_LAST = FIRST + itemRows - 1;
   const ws = book.addWorksheet(kho.sheet, { views: [{ state: "frozen", ySplit: 4 }] });
   ws.getCell("A1").value = `KHO ${kho.title}`; ws.getCell("A1").font = { bold: true, size: 14, color: { argb: `FF${NAVY}` } };
   ws.getCell("A2").value = "Nhập liệu ở ba bảng bên trái (cột A đến P), thêm dòng ở cuối. Bảng TỒN KHO (từ cột R) tự tính cho tháng ở ô S2: nhập tay tồn đầu tháng ở ô vàng."; ws.getCell("A2").font = { italic: true, color: { argb: "FF586B84" } };
@@ -50,15 +50,15 @@ function addKho(book: ExcelJS.Workbook, kho: KhoSeed, month: string) {
   const [mm, yyyy] = month.split("/").map(Number);
   ws.getCell("S2").value = new Date(Date.UTC(yyyy, mm - 1, 1)); ws.getCell("S2").numFmt = "mm/yyyy"; input(ws.getCell("S2"));
   ws.mergeCells("R3:X3"); ws.getCell("R3").value = "TỒN KHO — NHẬP TAY (ô vàng)"; head(ws.getCell("R3"), "B45309");
-  ws.mergeCells("Y3:AJ3"); ws.getCell("Y3").value = "TỰ TÍNH TỪ BA BẢNG NHẬP, XUẤT, KIỂM KÊ"; head(ws.getCell("Y3"), "15803D");
+  ws.mergeCells("Y3:AH3"); ws.getCell("Y3").value = "TỰ TÍNH TỪ BA BẢNG NHẬP, XUẤT, KIỂM KÊ"; head(ws.getCell("Y3"), "15803D");
   const cols: [string, number][] = [
     ["Mặt hàng", 30], ["Loại", 11], ["ĐVT", 8], ["Tồn đầu (SL)", 11], ["Tồn đầu (giá trị)", 14], ["Tên trong Blue Jay", 18], ["Đơn giá cố định", 12],
     ["Nhập (SL)", 10], ["Nhập (tiền)", 13], ["Xuất (SL)", 10], ["Giá áp dụng", 12], ["Giá trị xuất", 13], ["Tồn cuối (SL)", 11], ["Tồn cuối (giá trị)", 14],
-    ["Kiểm kê gần nhất (SL)", 12], ["Ngày kiểm", 12], ["Tồn theo sổ ngày kiểm", 13], ["Chênh (SL)", 10], ["Chênh (giá trị)", 13],
+    ["Kiểm kê gần nhất (SL)", 12], ["Chênh (SL)", 10], ["Chênh (giá trị)", 13],
   ];
   ws.getRow(4).height = 46;
   cols.forEach(([h, w], i) => { const c = ws.getCell(4, 18 + i); c.value = h; head(c, i < 7 ? "B45309" : "15803D"); ws.getColumn(18 + i).width = w; });
-  for (let i = 0; i < ITEM_ROWS; i++) {
+  for (let i = 0; i < itemRows; i++) {
     const r = FIRST + i, seed = kho.items[i], a = `$R${r}`;
     if (seed) {
       ws.getCell(`R${r}`).value = seed.name; ws.getCell(`S${r}`).value = seed.kind; ws.getCell(`T${r}`).value = seed.unit; ws.getCell(`U${r}`).value = seed.openQty ?? 0; ws.getCell(`V${r}`).value = seed.openValue ?? 0;
@@ -66,9 +66,8 @@ function addKho(book: ExcelJS.Workbook, kho: KhoSeed, month: string) {
       if (seed.fixedPrice) ws.getCell(`X${r}`).value = seed.fixedPrice;
     }
     const f = (col: string, formula: string) => { ws.getCell(`${col}${r}`).value = { formula, result: 0 }; };
-    const nhap = (sumCol: string, upTo?: string) => `SUMIFS(${range(sumCol, NHAP_LAST)},${range("B", NHAP_LAST)},${a},${range("A", NHAP_LAST)},">="&$S$2,${range("A", NHAP_LAST)},${upTo ? `"<="&$AG${r}` : '"<="&EOMONTH($S$2,0)'})`;
-    const xuat = (upTo?: string) => `SUMIFS(${range("J", XUAT_LAST)},${range("I", XUAT_LAST)},${a},${range("G", XUAT_LAST)},">="&$S$2,${range("G", XUAT_LAST)},${upTo ? `"<="&$AG${r}` : '"<="&EOMONTH($S$2,0)'})`;
-    const kiemDates = `MAXIFS(${range("M", KIEM_LAST)},${range("N", KIEM_LAST)},${a},${inMonth("M", KIEM_LAST)})`;
+    const nhap = (sumCol: string) => `SUMIFS(${range(sumCol, NHAP_LAST)},${range("B", NHAP_LAST)},${a},${range("A", NHAP_LAST)},">="&$S$2,${range("A", NHAP_LAST)},"<="&EOMONTH($S$2,0))`;
+    const xuat = () => `SUMIFS(${range("J", XUAT_LAST)},${range("I", XUAT_LAST)},${a},${range("G", XUAT_LAST)},">="&$S$2,${range("G", XUAT_LAST)},"<="&EOMONTH($S$2,0))`;
     f("Y", `IF(${a}="","",${nhap("C")})`);
     f("Z", `IF(${a}="","",${nhap("D")})`);
     f("AA", `IF(${a}="","",${xuat()})`);
@@ -76,20 +75,19 @@ function addKho(book: ExcelJS.Workbook, kho: KhoSeed, month: string) {
     f("AC", `IF(${a}="","",AA${r}*AB${r})`);
     f("AD", `IF(${a}="","",$U${r}+Y${r}-AA${r})`);
     f("AE", `IF(${a}="","",$V${r}+Z${r}-AC${r})`);
-    f("AG", `IF(${a}="","",IF(${kiemDates}=0,"",${kiemDates}))`);                                                                    // the date of the latest count in the month
-    f("AF", `IF(OR(${a}="",AG${r}=""),"",SUMIFS(${range("O", KIEM_LAST)},${range("N", KIEM_LAST)},${a},${range("M", KIEM_LAST)},AG${r}))`); // what was counted that day
-    f("AH", `IF(OR(${a}="",AG${r}=""),"",$U${r}+${nhap("C", "x")}-${xuat("x")})`);                                                  // what the books say that day
-    f("AI", `IF(OR(${a}="",AG${r}=""),"",AF${r}-AH${r})`);
-    f("AJ", `IF(OR(${a}="",AG${r}=""),"",AI${r}*AB${r})`);
-    for (let c = 18; c <= 36; c++) { const cell = ws.getCell(r, c); cell.border = BORDER; if (c >= 21 && c !== 23 && c !== 33) cell.numFmt = c === 28 ? "#,##0.##" : MONEY; }
-    ws.getCell(`AG${r}`).numFmt = "dd/mm/yyyy";
+    // the last count of the month typed in KIỂM KÊ (blank when none), against the closing stock, as the finance team does: difference = counted - closing
+    const lastDay = `SUMPRODUCT(MAX((${range("N", KIEM_LAST)}=${a})*(${range("M", KIEM_LAST)}>=$S$2)*(${range("M", KIEM_LAST)}<=EOMONTH($S$2,0))*${range("M", KIEM_LAST)}))`; // the date of the last count of the month; SUMPRODUCT makes it an array formula in Excel and in Google Sheets
+    f("AF", `IF(${a}="","",IF(${lastDay}=0,"",SUMIFS(${range("O", KIEM_LAST)},${range("N", KIEM_LAST)},${a},${range("M", KIEM_LAST)},${lastDay})))`);
+    f("AG", `IF(OR(${a}="",AF${r}=""),"",AF${r}-AD${r})`);
+    f("AH", `IF(OR(${a}="",AF${r}=""),"",AG${r}*AB${r})`);
+    for (let c = 18; c <= 34; c++) { const cell = ws.getCell(r, c); cell.border = BORDER; if (c >= 21 && c !== 23) cell.numFmt = c === 28 ? "#,##0.##" : MONEY; }
     for (const col of ["R", "S", "T", "U", "V", "W", "X"]) input(ws.getCell(`${col}${r}`));
   }
   const t = ITEM_LAST + 1;
   ws.getCell(`R${t}`).value = "Cộng";
-  for (const col of ["V", "Z", "AC", "AE", "AJ"]) ws.getCell(`${col}${t}`).value = { formula: `SUM(${col}${FIRST}:${col}${ITEM_LAST})`, result: 0 };
-  for (let c = 18; c <= 36; c++) { const cell = ws.getCell(t, c); cell.font = { bold: true }; cell.border = BORDER; if (c >= 21) cell.numFmt = MONEY; }
-  ws.addConditionalFormatting({ ref: `AI${FIRST}:AJ${ITEM_LAST}`, rules: [{ type: "expression", priority: 1, formulae: [`AND(AI${FIRST}<>"",ABS(AI${FIRST})>0)`], style: RED }] }); // a count that differs from the books
+  for (const col of ["V", "Z", "AC", "AE", "AH"]) ws.getCell(`${col}${t}`).value = { formula: `SUM(${col}${FIRST}:${col}${ITEM_LAST})`, result: 0 };
+  for (let c = 18; c <= 34; c++) { const cell = ws.getCell(t, c); cell.font = { bold: true }; cell.border = BORDER; if (c >= 21) cell.numFmt = MONEY; }
+  ws.addConditionalFormatting({ ref: `AG${FIRST}:AH${ITEM_LAST}`, rules: [{ type: "expression", priority: 1, formulae: [`AND(AG${FIRST}<>"",ABS(AG${FIRST})>0)`], style: RED }] }); // a count that differs from the books
   ws.addConditionalFormatting({ ref: `AD${FIRST}:AD${ITEM_LAST}`, rules: [{ type: "expression", priority: 1, formulae: [`AND(AD${FIRST}<>"",AD${FIRST}<0)`], style: RED }] });     // more went out than was in
   return ws;
 }

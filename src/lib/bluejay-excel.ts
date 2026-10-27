@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { FLAG_LABELS, type RevenueWeek } from "./bluejay-revenue.ts";
+import { FLAG_LABELS, upgradeTotal, type RevenueWeek } from "./bluejay-revenue.ts";
 import { addDays, combine, isoWeek, summarize, vnDay, type HotelRecord, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const PCT = "0.00%", INT = "#,##0";
@@ -47,7 +47,8 @@ function revenueSheets(revenue: RevenueWeek, scopeId: number | null): Sheet[] {
   const stays = (list: RevenueWeek["hotels"][number]["bookings"]) => list.filter((b) => b.stay);
   const total = (list: RevenueWeek["hotels"][number]["bookings"], key: "roomInWeek" | "servicePrice") => Math.round(stays(list).reduce((t, b) => t + b[key], 0));
   const summary = hotels.map((h): Cell[] => {
-    const room = total(h.bookings, "roomInWeek"), service = total(h.bookings, "servicePrice");
+    const up = Math.round(upgradeTotal(h.services));
+    const room = total(h.bookings, "roomInWeek") + up, service = total(h.bookings, "servicePrice") - up;
     const apartRoom = total(h.excluded ?? [], "roomInWeek"), apartService = total(h.excluded ?? [], "servicePrice");
     return [h.name, new Set(stays(h.bookings).map((b) => b.code)).size, room, service, room + service, apartRoom, apartService, room + apartRoom + service + apartService];
   });
