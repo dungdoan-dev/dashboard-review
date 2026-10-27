@@ -6,6 +6,9 @@ import { ArrowDownToLine, ExternalLink, FileDown, FileSpreadsheet } from "lucide
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS, addDays, mondayOf } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
+import { BluejayFnbReconcile } from "@/components/bluejay-fnb";
+import { SheetKindSwitch } from "@/components/sheet-kind-switch";
+import type { SheetKind } from "@/lib/ledger-sheets";
 import { KIND_LABELS, ledgerWarnings, parseLedgerWorkbook, reconcile, type Item, type Kind, type Ledger } from "@/lib/bluejay-reconcile";
 import type { RevenueBooking } from "@/lib/bluejay-revenue";
 
@@ -30,6 +33,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const [locked, setLocked] = useState<string[] | null>(null); // Mondays whose rows are protected in the sheet (null: not read yet)
   const [lockBusy, setLockBusy] = useState("");
   const [lockMessage, setLockMessage] = useState("");
+  const [kind, setKind] = useState<SheetKind>("hotel");
   const lockMonth = ledger?.month || month;
   const sheetUrl = useSheetUrl(scopeId);
 
@@ -131,8 +135,11 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
     <td>{item.notes.length ? item.notes.join("; ") : "–"}</td>
   </tr>;
 
+  if (kind === "fnb") return <><SheetKindSwitch value={kind} onChange={setKind} /><BluejayFnbReconcile scopeId={scopeId} /></>;
+
   return (
     <section className="summary-report">
+      <SheetKindSwitch value={kind} onChange={setKind} />
       <div className="summary-hero">
         <div>
           <h1>Đối soát bảng kê thu tiền · {hotelName || "chưa chọn khách sạn"}</h1>

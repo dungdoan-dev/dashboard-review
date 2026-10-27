@@ -54,8 +54,8 @@ export function lineMonths(lines: ExpenseLine[]) {
 }
 
 /** Costs of the lines in the report groups, each group with its expenses (transfers between funds are not costs). Groups in the report's order; "Chưa phân loại" only when there is one. */
-export function costTree(expenses: ExpenseLine[]) {
-  const listed = new Map(EXPENSES.map(([, name, , group]) => [norm(name), { name, group }]));
+export function costTree(expenses: ExpenseLine[], list: typeof EXPENSES = EXPENSES) {
+  const listed = new Map(list.map(([, name, , group]) => [norm(name), { name, group }]));
   const tree = new Map<string, Map<string, number>>(REPORT_GROUPS.map((g) => [g, new Map()]));
   for (const e of expenses) {
     const paid = e.cash + e.bank + e.visa, k = listed.get(norm(e.kind));
@@ -64,7 +64,7 @@ export function costTree(expenses: ExpenseLine[]) {
     if (!tree.has(group)) tree.set(group, new Map());
     tree.get(group)!.set(name, (tree.get(group)!.get(name) ?? 0) + paid);
   }
-  const order = EXPENSES.map((e) => e[1]);
+  const order = list.map((e) => e[1]);
   return [...tree].filter(([g, m]) => g !== UNLISTED || m.size).map(([group, m]) => ({
     group, total: [...m.values()].reduce((a, b) => a + b, 0),
     kinds: [...m].map(([name, total]) => ({ name, total })).sort((a, b) => (order.indexOf(a.name) + 1 || 99) - (order.indexOf(b.name) + 1 || 99)),

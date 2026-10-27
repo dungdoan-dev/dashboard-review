@@ -6,6 +6,9 @@ import { ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
+import { BluejayFnbFinance } from "@/components/bluejay-fnb";
+import { SheetKindSwitch } from "@/components/sheet-kind-switch";
+import type { SheetKind } from "@/lib/ledger-sheets";
 import { ledgerWarnings, parseLedgerWorkbook, type Ledger } from "@/lib/bluejay-reconcile";
 import { financeReport, parseExpenses, summarizeFinance, type ExpenseLine, type ReportRow } from "@/lib/finance-summary";
 import { parseOutsideServices } from "@/lib/outside-services";
@@ -40,12 +43,15 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<SheetKind>("hotel");
   const [sheetLink, setSheetLink] = useState<{ url: string; gid: number } | null>(null);
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
   const sheetUrl = useSheetUrl(scopeId);
 
   const report = useMemo(() => (income ? financeReport(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
   const summary = useMemo(() => (income ? summarizeFinance(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
+
+  if (kind === "fnb") return <><SheetKindSwitch value={kind} onChange={setKind} /><BluejayFnbFinance scopeId={scopeId} /></>;
 
   async function onSheet() {
     if (!scopeId) return;
@@ -131,6 +137,7 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
 
   return (
     <section className="summary-report">
+      <SheetKindSwitch value={kind} onChange={setKind} />
       <div className="summary-hero">
         <div>
           <h1>Thu chi · {hotelName || "chưa chọn khách sạn"}</h1>

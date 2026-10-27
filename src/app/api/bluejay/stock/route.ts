@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const id = await sheetIdOf(hotel, kind);
     if (!id) return Response.json({ message: kind === "fnb" ? "Chi nhánh này chưa có link Ăn sáng, cafe, mini mart. Thêm ở Cài đặt → Link Google Sheet." : "Khách sạn này chưa có Google Sheet." }, { status: 404 });
     const sheets = await readStockSheets(id, month, kind);
-    if (!sheets.length) return Response.json({ message: `Không thấy sheet kho của tháng ${mm}/${year} (cần các tab tên ${KHO_KINDS[kind].map((k) => `${k.toUpperCase()} ${mm}/${year}`).join(", ")}).` }, { status: 404 });
+    if (!sheets.length) return Response.json({ message: `Không thấy sheet kho (cần các tab ${KHO_KINDS[kind].map((k) => k.toUpperCase()).join(", ")}; mỗi tháng một file, hoặc thêm “${mm}/${year}” vào tên tab).` }, { status: 404 });
     const sold = kind === "hotel" ? await readServiceItems(serviceDb(), hotel, from, to, "Minibar").catch(() => null) : null; // the sheet is still shown when Blue Jay's side cannot be read
     return Response.json({ sheets, sheetUrl: sheetUrl(id), minibarSold: sold?.items ?? null, storedWeeks: sold?.weeks ?? [] });
   } catch (e) {

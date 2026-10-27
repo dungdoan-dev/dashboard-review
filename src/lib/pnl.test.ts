@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { FNB_EXPENSES, MART_EXPENSES } from "./expense-kinds.ts";
 import { costTree, lineMonths, noteMonths, pnlRows, revenueLines, roomByCheckout, type MonthData } from "./pnl.ts";
 
 const line = (kind: string, note: string, cash: number) => ({ row: 4, date: "2026-08-05", kind, note, cash, bank: 0, visa: 0, commission: 0, cardFee: 0 });
@@ -45,4 +46,15 @@ test("room money by check-out day counts whole stays, M-Standard / Unassigned an
   const noShow = (roomPrice: number) => ({ stay: false, roomInWeek: 0, roomPrice }) as never;
   assert.equal(roomByCheckout({ bookings: [stay(1000), stay(500), noShow(300)], excludedRoom: 200 }), 2000);
   assert.equal(roomByCheckout({ bookings: [stay(1000)], excludedRoom: undefined }), 1000); // a stored week that predates the excluded data
+});
+
+test("the café and mini mart lists file every kind in a report group, and the food groups are running costs", () => {
+  for (const list of [FNB_EXPENSES, MART_EXPENSES]) {
+    const tree = costTree(list.map(([, name]) => line(name, "", 1000)), list);
+    assert.equal(tree.find((g) => g.group.startsWith("Chưa phân loại")), undefined); // every name is found in its own list
+    assert.equal(tree.reduce((s, g) => s + g.total, 0), 1000 * (list.length - 1)); // all but the transfer between funds
+  }
+  const cafe = costTree([line("Chi nguyên liệu pha chế", "cà phê hạt", 5000), line("Chi mua hàng hóa", "bia", 3000)], FNB_EXPENSES);
+  assert.deepEqual(cafe.map((g) => [g.group, g.total]).filter(([, t]) => t), [["Chi phí vận hành", 8000]]);
+  assert.ok(costTree([line("Chi nguyên liệu pha chế", "", 1)]).some((g) => g.group.startsWith("Chưa phân loại"))); // the hotel list does not know it
 });

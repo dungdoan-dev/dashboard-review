@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fnbSales, parseFnbIncome, parseFnbLedger } from "./fnb-ledger.ts";
+import { fnbReport, fnbSales, fnbUnitOf, parseFnbIncome, parseFnbLedger } from "./fnb-ledger.ts";
 
 const OCT1 = 46296; // 2026-10-01 as an Excel serial
 const pad = (cells: unknown[], n: number) => [...cells, ...Array(Math.max(0, n - cells.length)).fill("")];
@@ -65,4 +65,19 @@ test("a tab that is not an income tab of this layout is refused with its name", 
   assert.throws(() => parseFnbLedger([{ name: "BK CHI 10-2026", rows: chi }]), /tab thu/);
   assert.throws(() => parseFnbIncome("BK THU 10-2026", [["Ngày", "Người bán"], ["x"]]), /thiếu cột/);
   assert.throws(() => parseFnbIncome("BK THU 10-2026", [["a", "b"]]), /BK THU 10-2026/);
+});
+
+test("the month's report per unit: sales, spending, funds (POS into the bank), the unit of each tab, and what looks wrong", () => {
+  assert.deepEqual(["BK THU 10-2026", "BK CHI", "THU MINIMART", "chi minimart 10-2026", "NGUYÊN LIỆU CAFE", "Hướng dẫn"].map(fnbUnitOf), ["cafe", "cafe", "mart", "mart", null, null]);
+  const r = fnbReport([{ name: "Danh mục", rows: [["x"]] }, { name: "BK THU", rows: cafe }, { name: "BK CHI", rows: chi }, { name: "THU MINIMART", rows: mart }], "2026-10");
+  const [c, m] = r.units;
+  assert.deepEqual([c.unit, c.sales, c.spent.total, c.expenses, c.funds], ["cafe", { cash: 331000, bank: 165400, pos: 74000, total: 570400 }, 60000, 2, { cash: 331000 - 60000, bank: 165400 + 74000 + 20000 }]);
+  assert.deepEqual([m.unit, m.sales.total, m.apps.shopee, m.rental, m.tree.every((g) => g.total === 0)], ["mart", 8462878, 419528, 50000, true]);
+  assert.deepEqual(r.units.map((u) => u.days.length), [1, 2]); // cafe: everything on the 1st
+  assert.deepEqual(r.warnings, ["Mini mart: không thấy tab chi, chi tính 0."]); // "Chi NL cafe" is an old name of "Chi nguyên liệu pha chế": found
+  assert.deepEqual(c.tree.filter((g) => g.total).map((g) => [g.group, g.total]), [["Chi phí vận hành", 60000]]);
+  const odd = fnbReport([{ name: "BK THU", rows: cafe }, { name: "BK CHI", rows: [...chi.slice(0, 4), [OCT1, "Chi lạ", "x", 1000, "", "", "", 1000]] }]);
+  assert.deepEqual(odd.warnings, ["Ăn sáng, cafe: hạng mục chi không có trong danh mục: “Chi lạ”."]);
+  assert.ok(fnbReport([{ name: "BK THU", rows: cafe }], "2026-11").warnings.some((w) => /khác tháng/.test(w)));
+  assert.throws(() => fnbReport([{ name: "Hướng dẫn", rows: [] }]), /Không thấy tab thu chi/);
 });

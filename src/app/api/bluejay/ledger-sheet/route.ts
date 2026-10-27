@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const id = await sheetIdOf(hotel, kind);
     if (!id) return Response.json({ message: kind === "fnb" ? "Chi nhánh này chưa có link Ăn sáng, cafe, mini mart. Thêm ở Cài đặt → Link Google Sheet." : "Khách sạn này chưa có Google Sheet bảng kê. Dùng file Excel." }, { status: 404 });
     const sheets = await readLedgerTabs(id, month, kind);
-    if (!sheets.length) return Response.json({ message: `Không thấy tab bảng kê tháng ${month.slice(5)}/${month.slice(0, 4)} (tên tab cần có “${month.slice(5)}/${month.slice(0, 4)}” hoặc “${month.slice(5)}-${month.slice(0, 4)}”).` }, { status: 404 });
+    if (!sheets.length) return Response.json({ message: kind === "fnb" ? "Không thấy tab thu chi trong sheet Ăn sáng, cafe, mini mart (cần BK THU, BK CHI, THU MINIMART, CHI MINIMART)." : `Không thấy tab bảng kê (cần tab BK THU và BK CHI; mỗi tháng một file, hoặc tab có “${month.slice(5)}/${month.slice(0, 4)}” trong tên).` }, { status: 404 });
     return Response.json({ sheets, sheetUrl: sheetUrl(id), gid: sheets[0].gid });
   } catch (e) {
     return Response.json({ message: e instanceof Error ? e.message : String(e) }, { status: 502 });

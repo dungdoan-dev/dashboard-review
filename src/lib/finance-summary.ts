@@ -80,7 +80,7 @@ export type FinanceSummary = {
 };
 
 /** Everything between from and to (inclusive, yyyy-mm-dd); omitted: every line given. */
-export function summarizeFinance(entries: LedgerEntry[], expenses: ExpenseLine[], range?: { from: string; to: string }): FinanceSummary {
+export function summarizeFinance(entries: LedgerEntry[], expenses: ExpenseLine[], range?: { from: string; to: string }, list: typeof EXPENSES = EXPENSES): FinanceSummary {
   const inside = (d: string) => !range || (d >= range.from && d <= range.to);
   const inc = entries.filter((e) => inside(e.date)), exp = expenses.filter((e) => inside(e.date));
   const outsideExp = expenses.filter((e) => !inside(e.date));
@@ -92,7 +92,7 @@ export function summarizeFinance(entries: LedgerEntry[], expenses: ExpenseLine[]
     for (const e of from) { const t = sum(e.taken); if (t) m.set(key(e) || "(chưa ghi)", (m.get(key(e) || "(chưa ghi)") ?? 0) + t); }
     return [...m].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
   };
-  const kinds = new Map(EXPENSES.map(([code, name, , grp]) => [norm(name), { code, name, group: grp, cash: 0, bank: 0, visa: 0, total: 0 }]));
+  const kinds = new Map(list.map(([code, name, , grp]) => [norm(name), { code, name, group: grp, cash: 0, bank: 0, visa: 0, total: 0 }]));
   const unlisted: FinanceSummary["expense"]["unlisted"] = [];
   const total = { cash: 0, bank: 0, visa: 0, all: 0 };
   const groups = new Map<string, number>(REPORT_GROUPS.map((g) => [g, 0]));
@@ -133,6 +133,17 @@ export function summarizeFinance(entries: LedgerEntry[], expenses: ExpenseLine[]
 export type ReportRow = { label: string; kind: "section" | "total" | "line"; values: number[] };
 export type FinanceReport = { columns: { label: string; from: string; to: string }[]; rows: ReportRow[] };
 
+/** One column per week (Monday to Sunday, cut to from..to) and a last one for the whole period. */
+export function weekColumns(range: { from: string; to: string }): FinanceReport["columns"] {
+  const columns: FinanceReport["columns"] = [];
+  for (let monday = mondayOf(range.from); monday <= range.to; monday = addDays(monday, 7)) {
+    const from = monday < range.from ? range.from : monday, end = addDays(monday, 6), to = end > range.to ? range.to : end;
+    columns.push({ label: `Tuần ${isoWeek(monday)}`, from, to });
+  }
+  columns.push({ label: "Cả kỳ", from: range.from, to: range.to });
+  return columns;
+}
+
 /** The revenue lines: a service of the income ledger goes to the first line whose pattern fits, anything else is "Thu khác". */
 const REVENUE_LINES: [string, RegExp][] = [
   ["Tiền phòng", /^(tien phong|coc phong|(nang|lang) hang phong)$/], // "Lâng hạng phòng" is how the sheet spells it
@@ -144,12 +155,7 @@ const REVENUE_LINES: [string, RegExp][] = [
 
 /** One column per week (Monday to Sunday, cut to from..to) and one for the whole period. The first block is the takings by service on the day the money came in (cash basis: an OTA that pays a month of rooms in one week shows it all in that week), NOT the accountant's revenue by stay date; "tiền thu" is new money into each fund (deposits of guests already staying were received earlier). */
 export function financeReport(entries: LedgerEntry[], expenses: ExpenseLine[], range: { from: string; to: string }): FinanceReport {
-  const columns: FinanceReport["columns"] = [];
-  for (let monday = mondayOf(range.from); monday <= range.to; monday = addDays(monday, 7)) {
-    const from = monday < range.from ? range.from : monday, end = addDays(monday, 6), to = end > range.to ? range.to : end;
-    columns.push({ label: `Tuần ${isoWeek(monday)}`, from, to });
-  }
-  columns.push({ label: "Cả kỳ", from: range.from, to: range.to });
+  const columns = weekColumns(range);
   const sums = columns.map((c) => summarizeFinance(entries, expenses, c));
   const by = (f: (s: FinanceSummary) => number) => sums.map(f);
   const revenue = (name: string) => by((s) => s.income.revenueByService.reduce((x, r) => (revenueLine(r.name) === name ? x + r.total : x), 0));

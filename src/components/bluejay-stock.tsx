@@ -6,6 +6,8 @@ import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
+import { SheetKindSwitch } from "@/components/sheet-kind-switch";
+import { SHEET_KINDS, type SheetKind } from "@/lib/ledger-sheets";
 import { parseInventorySheet, salesCheck, stockReport, type Inventory, type SalesCheck, type StockLine } from "@/lib/inventory";
 import { ReachTable, type Col } from "@/components/reach-table";
 
@@ -24,8 +26,10 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
   const [khoName, setKhoName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<SheetKind>("hotel");
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-  const sheetUrl = useSheetUrl(scopeId);
+  const sheetUrl = useSheetUrl(scopeId, kind);
+  const changeKind = (k: SheetKind) => { setKind(k); setLoaded(null); setError(""); }; // the other sheet has other tabs: what is on screen is of the old one
   const from = `${month}-01`, to = monthEnd(month);
 
   const kho = loaded ? loaded.khos.find((k) => k.sheet === khoName) ?? loaded.khos[0] : null;
@@ -37,7 +41,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
     if (!scopeId) return;
     setError(""); setBusy(true);
     try {
-      const res = await fetch(`/api/bluejay/stock?hotel=${scopeId}&month=${month}`, { cache: "no-store" });
+      const res = await fetch(`/api/bluejay/stock?hotel=${scopeId}&month=${month}&kind=${kind}`, { cache: "no-store" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.message ?? `Lỗi ${res.status}`);
       const khos = sheetsOf(body.sheets);
@@ -86,10 +90,11 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
 
   return (
     <section className="summary-report">
+      <SheetKindSwitch value={kind} onChange={changeKind} />
       <div className="summary-hero">
         <div>
-          <h1>Kho · {hotelName || "chưa chọn khách sạn"}</h1>
-          <p>Tồn kho của tháng theo từng loại kho: tồn đầu + nhập − xuất = tồn cuối theo giá bình quân của kế toán (hoặc đơn giá cố định nếu có), kiểm kê so với sổ, và với minibar thì số bán so với Blue Jay. Lấy từ Google Sheet của khách sạn (mỗi loại kho và mỗi tháng một tab).</p>
+          <h1>Kho{kind === "fnb" ? ` ${SHEET_KINDS[1].label}` : ""} · {hotelName || "chưa chọn khách sạn"}</h1>
+          <p>Tồn kho của tháng theo từng loại kho: tồn đầu + nhập − xuất = tồn cuối theo giá bình quân của kế toán (hoặc đơn giá cố định nếu có), kiểm kê so với sổ, và với minibar thì số bán so với Blue Jay. Lấy từ Google Sheet của chi nhánh (mỗi loại kho một tab; khách sạn: MINIBAR, AMENITIES, VẬT TƯ, ĐỒ VẢI; ăn sáng, cafe, mini mart: NGUYÊN LIỆU CAFE, NGUYÊN LIỆU ĂN SÁNG, VẬT TƯ).</p>
         </div>
         <div className="summary-controls">
           <input type="month" aria-label="Tháng" value={month} onChange={(event) => event.target.value && setMonth(event.target.value)} disabled={!scopeId} />
