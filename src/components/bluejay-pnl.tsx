@@ -20,8 +20,9 @@ type Ledger = { commission: number; otherDeduction: number; expenses: ExpenseLin
 type Sheets = { name: string; rows: unknown[][] }[];
 
 /** One month of the hotel's ledger tabs: deductions and expenses. */
-function readLedger(sheets: Sheets, month: string): Ledger {
+function readLedger(sheets: Sheets, month: string): Ledger | null {
   const ledger = parseLedgerWorkbook(sheets);
+  if (ledger.month && ledger.month !== month) return null; // one file per month: the same tabs come back for every month, only the month they are for counts
   let expenses: ExpenseLine[] = [];
   for (const s of sheets) { try { expenses = parseExpenses(s.rows); break; } catch { /* not the expense tab */ } }
   const s = summarizeFinance(ledger.entries, expenses, { from: `${month}-01`, to: monthEnd(month) });

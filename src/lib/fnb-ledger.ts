@@ -1,7 +1,7 @@
 // The thu chi of "Ăn sáng, cafe, mini mart" (kind "fnb" of a branch): income tabs "BK THU mm-yyyy" (cafe: one row per shift of a seller) or "THU MINIMART mm-yyyy" (mini mart: one row per day),
 // expense tabs "BK CHI" / "CHI MINIMART" (same columns as the hotel's, read by parseExpenses). Pure functions: tested by fnb-ledger.test.ts. Imports use ".ts" because tests run this with plain Node.
 import { ledgerDate, monthOf } from "./bluejay-reconcile.ts";
-import { UNLISTED, parseExpenses, type ExpenseLine } from "./finance-summary.ts";
+import { UNLISTED, ledgerBalances, parseExpenses, type ExpenseLine } from "./finance-summary.ts";
 import { FNB_EXPENSES, MART_EXPENSES, OLD_FNB_KINDS } from "./expense-kinds.ts";
 import { costTree } from "./pnl.ts";
 
@@ -99,10 +99,10 @@ export function fnbReport(sheets: { name: string; rows: unknown[][] }[], month =
     const sum = (f: (l: FnbIncomeLine) => number) => lines.reduce((t, l) => t + f(l), 0);
     const sales = { cash: sum((l) => l.cash), bank: sum((l) => l.bank), pos: sum((l) => l.pos), total: sum(fnbSales) };
     const spent = { cash: expenses.reduce((t, e) => t + e.cash, 0), bank: expenses.reduce((t, e) => t + e.bank, 0), visa: expenses.reduce((t, e) => t + e.visa, 0), total: expenses.reduce((t, e) => t + paid(e), 0) };
-    const days = new Map<string, { date: string; income: number; cash: number; bank: number; expense: number }>(); // bank: transfers + POS
-    const day = (date: string) => days.get(date) ?? days.set(date, { date, income: 0, cash: 0, bank: 0, expense: 0 }).get(date)!;
-    for (const l of lines) { const d = day(l.date); d.income += fnbSales(l); d.cash += l.cash; d.bank += l.bank + l.pos; }
-    for (const e of expenses) day(e.date).expense += paid(e);
+    const days = new Map<string, { date: string; income: number; cash: number; bank: number; expense: number; inCash: number; inBank: number; outCash: number; outBank: number }>(); // cash, bank: sales (bank = transfers + POS); inCash, inBank: all money in (other sources too); outCash, outBank: money out
+    const day = (date: string) => days.get(date) ?? days.set(date, { date, income: 0, cash: 0, bank: 0, expense: 0, inCash: 0, inBank: 0, outCash: 0, outBank: 0 }).get(date)!;
+    for (const l of lines) { const d = day(l.date); d.income += fnbSales(l); d.cash += l.cash; d.bank += l.bank + l.pos; d.inCash += l.cash + l.otherCash; d.inBank += l.bank + l.pos + l.otherBank; }
+    for (const e of expenses) { const d = day(e.date); d.expense += paid(e); d.outCash += e.cash; d.outBank += e.bank + e.visa; }
     const tree = costTree(expenses, unit === "mart" ? MART_EXPENSES : FNB_EXPENSES);
     const unlisted = tree.find((g) => g.group === UNLISTED)?.kinds ?? [];
     if (unlisted.length) warnings.push(`${label}: hạng mục chi không có trong danh mục: ${unlisted.map((k) => `“${k.name}”`).join(", ")}.`);
@@ -115,7 +115,7 @@ export function fnbReport(sheets: { name: string; rows: unknown[][] }[], month =
       unit, label, name: incomes.find((i) => i.unit)?.unit ?? "", sales, spent, expenses: expenses.length, incomeLines: lines.length,
       other: { cash: otherCash, bank: otherBank }, apps: { shopee: sum((l) => l.shopee), grab: sum((l) => l.grab) }, voided: sum((l) => l.voided), rental: sum((l) => l.rental),
       funds: { cash: sales.cash + otherCash - spent.cash, bank: sales.bank + sales.pos + otherBank - spent.bank - spent.visa },
-      days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)), tree,
+      days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)), tree, balances: ledgerBalances(own),
     }];
   });
   if (!units.length) throw new Error("Không thấy tab thu chi nào (BK THU, BK CHI, THU MINIMART, CHI MINIMART).");

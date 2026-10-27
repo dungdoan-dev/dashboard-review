@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseLedger } from "./bluejay-reconcile.ts";
-import { financeReport, parseExpenses, reportGroup, summarizeFinance } from "./finance-summary.ts";
+import { financeReport, ledgerBalances, parseExpenses, reportGroup, summarizeFinance } from "./finance-summary.ts";
 
 const ledgerRows = [
   ["BẢNG KÊ THU TIỀN KHÁCH SẠN"],
@@ -137,4 +137,10 @@ test("an expense sheet without the commission and card fee columns still reads (
   assert.equal(lines.length, 4);
   assert.deepEqual(lines.map((l) => [l.commission, l.cardFee]), [[0, 0], [0, 0], [0, 0], [0, 0]]);
   assert.equal(lines[0].cash, 450000);
+});
+
+test("the balances typed at the top of a ledger tab: a label and its number in one of the next two cells, the first tab that has it wins, text is not a number", () => {
+  const rows = [["BẢNG KÊ", "", "Đầu kỳ tiền mặt", 1000, "Đầu kỳ ngân hàng", "", 5000], ["", "CUỐI KỲ TIỀN MẶT", "", 2000, "Cuối kỳ ngân hàng", "1.000"]];
+  assert.deepEqual(ledgerBalances([{ rows }, { rows: [["Đầu kỳ tiền mặt", 9]] }]), { openCash: 1000, closeCash: 2000, openBank: 5000, closeBank: null });
+  assert.deepEqual(ledgerBalances([{ rows: [["x"], [], [], [], ["Đầu kỳ tiền mặt", 7]] }]), { openCash: null, closeCash: null, openBank: null, closeBank: null }); // only the first rows are read
 });

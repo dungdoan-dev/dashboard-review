@@ -3,6 +3,7 @@ import { createClient as createServiceClient, type SupabaseClient } from "@supab
 import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
 import { dailyRevenue } from "./bluejay-daily.ts";
 import { checkoutRevenue } from "./bluejay-checkout.ts";
+import { channelCounts } from "./ql-channels.ts";
 import { latestBookings, openDebts, paymentCheck, weeksWithDebt } from "./bluejay-debt.ts";
 import { REVENUE_VERSION, revenueBookings, serviceDay, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 import { BLUEJAY_HOTELS, addDays, apiDate, hotelRecord, inApiWindow, isDate, redactReservations, todayVN, isoWeek, lastFullWeek, mondayOf, occupancyDaily, occupancyTotals, weekEnd, type OccupancyResponse, type Reservation, type ServiceResponse, type WeeklyReport } from "./bluejay-metrics.ts";
@@ -250,6 +251,14 @@ export async function readDebts(db: SupabaseClient, today: string) {
   const rows = openDebts(await recentRevenueWeeks(db), today);
   // Only weeks that still owe are re-pulled; a settled week keeps its old snapshot and must not make the page look stale.
   return { rows, oldestAsOf: rows.map((r) => r.asOf).sort()[0] ?? null };
+}
+
+/** Bookings and cancellations per channel per week of a month (by booking date), from the stored weeks. A booking made in the month is stored in the week it checks out or later, so every week from the month's first Monday on is read. */
+export async function readChannelCounts(db: SupabaseClient, hotelId: number, month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Tháng không hợp lệ.");
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(`${month}-01`)).order("week_start");
+  if (error) throw new Error(error.message);
+  return channelCounts((data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION), hotelId, month);
 }
 
 /** Paid / unpaid check of the stays that checked out in [from, to], from the stored weeks (no call to Blue Jay). */

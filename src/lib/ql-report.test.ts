@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { qlFunds, qlResult, qlWeekly, monthRange } from "./ql-report.ts";
+import { qlBooks, qlFunds, qlResult, qlWeekly, monthRange } from "./ql-report.ts";
 import type { CheckoutDay } from "./bluejay-checkout.ts";
 import type { FnbReport } from "./fnb-ledger.ts";
 
@@ -35,9 +35,10 @@ test("the ledger block keeps the money in and out and drops the by-service reven
 
 test("fund lines: money in and out per fund, the totals over the units, net = in - out", () => {
   const hotel = { income: { taken: { cash: 100, bank: 50, card: 0 }, deposit: { cash: 10, bank: 0, card: 0 }, advance: { cash: 5, bank: 0, card: 0 } }, expense: { total: { cash: 20, bank: 5, visa: 0 } }, funds: { cash: 75, bank: 45, card: 0 } } as never;
-  const fnb = { units: [{ label: "Mini mart", sales: { cash: 30, bank: 40, pos: 0 }, other: { cash: 0, bank: 0 }, spent: { cash: 10, bank: 0, visa: 0 }, funds: { cash: 20, bank: 40 } }] } as unknown as FnbReport;
-  const lines = qlFunds({ hotel, fnb });
+  const fnb = { units: [{ label: "Mini mart", sales: { cash: 30, bank: 40, pos: 0 }, other: { cash: 0, bank: 0 }, spent: { cash: 10, bank: 0, visa: 0 }, funds: { cash: 20, bank: 40 }, balances: { openCash: null, closeCash: null, openBank: null, closeBank: null } }] } as unknown as FnbReport;
+  const lines = qlFunds({ hotel, balances: { openCash: 1000, closeCash: null, openBank: null, closeBank: null }, fnb });
   assert.deepEqual(lines.map((l) => [l.label, l.in, l.out, l.net]), [["Khách sạn · tiền mặt", 95, 20, 75], ["Khách sạn · tài khoản ngân hàng", 50, 5, 45], ["Khách sạn · thẻ visa", 0, 0, 0], ["Mini mart · tiền mặt", 30, 10, 20], ["Mini mart · ngân hàng (gồm POS)", 40, 0, 40], ["Tổng tiền mặt", 125, 30, 95], ["Tổng ngân hàng", 90, 5, 85]]);
+  assert.deepEqual(lines.map((l) => [l.open, l.close]), [[1000, 1075], [null, null], [null, null], [null, null], [null, null], [1000, 1095], [0, 85]]); // a line without a typed opening has no closing; the totals count it as 0
   assert.ok(lines.every((l) => l.in - l.out === l.net));
 });
 
@@ -49,8 +50,20 @@ test("the month's result: one column per unit and a total, hotel costs from the 
   const r = qlResult("2026-10", { days: [day("2026-10-02", { room: 1000, service: 100, excludedRoom: 50 })], hotel, fnb });
   const by = (label: string) => r.rows.find((x) => x.label.startsWith(label))!.values;
   assert.deepEqual(r.columns, ["Khách sạn", "Mini mart", "Tổng"]);
-  assert.deepEqual(by("I. TỔNG DOANH THU"), [1100, 500, 1600]); // 1000 + 100 + 50 - 50 deducted; 500 sales
-  assert.deepEqual(by("II. TỔNG CHI PHÍ"), [400, 60, 460]); // the 30 September line is out of the month
+  assert.deepEqual(by("I, TỔNG DOANH THU"), [1100, 500, 1600]); // 1000 + 100 + 50 - 50 deducted; 500 sales
+  assert.deepEqual(by("II, TỔNG CHI PHÍ"), [400, 60, 460]); // the 30 September line is out of the month
   assert.deepEqual(by("Chi mua hàng hóa"), [0, 60, 60]);
-  assert.deepEqual(by("III. LỢI NHUẬN"), [700, 440, 1140]);
+  assert.deepEqual(by("III, Lợi nhuận"), [700, 440, 1140]);
+});
+
+test("the cash book and the bank book day by day: opening, in and out per unit, closing, and the sheet's own closing to compare with", () => {
+  const hotel = { summary: { fundDaily: [{ date: "2026-10-02", cash: { in: 100, adv: 20, out: 30 }, bank: { in: 50, adv: 0, out: 10 } }] }, balances: { openCash: 1000, closeCash: 1090, openBank: 500, closeBank: 540 } } as never;
+  const unit = { label: "Mini mart", days: [{ date: "2026-10-02", inCash: 40, outCash: 5, inBank: 60, outBank: 0 }], balances: { openCash: 200, closeCash: 235, openBank: null, closeBank: null } };
+  const { cash, bank } = qlBooks("2026-10", { hotel, fnb: { units: [unit] } as unknown as FnbReport });
+  assert.deepEqual(cash.cols.map((c) => c.label), ["Khách sạn · thu", "Khách sạn · chi", "Mini mart · thu", "Mini mart · chi"]);
+  assert.equal(cash.rows.length, 31);
+  assert.deepEqual([cash.opening, cash.rows[0].close, cash.rows[1].open, cash.rows[1].values, cash.rows[1].close, cash.rows[2].open, cash.total.close, cash.total.values], [1200, 1200, 1200, [120, 30, 40, 5], 1325, 1325, 1325, [120, 30, 40, 5]]);
+  assert.equal(cash.sheetClose, 1325); // 1090 + 235: the sheets agree
+  assert.deepEqual([bank.opening, bank.rows[1].close, bank.total.close, bank.sheetClose, bank.cols.filter((c) => c.memo).length], [500, 540, 540, 540, 2]); // the F&B account is beside, not in the balance
+  assert.equal(qlBooks("2026-10", { hotel: { ...(hotel as object), balances: { openCash: null, closeCash: null, openBank: null, closeBank: null } } as never }).cash.sheetClose, null); // no typed balances: nothing to compare
 });

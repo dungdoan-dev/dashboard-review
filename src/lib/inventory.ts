@@ -40,7 +40,7 @@ export function parseInventorySheet(rows: Rows, red: Set<string> = new Set()): I
   const head = findBlock(rows, ["mat hang", "loai", "dvt", "ton dau (sl)", "ton dau (gia tri)"]);
   if (head) {
     const header = rows[head.row].map(norm), at = (w: string) => header.indexOf(w); // Blue Jay name and fixed price may sit left or right of the item list: found on the whole header row
-    for (const { r, row } of list(head, 12)) { const n = text(r[0]); if (n && !/^(cong|tong)$/.test(norm(n))) inv.items.push({ name: n, kind: text(r[1]), unit: text(r[2]), openQty: num(r[3]), openValue: num(r[4]), fixedPrice: at("don gia co dinh") >= 0 ? num(rows[row - 1][at("don gia co dinh")]) : 0, bluejay: at("ten trong blue jay") >= 0 ? text(rows[row - 1][at("ten trong blue jay")]) : "", immediate: red.has(`${row - 1},${head.col}`) || norm(text(r[1])) === "mua xuat luon" }); }
+    for (const { r, row } of list(head, 12)) { const n = text(r[0]); if (n && !/^(cong|tong|thang)$/.test(norm(n)) && !/^(tong )?cong$/.test(norm(text(r[2])))) inv.items.push({ name: n, kind: text(r[1]), unit: text(r[2]), openQty: num(r[3]), openValue: num(r[4]), fixedPrice: at("don gia co dinh") >= 0 ? num(rows[row - 1][at("don gia co dinh")]) : 0, bluejay: at("ten trong blue jay") >= 0 ? text(rows[row - 1][at("ten trong blue jay")]) : "", immediate: red.has(`${row - 1},${head.col}`) || norm(text(r[1])) === "mua xuat luon" }); }
   }
   // the month of the item list: a cell "Tháng" with the first day of the month next to it
   for (let r = 0; r < Math.min(rows.length, 4) && !inv.month; r++) for (let c = 0; c + 1 < rows[r].length; c++) if (norm(rows[r][c]).startsWith("thang")) { const d = ledgerDate(rows[r][c + 1]); if (d) { inv.month = d.slice(0, 7); break; } }

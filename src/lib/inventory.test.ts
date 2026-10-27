@@ -79,3 +79,10 @@ test("the Blue Jay name and the fixed price are read wherever their columns sit,
   const inv = parseInventorySheet(sheet([nhap, xuat, kiem, bj, items], 46296));
   assert.deepEqual(inv.items.map((i) => [i.name, i.bluejay, i.fixedPrice]), [["Snack", "Snack BJ", 0], ["Nước suối (miễn phí)", "", 3125]]);
 });
+
+test("the F&B kho keeps its month and its totals on the first row under the header: that row is not an item", () => {
+  const head = ["Mặt hàng", "Loại", "ĐVT", "Tồn đầu (SL)", "Tồn đầu (giá trị)"];
+  const rows = [[], [], head, ["Tháng", 46296, "TỔNG CỘNG", "", 13_649_365], ["Atiso khô", "Nguyên liệu cafe", "Gói", 1, 68_600], ["Base", "Nguyên liệu cafe", "Hộp", 5, 425_000]];
+  const inv = parseInventorySheet(rows);
+  assert.deepEqual([inv.items.map((i) => i.name), inv.month], [["Atiso khô", "Base"], "2026-10"]);
+});

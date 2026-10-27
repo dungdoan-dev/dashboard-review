@@ -81,3 +81,12 @@ test("the month's report per unit: sales, spending, funds (POS into the bank), t
   assert.ok(fnbReport([{ name: "BK THU", rows: cafe }], "2026-11").warnings.some((w) => /khác tháng/.test(w)));
   assert.throws(() => fnbReport([{ name: "Hướng dẫn", rows: [] }]), /Không thấy tab thu chi/);
 });
+
+test("the day rows carry the money in and out of each fund (other sources too) and the unit's balances", () => {
+  const r = fnbReport([{ name: "BK THU", rows: cafe }, { name: "BK CHI", rows: chi }]);
+  const day = r.units[0].days[0];
+  assert.deepEqual([day.inCash, day.inBank, day.outCash, day.outBank], [331000, 71400 + 74000 + 94000 + 20000, 60000, 0]);
+  assert.deepEqual(r.units[0].balances, { openCash: null, closeCash: null, openBank: null, closeBank: null });
+  const withBalance = cafe.map((row, i) => (i === 0 ? [...row.slice(0, 13), "Đầu kỳ tiền mặt", 777] : row));
+  assert.equal(fnbReport([{ name: "BK THU", rows: withBalance }]).units[0].balances.openCash, 777);
+});

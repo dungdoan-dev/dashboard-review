@@ -1,7 +1,7 @@
 // The weekly management table (the finance team's "BC Doanh thu, CP" and "BC TH"): one column per week of the month and one for the month, blocks one under the other.
 // Hotel revenue from Blue Jay by check-out day, the hotel's money in and out from its ledger, then each F&B unit from its ledger. Pure function: tested by ql-report.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { CheckoutDay } from "./bluejay-checkout.ts";
-import { REPORT_GROUPS, weekColumns, type ExpenseLine, type FinanceReport, type FinanceSummary, type ReportRow } from "./finance-summary.ts";
+import { weekColumns, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary, type ReportRow } from "./finance-summary.ts";
 import { costTree } from "./pnl.ts";
 import type { FnbReport } from "./fnb-ledger.ts";
 
@@ -43,60 +43,105 @@ export function qlWeekly(month: string, input: { days?: CheckoutDay[]; finance?:
   return { columns, rows };
 }
 
-export type FundLine = { label: string; fund: "cash" | "bank" | "card"; in: number; out: number; net: number; total?: boolean };
+export type FundLine = { label: string; fund: "cash" | "bank" | "card"; open: number | null; in: number; out: number; net: number; close: number | null; total?: boolean }; // open: the typed opening balance, null when the tabs have none; close = open + net
 
-/** Money in and out of each fund over the month (the finance team's "BC DÒNG TIỀN" without the typed opening and closing balances), then the totals of cash and bank over the units. Transfers between funds (withdrawals) are inside. */
-export function qlFunds(input: { hotel?: FinanceSummary; fnb?: FnbReport }): FundLine[] {
+/** Opening balance, money in and out and closing balance of each fund over the month (the finance team's "BC DÒNG TIỀN"), then the totals of cash and bank over the units (a missing opening counts as 0 there). Transfers between funds (withdrawals) are inside. */
+export function qlFunds(input: { hotel?: FinanceSummary; balances?: Balances; fnb?: FnbReport }): FundLine[] {
   const lines: FundLine[] = [];
   const h = input.hotel;
   if (h) for (const [fund, label, paid] of [["cash", "tiền mặt", h.expense.total.cash], ["bank", "tài khoản ngân hàng", h.expense.total.bank], ["card", "thẻ visa", h.expense.total.visa]] as const) {
-    lines.push({ label: `Khách sạn · ${label}`, fund, in: h.income.taken[fund] - h.income.deposit[fund] + h.income.advance[fund], out: paid, net: h.funds[fund] });
+    const open = fund === "cash" ? input.balances?.openCash ?? null : fund === "bank" ? input.balances?.openBank ?? null : null, net = h.funds[fund];
+    lines.push({ label: `Khách sạn · ${label}`, fund, open, in: h.income.taken[fund] - h.income.deposit[fund] + h.income.advance[fund], out: paid, net, close: open === null ? null : open + net });
   }
   for (const u of input.fnb?.units ?? []) lines.push(
-    { label: `${u.label} · tiền mặt`, fund: "cash", in: u.sales.cash + u.other.cash, out: u.spent.cash, net: u.funds.cash },
-    { label: `${u.label} · ngân hàng (gồm POS)`, fund: "bank", in: u.sales.bank + u.sales.pos + u.other.bank, out: u.spent.bank + u.spent.visa, net: u.funds.bank });
+    { label: `${u.label} · tiền mặt`, fund: "cash", open: u.balances.openCash, in: u.sales.cash + u.other.cash, out: u.spent.cash, net: u.funds.cash, close: u.balances.openCash === null ? null : u.balances.openCash + u.funds.cash },
+    { label: `${u.label} · ngân hàng (gồm POS)`, fund: "bank", open: u.balances.openBank, in: u.sales.bank + u.sales.pos + u.other.bank, out: u.spent.bank + u.spent.visa, net: u.funds.bank, close: u.balances.openBank === null ? null : u.balances.openBank + u.funds.bank });
   for (const [fund, label] of [["cash", "Tổng tiền mặt"], ["bank", "Tổng ngân hàng"]] as const) {
     const own = lines.filter((l) => l.fund === fund);
-    if (own.length > 1) lines.push({ label, fund, in: own.reduce((t, l) => t + l.in, 0), out: own.reduce((t, l) => t + l.out, 0), net: own.reduce((t, l) => t + l.net, 0), total: true });
+    const sum = (f: (l: FundLine) => number) => own.reduce((t, l) => t + f(l), 0);
+    if (own.length > 1) lines.push({ label, fund, open: sum((l) => l.open ?? 0), in: sum((l) => l.in), out: sum((l) => l.out), net: sum((l) => l.net), close: sum((l) => l.open ?? 0) + sum((l) => l.net), total: true });
   }
   return lines;
 }
 
-/** The month's result like the finance team's "KQ HĐKD", one column per unit and a total: revenue (hotel by check-out day, with M-Standard / Unassigned, F&B sales), deductions, costs by report group, profit. hotel: the ledger's summary and expense lines of the month. */
+export type BookCol = { label: string; side: "in" | "out"; memo?: boolean }; // memo: shown, but not part of this book's balance (another account)
+export type Book = { cols: BookCol[]; opening: number; rows: { date: string; open: number; values: number[]; close: number }[]; total: { values: number[]; close: number }; sheetClose: number | null };
+
+/** The finance team's "TK TM" (cash book) and "TK TG NH" (bank book), day by day for the month: opening balance, money in and out per unit, closing balance. Cash: the hotel and both F&B units in one drawer; bank: the hotel's account, the F&B accounts only listed beside it.
+ * Opening balances are the ones typed at the top of the ledger tabs (0 when there is none). sheetClose: the closing balance the sheet itself shows, to compare with, when every tab that has an opening also has a closing. The hotel's cash in includes the deposits of guests not yet staying (as in the fund panel of BK THU). */
+export function qlBooks(month: string, input: { hotel?: { summary: FinanceSummary; balances: Balances }; fnb?: FnbReport }) {
+  const { from, to } = monthRange(month);
+  const dates: string[] = [];
+  for (let d = from; d <= to; d = new Date(Date.parse(`${d}T00:00:00Z`) + 864e5).toISOString().slice(0, 10)) dates.push(d);
+  const units = input.fnb?.units ?? [];
+  const build = (cols: (BookCol & { open?: number | null; close?: number | null; by: Map<string, number> })[]): Book => {
+    const counted = cols.filter((c) => !c.memo);
+    const opening = counted.reduce((t, c) => t + (c.open ?? 0), 0);
+    const delta = (date: string) => counted.reduce((t, c) => t + (c.by.get(date) ?? 0) * (c.side === "in" ? 1 : -1), 0);
+    let open = opening;
+    const rows = dates.map((date) => { const values = cols.map((c) => c.by.get(date) ?? 0), close = open + delta(date); const row = { date, open, values, close }; open = close; return row; });
+    const owners = new Set(counted.map((c) => c.label.split(" · ")[0]));
+    const known = [...owners].every((o) => counted.some((c) => c.label.startsWith(o) && c.open != null && c.close != null));
+    return { cols: cols.map(({ label, side, memo }) => ({ label, side, memo })), opening, rows, total: { values: cols.map((c) => dates.reduce((t, d) => t + (c.by.get(d) ?? 0), 0)), close: open }, sheetClose: known && owners.size ? [...owners].reduce((t, o) => t + (counted.find((c) => c.label.startsWith(o))?.close ?? 0), 0) : null };
+  };
+  const hotelDay = (pick: (d: FinanceSummary["fundDaily"][number]) => number) => new Map((input.hotel?.summary.fundDaily ?? []).map((d) => [d.date, pick(d)]));
+  const unitDay = (u: FnbReport["units"][number], pick: (d: FnbReport["units"][number]["days"][number]) => number) => new Map(u.days.map((d) => [d.date, pick(d)]));
+  const cash: (BookCol & { open?: number | null; close?: number | null; by: Map<string, number> })[] = [];
+  const bank: typeof cash = [];
+  const h = input.hotel;
+  if (h) {
+    cash.push({ label: "Khách sạn · thu", side: "in", by: hotelDay((d) => d.cash.in + d.cash.adv), open: h.balances.openCash, close: h.balances.closeCash }, { label: "Khách sạn · chi", side: "out", by: hotelDay((d) => d.cash.out) });
+    bank.push({ label: "Khách sạn · thu", side: "in", by: hotelDay((d) => d.bank.in + d.bank.adv), open: h.balances.openBank, close: h.balances.closeBank }, { label: "Khách sạn · chi", side: "out", by: hotelDay((d) => d.bank.out) });
+  }
+  for (const u of units) {
+    cash.push({ label: `${u.label} · thu`, side: "in", by: unitDay(u, (d) => d.inCash), open: u.balances.openCash, close: u.balances.closeCash }, { label: `${u.label} · chi`, side: "out", by: unitDay(u, (d) => d.outCash) });
+    bank.push({ label: `${u.label} · thu (gồm POS)`, side: "in", memo: true, by: unitDay(u, (d) => d.inBank) }, { label: `${u.label} · chi`, side: "out", memo: true, by: unitDay(u, (d) => d.outBank) });
+  }
+  return { cash: build(cash), bank: build(bank) };
+}
+
+export type KqRow = ReportRow & { stt?: string; code?: string; note?: string };
+const KQ_GROUPS = ["Chi phí đầu tư, sự kiện", "Chi phí vận hành", "Chi phí nhân sự", "Chi phí khác", "Chi dịch vụ ngoài & nộp thuế"]; // the order of the finance team's sheet (REPORT_GROUPS has the last two the other way round)
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+
+/** The month's result laid out like the finance team's "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH" (STT, Chỉ tiêu, Mã số, Ghi chú), one column per unit and a total: revenue (hotel by check-out day, with M-Standard / Unassigned, F&B sales),
+ * deductions, costs by group in the finance team's order, profit. hotel: the ledger's summary and expense lines of the month. */
 export function qlResult(month: string, input: { days?: CheckoutDay[]; hotel?: { summary: FinanceSummary; expenses: ExpenseLine[] }; fnb?: FnbReport }) {
   const { from, to } = monthRange(month);
-  type Unit = { label: string; room: number; service: number; sales: number; deduction: number; tree: ReturnType<typeof costTree> };
+  type Unit = { label: string; room: number; service: number; sales: number; commission: number; otherDeduction: number; tree: ReturnType<typeof costTree> };
   const units: Unit[] = [];
   if (input.days || input.hotel) {
-    const d = (input.days ?? []).filter((x) => x.date >= from && x.date <= to);
+    const d = (input.days ?? []).filter((x) => x.date >= from && x.date <= to), inc = input.hotel?.summary.income;
     units.push({
       label: "Khách sạn", room: d.reduce((t, x) => t + x.room + x.excludedRoom, 0), service: d.reduce((t, x) => t + x.service + x.excludedService, 0), sales: 0,
-      deduction: input.hotel ? input.hotel.summary.income.commission + input.hotel.summary.income.otherDeduction : 0,
+      commission: inc?.commission ?? 0, otherDeduction: inc?.otherDeduction ?? 0,
       tree: input.hotel ? costTree(input.hotel.expenses.filter((e) => e.date >= from && e.date <= to)) : [],
     });
   }
-  for (const u of input.fnb?.units ?? []) units.push({ label: u.label, room: 0, service: 0, sales: u.sales.total, deduction: 0, tree: u.tree });
+  for (const u of input.fnb?.units ?? []) units.push({ label: u.label, room: 0, service: 0, sales: u.sales.total, commission: 0, otherDeduction: 0, tree: u.tree });
   const withTotal = (v: number[]) => [...v, v.reduce((a, b) => a + b, 0)];
   const each = (f: (u: Unit) => number) => withTotal(units.map(f));
-  const row = (label: string, values: number[], kind: ReportRow["kind"] = "line"): ReportRow => ({ label, kind, values });
-  const gross = each((u) => u.room + u.service + u.sales), deduction = each((u) => u.deduction);
-  const revenue = gross.map((v, i) => v - deduction[i]);
-  const groups = [...new Set([...REPORT_GROUPS, ...units.flatMap((u) => u.tree.map((g) => g.group))])];
-  const costRows: ReportRow[] = [];
+  const row = (label: string, values: number[], kind: ReportRow["kind"] = "line", extra: { stt?: string; code?: string; note?: string } = {}): KqRow => ({ label, kind, values, ...extra });
+  const gross = each((u) => u.room + u.service + u.sales), commission = each((u) => u.commission), other = each((u) => u.otherDeduction);
+  const deduction = commission.map((v, i) => v + other[i]), revenue = gross.map((v, i) => v - deduction[i]);
+  const groups = [...KQ_GROUPS, ...new Set(units.flatMap((u) => u.tree.map((g) => g.group)).filter((g) => !KQ_GROUPS.includes(g)))];
+  const costRows: KqRow[] = [];
   groups.forEach((group, i) => {
-    costRows.push(row(`${i + 1}. ${group}`, each((u) => u.tree.find((g) => g.group === group)?.total ?? 0), "total"));
+    costRows.push(row(group, each((u) => u.tree.find((g) => g.group === group)?.total ?? 0), "total", { stt: String(i + 1), code: ROMAN[i] }));
     const names = [...new Set(units.flatMap((u) => u.tree.find((g) => g.group === group)?.kinds.map((k) => k.name) ?? []))];
     for (const name of names) costRows.push(row(name, each((u) => u.tree.find((g) => g.group === group)?.kinds.find((k) => k.name === name)?.total ?? 0)));
   });
   const cost = withTotal(units.map((_, i) => costRows.filter((r) => r.kind === "total").reduce((t, r) => t + r.values[i], 0)));
-  return {
-    columns: [...units.map((u) => u.label), "Tổng"],
-    rows: [
-      row("I. TỔNG DOANH THU (I = 1 − 2)", revenue, "total"),
-      row("1. Doanh thu bán hàng và phòng", gross, "total"), row("Tiền phòng (gồm M-Standard / Unassigned)", each((u) => u.room)), row("Tiền dịch vụ", each((u) => u.service)), row("Thu bán hàng", each((u) => u.sales)),
-      row("2. Các khoản giảm trừ doanh thu (hoa hồng, phí quẹt thẻ)", deduction, "total"),
-      row("II. TỔNG CHI PHÍ HĐKD", cost, "total"), ...costRows,
-      row("III. LỢI NHUẬN THUẦN TỪ HĐKD (III = I − II)", revenue.map((v, i) => v - cost[i]), "total"),
-    ],
-  };
+  const rows: KqRow[] = [
+    row("I, TỔNG DOANH THU (I=1-2)", revenue, "total"),
+    row("Doanh thu khách sạn và bán hàng", gross, "total", { stt: "1", code: "I" }),
+    row("Tiền phòng", each((u) => u.room), "line", { code: "1.1", note: "Theo ngày trả phòng, gồm M-Standard / Unassigned" }),
+    row("Tiền dịch vụ", each((u) => u.service), "line", { code: "1.2", note: "Minibar, giặt ủi, dịch vụ ngoài, thu khác: Blue Jay chỉ trả gộp theo đặt phòng" }),
+    row("Thu bán hàng", each((u) => u.sales), "line", { code: "1.3", note: "Ăn sáng, cafe, mini mart" }),
+    row("Các khoản giảm trừ doanh thu", deduction, "total", { stt: "2", code: "II" }),
+    row("Hoa hồng nền tảng", commission, "line", { code: "2.1" }), row("Phí quẹt thẻ, giảm giá khách hàng", other, "line", { code: "2.2" }),
+    row("II, TỔNG CHI PHÍ HĐKD (II = 1+2+3+4+5)", cost, "total"), ...costRows,
+    row("III, Lợi nhuận thuần từ HĐKD (III = I-II)", revenue.map((v, i) => v - cost[i]), "total", { code: "VI" }),
+  ];
+  return { columns: [...units.map((u) => u.label), "Tổng"], rows };
 }

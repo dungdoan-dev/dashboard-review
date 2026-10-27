@@ -29,6 +29,21 @@ export function parseExpenses(rows: unknown[][]): ExpenseLine[] {
   return lines;
 }
 
+export type Balances = { openCash: number | null; closeCash: number | null; openBank: number | null; closeBank: number | null };
+
+/** The balances typed (or summed) in the first rows of a ledger tab: a label "Đầu kỳ tiền mặt", "Cuối kỳ tiền mặt", "Đầu kỳ ngân hàng", "Cuối kỳ ngân hàng" with its number in one of the next two cells; null when the tabs have none. */
+export function ledgerBalances(sheets: { rows: unknown[][] }[]): Balances {
+  const out: Balances = { openCash: null, closeCash: null, openBank: null, closeBank: null };
+  const keys: [RegExp, keyof Balances][] = [[/^dau ky tien mat$/, "openCash"], [/^cuoi ky tien mat$/, "closeCash"], [/^dau ky ngan hang$/, "openBank"], [/^cuoi ky ngan hang$/, "closeBank"]];
+  for (const s of sheets) for (const row of s.rows.slice(0, 4)) row.forEach((cell, c) => {
+    const key = keys.find(([re]) => re.test(norm(cell)))?.[1];
+    if (!key || out[key] !== null) return;
+    const value = row.slice(c + 1, c + 3).find((v) => typeof v === "number" && Number.isFinite(v));
+    if (typeof value === "number") out[key] = value;
+  });
+  return out;
+}
+
 const zero = (): Funds => ({ cash: 0, bank: 0, card: 0 });
 const add = (a: Funds, b: Funds): Funds => ({ cash: a.cash + b.cash, bank: a.bank + b.bank, card: a.card + b.card });
 const sum = (f: Funds) => f.cash + f.bank + f.card;
