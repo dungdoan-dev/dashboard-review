@@ -79,6 +79,8 @@ import { SocialIcon } from "@/components/social-icon";
 import { TiktokPage } from "@/components/tiktok-page";
 import { HrPage } from "@/components/hr-page";
 import { NhanSuPage } from "@/components/nhan-su-page";
+import { IsoDatePicker } from "@/components/date-picker";
+import { customValid, rangeWindow, type CustomRange, type ReportRange } from "@/lib/report-range";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
 import { BranchSheetsSettings } from "@/components/branch-sheets-settings";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -122,7 +124,7 @@ type LocationFilterType = "hotel" | "cafe" | "mart" | "entertainment";
 const filterTypeOptions: Array<[LocationFilterType, string]> = [["hotel", "Khách sạn"], ["cafe", "Cafe"], ["mart", "Mart 24h"], ["entertainment", "Giải trí"]];
 // Nền tảng của từng loại hình; Cafe và Mart 24h dùng chung bộ nguồn.
 const typePlatformOrder: Record<LocationFilterType, Platform[]> = {
-  hotel: ["google", "booking", "tripadvisor", "tripcom", "agoda", "expedia", "traveloka"],
+  hotel: ["google", "tripadvisor", "booking", "tripcom", "agoda", "expedia", "traveloka"],
   cafe: ["google", "tripadvisor", "grabfood", "shopeefood"],
   mart: ["google", "tripadvisor", "grabfood", "shopeefood"],
   entertainment: ["google", "tripadvisor"],
@@ -283,7 +285,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
   const pageGroup = isHrPage || isNhanSuPage ? "nhan-su" : isReachPage ? "tiep-can" : isBluejayPage ? "van-hanh" : "review";
-  const [openGroup, setOpenGroup] = useState(pageGroup); // sidebar accordion: one group open at a time
+  const [openGroup, setOpenGroup] = useState(pathname === "/" ? "van-hanh" : pageGroup); // sidebar accordion: one group open at a time; opening the app on Tổng quan shows Vận hành first
   const [groupPath, setGroupPath] = useState(pathname);
   if (groupPath !== pathname) { setGroupPath(pathname); setOpenGroup(pageGroup); } // moving to another page opens that page's group
   const [collapsed, setCollapsed] = useState(false); // desktop sidebar shrunk to icons; remembered per browser
@@ -324,7 +326,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState("");
   const [timelineRefresh, setTimelineRefresh] = useState(0);
-  const [dailyReportRange, setDailyReportRange] = useState<"7" | "30" | "90" | "365" | "all">("30");
+  const [dailyReportRange, setDailyReportRange] = useState<ReportRange>("30");
+  const [customRange, setCustomRange] = useState<CustomRange>({ from: "", to: "" }); // the typed range of "Chọn ngày…"
   const historyRange = dailyReportRange;
   const [historicalReportPreview, setHistoricalReportPreview] = useState<HistoricalReportPreview | null>(null);
   const [readingHistoricalFile, setReadingHistoricalFile] = useState(false);
@@ -814,9 +817,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       setTimelineError("");
       return;
     }
+    if (historyRange === "custom" && !customValid(customRange)) return; // wait for a real from-to range
     let active = true;
     const scopeIds = (comparisonMode ? comparisonLocations.map((location) => location.id) : [dashboardLocation!.id]).sort();
-    const cacheKey = JSON.stringify([user.id, scopeIds, historyRange, timelineRefresh]);
+    const cacheKey = JSON.stringify([user.id, scopeIds, historyRange, customRange, timelineRefresh]);
     const cachedResult = timelineCache.current.get(cacheKey);
     if (cachedResult && Date.now() - cachedResult.loadedAt < 60_000) {
       setTimelineSnapshots(cachedResult.rows);
@@ -832,12 +836,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       const pageSize = 1000;
       const supabase = createClient();
       const locationIds = scopeIds;
-      let startDate: string | null = null;
-      if (historyRange !== "all") {
-        const firstDay = new Date(`${reportDateInVietnam()}T00:00:00Z`);
-        firstDay.setUTCDate(firstDay.getUTCDate() - Number(historyRange) + 1);
-        startDate = firstDay.toISOString().slice(0, 10);
-      }
+      const { start: startDate, end: endDate } = rangeWindow(historyRange, customRange, reportDateInVietnam());
       for (let offset = 0; active; offset += pageSize) {
         let baseQuery = supabase
           .from("daily_report_snapshots")
@@ -845,6 +844,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           .order("report_date", { ascending: false })
           .order("id", { ascending: false });
         if (startDate) baseQuery = baseQuery.gte("report_date", startDate);
+        if (endDate) baseQuery = baseQuery.lte("report_date", endDate);
         const query = comparisonMode
           ? baseQuery.in("location_id", locationIds)
           : baseQuery.eq("location_id", dashboardLocation!.id);
@@ -878,7 +878,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       if (active) setTimelineLoading(false);
     });
     return () => { active = false; };
-  }, [timelineMode, user, dashboardLocation, comparisonMode, comparisonLocations, historyRange, timelineRefresh]);
+  }, [timelineMode, user, dashboardLocation, comparisonMode, comparisonLocations, historyRange, customRange, timelineRefresh]);
 
   const timelineRows = useMemo(() => {
     const grouped = new Map<string, Partial<Record<Platform, DailyReportSnapshot>>>();
@@ -895,12 +895,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }, [timelineSnapshots, dashboardLocation?.id, isTripadvisorRankPage, selectedReportPlatforms]);
 
   const dailyAnalyticsRows = useMemo(() => {
-    if (!timelineRows.length || dailyReportRange === "all") return timelineRows;
-    const latestDate = new Date(`${timelineRows[timelineRows.length - 1].date}T00:00:00Z`);
-    latestDate.setUTCDate(latestDate.getUTCDate() - Number(dailyReportRange) + 1);
-    const startDate = latestDate.toISOString().slice(0, 10);
-    return timelineRows.filter((row) => row.date >= startDate);
-  }, [timelineRows, dailyReportRange]);
+    if (!timelineRows.length) return timelineRows;
+    const { start, end } = rangeWindow(dailyReportRange, customRange, timelineRows[timelineRows.length - 1].date);
+    return timelineRows.filter((row) => (!start || row.date >= start) && (!end || row.date <= end));
+  }, [timelineRows, dailyReportRange, customRange]);
 
   const hotelComparisonData = useMemo(() => {
     if (!comparisonMode) return { scoreRows: [], reviewRows: [] };
@@ -913,13 +911,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       grouped.set(snapshot.reportDate, byHotel);
     }
     const dates = [...grouped.keys()].sort();
-    const latestDate = dates.at(-1);
-    const startDate = latestDate && historyRange !== "all"
-      ? new Date(`${latestDate}T00:00:00Z`) : null;
-    if (startDate) startDate.setUTCDate(startDate.getUTCDate() - Number(historyRange) + 1);
+    const { start, end } = dates.length ? rangeWindow(historyRange, customRange, dates[dates.length - 1]) : { start: null, end: null };
     const scoreRows: Record<string, string | number | null>[] = [];
     const reviewRows: Record<string, string | number | null>[] = [];
-    for (const date of dates.filter((date) => !startDate || date >= startDate.toISOString().slice(0, 10))) {
+    for (const date of dates.filter((date) => (!start || date >= start) && (!end || date <= end))) {
       const scoreRow: Record<string, string | number | null> = { date };
       const reviewRow: Record<string, string | number | null> = { date };
       for (const location of comparisonLocations) {
@@ -933,7 +928,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       if (comparisonLocations.some((location) => reviewRow[location.id] != null)) reviewRows.push(reviewRow);
     }
     return { scoreRows, reviewRows };
-  }, [comparisonMode, comparisonLocations, timelineSnapshots, selectedReportPlatforms, reportScale, historyRange]);
+  }, [comparisonMode, comparisonLocations, timelineSnapshots, selectedReportPlatforms, reportScale, historyRange, customRange]);
 
   const tripadvisorRankRows = useMemo<TripadvisorRankReportRow[]>(() => dailyAnalyticsRows.flatMap((row) => {
     const metric = row.metrics.tripadvisor;
@@ -1066,8 +1061,9 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     setNotice("");
     try {
       const today = reportDateInVietnam();
-      const days = dailyReportRange === "all" ? null : Number(dailyReportRange);
-      const from = days ? new Date(Date.parse(`${today}T00:00:00Z`) - days * 864e5).toISOString().slice(0, 10) : null;
+      if (dailyReportRange === "custom" && !customValid(customRange)) { setError("Chọn khoảng ngày hợp lệ ở “Thời gian”."); return; }
+      const days = dailyReportRange === "all" || dailyReportRange === "custom" ? null : Number(dailyReportRange);
+      const from = dailyReportRange === "custom" ? customRange.from : days ? new Date(Date.parse(`${today}T00:00:00Z`) - days * 864e5).toISOString().slice(0, 10) : null;
       const db = createClient();
       const rows: Record<string, unknown>[] = [];
       for (let page = 0; ; page += 1) { // Supabase returns at most 1000 rows per request
@@ -1075,6 +1071,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           .select("location_id,platform,report_date,rating_value,review_count,tripadvisor_rank")
           .in("location_id", ids).in("platform", selectedReportPlatforms);
         if (from) query = query.gte("report_date", from);
+        if (dailyReportRange === "custom") query = query.lte("report_date", customRange.to);
         const { data, error: loadError } = await query.order("report_date").order("id").range(page * 1000, page * 1000 + 999);
         if (loadError) throw loadError;
         rows.push(...(data ?? []));
@@ -1789,13 +1786,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
         </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          {navGroup("review", "REVIEW", false, <>
-            <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
-            <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
-            <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
-            <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
-          </>)}
-          {navGroup("van-hanh", "VẬN HÀNH", true, <>
+          {navGroup("van-hanh", "VẬN HÀNH", false, <>
             <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
             <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
             <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
@@ -1803,6 +1794,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
             <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
             <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
+          </>)}
+          {navGroup("nhan-su", "NHÂN SỰ", true, <>
+            <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
+            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
+          </>)}
+          {navGroup("review", "REVIEW", true, <>
+            <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
+            <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
+            <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
+            <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           </>)}
           {navGroup("tiep-can", "TIẾP CẬN", true, <>
             <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
@@ -1812,10 +1813,6 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
             <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} href="/google-analytics" data-tip="Google Analytics"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
             <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
-          </>)}
-          {navGroup("nhan-su", "NHÂN SỰ", true, <>
-            <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
-            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
           </>)}
         </nav>
         <div className="sidebar-bottom">
@@ -1829,7 +1826,11 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         <header className={`dashboard-topbar ${isReachPage || isHrPage || isNhanSuPage ? "topbar-hidden" : ""}`}>
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
           <div className="topbar-title"><span className="topbar-overline">{isNhanSuPage ? "NHÂN SỰ" : isHrPage ? "TUYỂN DỤNG" : isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ HĐKD" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isHrPage ? "Nhân sự & tuyển dụng" : isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
-          {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}{(isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => setDailyReportRange(event.target.value as typeof dailyReportRange)}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option></select><ChevronDown size={15} /></label>}</>}
+          {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotelId ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{BLUEJAY_HOTELS.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}</>}{(isSummaryPage || isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <><label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => {
+            const next = event.target.value as ReportRange;
+            if (next === "custom" && !customValid(customRange)) { const today = reportDateInVietnam(); setCustomRange({ from: rangeWindow(dailyReportRange === "custom" || dailyReportRange === "all" ? "30" : dailyReportRange, customRange, today).start ?? today, to: today }); } // a typed range starts from the one on screen
+            setDailyReportRange(next);
+          }}><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option><option value="all">Toàn bộ</option><option value="custom">Chọn ngày…</option></select><ChevronDown size={15} /></label>{dailyReportRange === "custom" && <><IsoDatePicker label="Từ ngày" value={customRange.from} max={customRange.to || reportDateInVietnam()} onChange={(from) => setCustomRange((c) => ({ ...c, from }))} /><IsoDatePicker label="Đến ngày" value={customRange.to} min={customRange.from || undefined} max={reportDateInVietnam()} onChange={(to) => setCustomRange((c) => ({ ...c, to }))} /></>}</>}
           <div className="date-chip topbar-date"><Clock3 size={15} />{todayLabel || "Hôm nay"}</div>
           {supabaseConfigured && !isBluejayPage && <MissingReportsBell userId={user?.id ?? null} locations={locations.flatMap((location) => { const type = filterTypeOf(location.type); return type === "entertainment" ? [] : [{ id: location.id, name: location.name, kind: type === "hotel" ? "hotel" as const : "fnb" as const }]; })} />}
           {supabaseConfigured && !isBluejayPage && <NotificationBell userId={user?.id ?? null} />}
@@ -1867,7 +1868,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
-          {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
+          {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} range={dailyReportRange} customRange={customRange} />}
 
           {isDetailPage && <>
           {detailTabs}

@@ -9,6 +9,7 @@ import { ReachTable } from "@/components/reach-table";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
+import { customValid, type CustomRange, type ReportRange } from "@/lib/report-range";
 import { SUMMARY_SCALE, buildTrend, summarizeLocation, summarizeType, type LocationSummary, type Snapshot } from "@/lib/summary";
 import type { LocationRecord, Platform } from "@/lib/types";
 
@@ -23,13 +24,15 @@ const daysBefore = (date: string, days: number) => new Date(new Date(`${date}T00
 const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toLocaleString("vi-VN")}`;
 const level = (score: number) => (score >= GOOD ? { text: "Xuất sắc", cls: "good" } : score >= WATCH ? { text: "Tốt", cls: "ok" } : { text: "Cần chú ý", cls: "bad" });
 
-async function fetchSnapshots(ids: string[], from: string): Promise<Snapshot[]> {
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
+
+async function fetchSnapshots(ids: string[], from: string, to: string): Promise<Snapshot[]> {
   const db = createClient();
   const rows: Snapshot[] = [];
   for (let page = 0; ; page++) { // Supabase trả tối đa 1000 dòng mỗi lần
     const { data, error } = await db.from("daily_report_snapshots")
       .select("location_id,platform,report_date,rating_scale,rating_value,review_count")
-      .in("location_id", ids).gte("report_date", from).order("report_date").order("id").range(page * 1000, page * 1000 + 999);
+      .in("location_id", ids).gte("report_date", from).lte("report_date", to).order("report_date").order("id").range(page * 1000, page * 1000 + 999);
     if (error) throw new Error(error.message);
     for (const row of data ?? []) {
       rows.push({
@@ -50,8 +53,8 @@ function ChartCard({ title, unit, wide, children }: { title: string; unit?: stri
   return <article className={`summary-chart ${wide ? "wide" : ""}`}><h4>{title}{unit && <small>{unit}</small>}</h4>{children}</article>;
 }
 
-export function SummaryReport({ sections, userId }: { sections: SummarySection[]; userId: string | null }) {
-  const [days, setDays] = useState<7 | 30 | 90>(30);
+/** range / customRange: the "Thời gian" choice of the app's header. */
+export function SummaryReport({ sections, userId, range, customRange }: { sections: SummarySection[]; userId: string | null; range: ReportRange; customRange: CustomRange }) {
   // In qua react-to-print: chỉ báo cáo được đưa vào khung in riêng (không kéo theo thanh bên, vùng cuộn của app).
   // Biểu đồ là SVG chụp theo bề rộng lúc in, nên trước đó đặt bề rộng cố định vừa trang và tắt hiệu ứng vẽ dần.
   const [printing, setPrinting] = useState(false);
@@ -71,16 +74,20 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const idsKey = useMemo(() => sections.flatMap((section) => section.locations.map((location) => location.id)).sort().join(","), [sections]);
   const today = vnToday();
-  const from = daysBefore(today, days);
+  const custom = range === "custom", allTime = range === "all";
+  const from = custom ? customRange.from : allTime ? "2000-01-01" : daysBefore(today, Number(range)); // N days back: the day before the first counted day is the baseline of "mới trong kỳ"
+  const to = custom ? customRange.to : today;
+  const invalid = custom && !customValid(customRange); // only a typed range can be wrong
+  const periodText = custom ? `${fmtDate(from)} – ${fmtDate(to)}` : allTime ? "toàn bộ dữ liệu" : `${range} ngày qua`;
 
   useEffect(() => {
-    if (!userId || !idsKey) return;
+    if (!userId || !idsKey || invalid) return;
     let active = true;
-    fetchSnapshots(idsKey.split(","), from)
+    fetchSnapshots(idsKey.split(","), from, to)
       .then((rows) => { if (active) { setSnapshots(rows); setStatus("ready"); } })
       .catch(() => { if (active) setStatus("error"); });
     return () => { active = false; };
-  }, [userId, idsKey, from]);
+  }, [userId, idsKey, from, to, invalid]);
 
   const data = useMemo(() => sections.map((section) => {
     const rows = section.locations.map((location) => summarizeLocation(location, section.platforms));
@@ -109,17 +116,16 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
       <div>
         <div className="section-kicker"><FileBarChart size={14} /> BÁO CÁO TỔNG HỢP</div>
         <h1>Báo cáo tổng hợp đánh giá</h1>
-        <p>Kỳ báo cáo: <strong>{fmtDate(from)} – {fmtDate(today)}</strong> ({days} ngày) · Số liệu mới nhất: <strong>{latestCapture ? fmtDateTime(latestCapture) : "chưa có"}</strong></p>
+        <p>Kỳ báo cáo: <strong>{allTime ? "Toàn bộ dữ liệu" : `${fmtDate(from)} – ${fmtDate(to)}`}</strong>{!allTime && ` (${daysBetween(from, to)} ngày)`} · Số liệu mới nhất: <strong>{latestCapture ? fmtDateTime(latestCapture) : "chưa có"}</strong></p>
       </div>
       <div className="summary-controls summary-no-print">
-        <label><span>Kỳ báo cáo</span><select value={days} onChange={(event) => setDays(Number(event.target.value) as 7 | 30 | 90)} aria-label="Chọn kỳ báo cáo">
-          <option value={7}>7 ngày qua</option><option value={30}>30 ngày qua</option><option value={90}>90 ngày qua</option></select></label>
         <button type="button" onClick={() => void print()}><Printer size={15} /> In / Lưu PDF</button>
       </div>
     </header>
 
-    {status === "error" && <p className="summary-note bad" role="alert">Không tải được lịch sử đánh giá nên các số “mới trong kỳ” và biểu đồ diễn biến tạm thời không có.</p>}
-    {status === "ready" && !hasHistory && <p className="summary-note">Chưa có số liệu đã chốt trong kỳ này nên chưa tính được đánh giá mới và diễn biến.</p>}
+    {invalid && <p className="summary-note bad summary-no-print" role="alert">Chọn khoảng ngày hợp lệ ở “Thời gian” (từ ngày không sau đến ngày).</p>}
+    {status === "error" && !invalid && <p className="summary-note bad" role="alert">Không tải được lịch sử đánh giá nên các số “mới trong kỳ” và biểu đồ diễn biến tạm thời không có.</p>}
+    {status === "ready" && !invalid && !hasHistory && <p className="summary-note">Chưa có số liệu đã chốt trong kỳ này nên chưa tính được đánh giá mới và diễn biến.</p>}
 
     <section className="summary-section" aria-labelledby="summary-all-title">
       <h2 id="summary-all-title">1. Toàn hệ thống</h2>
@@ -127,10 +133,10 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
         <Kpi label="Số cơ sở" value={String(all.length)} hint={`${allScored.length} cơ sở đã có điểm`} />
         <Kpi label="Điểm trung bình" value={overallScore == null ? "—" : `${num(overallScore)} / ${SUMMARY_SCALE}`} hint={overallScore == null ? "Chưa có dữ liệu" : level(overallScore).text} />
         <Kpi label="Tổng số đánh giá" value={overallReviews.toLocaleString("vi-VN")} hint="Cộng dồn mọi nền tảng" />
-        <Kpi label="Đánh giá mới trong kỳ" value={hasHistory ? signed(overallGained) : "—"} hint={`Trong ${days} ngày qua`} />
+        <Kpi label="Đánh giá mới trong kỳ" value={hasHistory ? signed(overallGained) : "—"} hint={`Trong ${periodText}`} />
       </div>
       <div className="summary-grid">
-        <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`} wide>
+        <ChartCard title="Đánh giá mới tích lũy" unit={periodText} wide>
           <AreaTrend points={systemTrend.points.map((p) => ({ date: p.date, value: p.gained }))} color="#16a34a" width={chartWidth} animate={!printing} id="grad-system" label="Đánh giá mới" format={signed} />
         </ChartCard>
         <ChartCard title="Tỷ trọng đánh giá theo loại hình" unit="Tổng số đánh giá">
@@ -164,7 +170,7 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
             <Kpi label="Số cơ sở" value={String(summary.count)} hint={`${summary.scored} cơ sở đã có điểm`} />
             <Kpi label="Điểm trung bình" value={summary.avgScore == null ? "—" : `${num(summary.avgScore)} / ${SUMMARY_SCALE}`} hint={summary.avgScore == null ? "Chưa có dữ liệu" : level(summary.avgScore).text} />
             <Kpi label="Tổng số đánh giá" value={summary.totalReviews.toLocaleString("vi-VN")} hint={section.platforms.map((platform) => PLATFORM_LABELS[platform]).join(" · ")} />
-            <Kpi label="Đánh giá mới trong kỳ" value={hasHistory ? signed(trend.gained) : "—"} hint={`Trong ${days} ngày qua`} />
+            <Kpi label="Đánh giá mới trong kỳ" value={hasHistory ? signed(trend.gained) : "—"} hint={`Trong ${periodText}`} />
           </div>
           <div className="summary-insights">
             <h3>Điểm nổi bật</h3>
@@ -172,12 +178,12 @@ export function SummaryReport({ sections, userId }: { sections: SummarySection[]
               {summary.best && <li><CheckCircle2 size={15} className="ok" /> Cao nhất: <strong>{summary.best.name}</strong> ({num(summary.best.score!)}/{SUMMARY_SCALE}).</li>}
               {summary.worst && summary.worst.id !== summary.best?.id && <li>{summary.worst.score! < WATCH ? <AlertTriangle size={15} className="bad" /> : <CheckCircle2 size={15} className="ok" />} Thấp nhất: <strong>{summary.worst.name}</strong> ({num(summary.worst.score!)}/{SUMMARY_SCALE}){summary.avgScore != null && `, thấp hơn trung bình ${num(summary.avgScore - summary.worst.score!)} điểm`}.</li>}
               {watch.length > 1 && <li><AlertTriangle size={15} className="bad" /> {watch.length} cơ sở dưới {WATCH}/{SUMMARY_SCALE}: {watch.map((row) => row.name).join(", ")}.</li>}
-              {hasHistory && gainName && topGain[1] > 0 && <li><CheckCircle2 size={15} className="ok" /> Nhiều đánh giá mới nhất: <strong>{gainName}</strong> ({signed(topGain[1])} trong {days} ngày).</li>}
+              {hasHistory && gainName && topGain[1] > 0 && <li><CheckCircle2 size={15} className="ok" /> Nhiều đánh giá mới nhất: <strong>{gainName}</strong> ({signed(topGain[1])} trong {periodText}).</li>}
               {summary.count - summary.scored > 0 && <li><AlertTriangle size={15} className="warn" /> {summary.count - summary.scored} cơ sở chưa có dữ liệu điểm.</li>}
             </ul>
           </div>
           <div className="summary-grid">
-            <ChartCard title="Đánh giá mới tích lũy" unit={`${days} ngày qua`} wide>
+            <ChartCard title="Đánh giá mới tích lũy" unit={periodText} wide>
               <AreaTrend points={trend.points.map((p) => ({ date: p.date, value: p.gained }))} color={section.color} width={chartWidth} animate={!printing} id={`grad-${section.type}`} label="Đánh giá mới" format={signed} />
             </ChartCard>
             <ChartCard title="Tỷ trọng đánh giá theo nền tảng" unit="Tổng số đánh giá">
