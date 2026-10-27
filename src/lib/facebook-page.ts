@@ -45,7 +45,7 @@ export async function readFacebook(db: SupabaseClient, from: string, to: string)
   const [stored, period] = await Promise.all([
     readStored(db, "facebook", from, to),
     // people over the whole range cannot be added from days: asked live (no date field, Windsor answers once); without it "Người xem" shows 0
-    windsorRows("facebook_organic", ["account_id", "account_name", "page_total_media_view_unique"], from, to).catch(() => []),
+    windsorRows("facebook_organic", ["account_id", "account_name", "page_total_media_view_unique"], from, to, "API_WINDSOR_2").catch(() => []),
   ]);
   return { ...summarizeFacebook(stored.days, period, stored.items, from, to), fetchedAt: stored.fetchedAt };
 }

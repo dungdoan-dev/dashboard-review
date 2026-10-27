@@ -73,6 +73,7 @@ import { FacebookPage } from "@/components/facebook-page";
 import { InstagramPage } from "@/components/instagram-page";
 import { FacebookAds } from "@/components/facebook-ads";
 import { GoogleAds } from "@/components/google-ads";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { SocialIcon } from "@/components/social-icon";
 import { TiktokPage } from "@/components/tiktok-page";
 import { HrPage } from "@/components/hr-page";
@@ -270,9 +271,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isInstagramPage = pathname === "/instagram";
   const isFacebookAdsPage = pathname === "/facebook-ads";
   const isGoogleAdsPage = pathname === "/google-ads";
+  const isGoogleAnalyticsPage = pathname === "/google-analytics";
   const isTiktokPage = pathname === "/tiktok";
   const isHrPage = pathname === "/hr";
-  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isGoogleAdsPage || isTiktokPage;
+  const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isGoogleAdsPage || isGoogleAnalyticsPage || isTiktokPage;
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayFinancePage || isBluejayDailyPage || isBluejayPnlPage || isBluejayStockPage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
@@ -1804,6 +1806,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
             <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
             <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
+            <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} href="/google-analytics" data-tip="Google Analytics"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
             <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
           </>)}
           {navGroup("nhan-su", "NHÂN SỰ", true, <>
@@ -1852,6 +1855,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isInstagramPage && <InstagramPage />}
           {isFacebookAdsPage && <FacebookAds />}
           {isGoogleAdsPage && <GoogleAds />}
+          {isGoogleAnalyticsPage && <GoogleAnalytics />}
           {isTiktokPage && <TiktokPage />}
           {isHrPage && <HrPage />}
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
