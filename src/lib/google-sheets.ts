@@ -16,7 +16,7 @@ async function accessToken() {
   const key = serviceKey();
   const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${enc({ alg: "RS256", typ: "JWT" })}.${enc({ iss: key.client_email, scope: "https://www.googleapis.com/auth/spreadsheets.readonly", aud: key.token_uri, iat: now, exp: now + 3000 })}`;
+  const unsigned = `${enc({ alg: "RS256", typ: "JWT" })}.${enc({ iss: key.client_email, scope: "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly", aud: key.token_uri, iat: now, exp: now + 3000 })}`;
   const assertion = `${unsigned}.${createSign("RSA-SHA256").update(unsigned).sign(key.private_key, "base64url")}`;
   const res = await fetch(key.token_uri, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
   const body = await res.json().catch(() => ({})) as { access_token?: string; expires_in?: number };
@@ -67,6 +67,15 @@ export async function readStockSheets(hotel: number, month: string) {
   const sheetId = LEDGER_SHEETS[hotel];
   if (!sheetId) return null;
   return readTabs(sheetId, (titles) => stockTabs(titles, month));
+}
+
+/** The Google Sheets files directly inside a Drive folder (shared with the service account; needs the Drive API enabled in its project). */
+export async function folderSheets(folderId: string): Promise<{ id: string; name: string }[]> {
+  const q = `'${folderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?${new URLSearchParams({ q, fields: "files(id,name)", pageSize: "100", supportsAllDrives: "true", includeItemsFromAllDrives: "true" })}`, { headers: { authorization: `Bearer ${await accessToken()}` }, cache: "no-store" });
+  const body = await res.json().catch(() => ({})) as { files?: { id: string; name: string }[] };
+  if (!res.ok) throw new Error(res.status === 403 || res.status === 404 ? "Không mở được thư mục Google Drive (chưa chia sẻ cho tài khoản đọc, hoặc chưa bật Drive API?)." : `Google Drive lỗi ${res.status}.`);
+  return body.files ?? [];
 }
 
 /** Tab titles of the spreadsheet; then the values of the chosen tabs as plain rows (numbers stay numbers, dates come as Excel serials, like a file read by XLSX). */

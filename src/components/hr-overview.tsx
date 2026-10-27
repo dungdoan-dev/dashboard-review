@@ -7,7 +7,7 @@ import { countBy, statusTone, type HrBirthday, type HrCand, type HrNeed, type Hr
 
 const PIPELINE = ["Mới nhận", "Sàng lọc", "Hẹn phỏng vấn", "Phỏng vấn", "Đã phỏng vấn", "Offer", "Thử việc", "Chính thức"];
 
-function Columns({ rows, unit }: { rows: [string, number][]; unit: string }) {
+export function Columns({ rows, unit }: { rows: [string, number][]; unit: string }) {
   if (!rows.length) return <p className="summary-note">Chưa có dữ liệu.</p>;
   const data = rows.map(([name, value]) => ({ name, value }));
   return <ResponsiveContainer width="100%" height={280}>

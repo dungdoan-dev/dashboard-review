@@ -115,6 +115,10 @@
     {
       "path": "/api/cron/social",
       "schedule": "40 0 * * *"
+    },
+    {
+      "path": "/api/cron/hr",
+      "schedule": "0 1 * * *"
     }
   ]
 }
