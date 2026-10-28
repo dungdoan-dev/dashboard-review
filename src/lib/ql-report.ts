@@ -2,6 +2,7 @@
 // Hotel revenue from Blue Jay by check-out day, the hotel's money in and out from its ledger, then each F&B unit from its ledger. Pure function: tested by ql-report.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { CheckoutDay } from "./bluejay-checkout.ts";
 import { weekColumns, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary, type ReportRow } from "./finance-summary.ts";
+import { EXPENSES, FNB_EXPENSES, MART_EXPENSES } from "./expense-kinds.ts";
 import { costTree } from "./pnl.ts";
 import type { FnbReport } from "./fnb-ledger.ts";
 
@@ -102,6 +103,10 @@ export function qlBooks(month: string, input: { hotel?: { summary: FinanceSummar
 
 export type KqRow = ReportRow & { stt?: string; code?: string; note?: string };
 const KQ_GROUPS = ["Chi phí đầu tư, sự kiện", "Chi phí vận hành", "Chi phí nhân sự", "Chi phí khác", "Chi dịch vụ ngoài & nộp thuế"]; // the order of the finance team's sheet (REPORT_GROUPS has the last two the other way round)
+// The units name some kinds differently ("Chi Marketing – OTA" at the hotel, "Chi Marketing" at the mini mart): kinds are put on one line by their code, under the first name met (the hotel's).
+const plain = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/đ/g, "d").replace(/[–—-]/g, " ").replace(/\s+/g, " ").trim();
+const CODE_OF = new Map([...EXPENSES, ...FNB_EXPENSES, ...MART_EXPENSES].map(([code, name]) => [plain(name), code]));
+const kindKey = (name: string) => CODE_OF.get(plain(name)) ?? name;
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
 /** The month's result laid out like the finance team's "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH" (STT, Chỉ tiêu, Mã số, Ghi chú), one column per unit and a total: revenue (hotel by check-out day, with M-Standard / Unassigned, F&B sales),
@@ -128,8 +133,10 @@ export function qlResult(month: string, input: { days?: CheckoutDay[]; hotel?: {
   const costRows: KqRow[] = [];
   groups.forEach((group, i) => {
     costRows.push(row(group, each((u) => u.tree.find((g) => g.group === group)?.total ?? 0), "total", { stt: String(i + 1), code: ROMAN[i] }));
-    const names = [...new Set(units.flatMap((u) => u.tree.find((g) => g.group === group)?.kinds.map((k) => k.name) ?? []))];
-    for (const name of names) costRows.push(row(name, each((u) => u.tree.find((g) => g.group === group)?.kinds.find((k) => k.name === name)?.total ?? 0)));
+    const kindsOf = (u: Unit) => u.tree.find((g) => g.group === group)?.kinds ?? [];
+    const names = new Map<string, string>();
+    for (const u of units) for (const k of kindsOf(u)) if (!names.has(kindKey(k.name))) names.set(kindKey(k.name), k.name);
+    for (const [key, name] of names) costRows.push(row(name, each((u) => kindsOf(u).filter((k) => kindKey(k.name) === key).reduce((t, k) => t + k.total, 0))));
   });
   const cost = withTotal(units.map((_, i) => costRows.filter((r) => r.kind === "total").reduce((t, r) => t + r.values[i], 0)));
   const rows: KqRow[] = [

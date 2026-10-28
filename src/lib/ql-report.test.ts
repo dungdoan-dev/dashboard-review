@@ -67,3 +67,12 @@ test("the cash book and the bank book day by day: opening, in and out per unit, 
   assert.deepEqual([bank.opening, bank.rows[1].close, bank.total.close, bank.sheetClose, bank.cols.filter((c) => c.memo).length], [500, 540, 540, 540, 2]); // the F&B account is beside, not in the balance
   assert.equal(qlBooks("2026-10", { hotel: { ...(hotel as object), balances: { openCash: null, closeCash: null, openBank: null, closeBank: null } } as never }).cash.sheetClose, null); // no typed balances: nothing to compare
 });
+
+test("a kind the units name differently is one line, under the hotel's name", () => {
+  const e = (kind: string, cash: number) => ({ row: 1, date: "2026-10-05", kind, note: "", cash, bank: 0, visa: 0, commission: 0, cardFee: 0 });
+  const hotel = { summary: { income: { commission: 0, otherDeduction: 0 } }, expenses: [e("Chi Marketing – OTA", 400), e("Chi mua đồ dùng CCDC", 10)] } as never;
+  const group = "Chi dịch vụ ngoài & nộp thuế";
+  const fnb = { units: [{ label: "Mini mart", sales: { total: 0 }, tree: [{ group, total: 60, kinds: [{ name: "Chi Marketing", total: 60 }] }, { group: "Chi phí đầu tư, sự kiện", total: 5, kinds: [{ name: "Chi mua đồ dùng – CCDC", total: 5 }] }] }] } as unknown as FnbReport;
+  const r = qlResult("2026-10", { days: [], hotel, fnb });
+  assert.deepEqual(r.rows.filter((x) => /^Chi (Marketing|mua đồ dùng)/.test(x.label)).map((x) => [x.label, x.values]), [["Chi mua đồ dùng CCDC", [10, 5, 15]], ["Chi Marketing – OTA", [400, 60, 460]]]);
+});
