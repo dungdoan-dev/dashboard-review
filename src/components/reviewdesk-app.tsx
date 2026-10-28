@@ -1995,8 +1995,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                             if (!metric) return <span className="timeline-no-data">Chưa chốt</span>;
                             const value = score(row);
                             return <div className="cell" title={metric.rating == null ? undefined : `Điểm gốc ${metric.rating.toFixed(1).replace(".", ",")} / ${metric.ratingScale}`}>
-                              <strong>{value == null ? "—" : value.toFixed(1).replace(".", ",")}</strong>
-                              <small>{metric.reviewCount == null ? "—" : moneyless(metric.reviewCount)} đánh giá</small>
+                              <strong className="star-score"><Star size={12} fill="currentColor" aria-hidden="true" />{value == null ? "—" : value.toFixed(1).replace(".", ",")}</strong>
+                              <span className="count"><strong>{metric.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong> đánh giá</span>
                               {platform === "tripadvisor" && metric.tripadvisorRank && <small>{metric.tripadvisorRank}</small>}
                             </div>;
                           },

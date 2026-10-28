@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Gauge, MessageSquareQuote, Star, TrendingDown } from "lucide-react";
+import { AlertTriangle, Gauge, TrendingDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, parseDmy } from "@/lib/format-date";
 import { DatePicker } from "@/components/date-picker";
@@ -93,9 +93,9 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, select
       render: (row) => {
         const cell = row.cells[platform];
         if (cell?.score == null && cell?.count == null) return <span className="muted">—</span>;
-        return <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <small>{cell.count.toLocaleString("vi-VN")} lượt</small>}
-          {cell?.dScore != null && Math.abs(cell.dScore) > EPSILON && <small className={`delta ${trend(cell.dScore, EPSILON)}`}><Star size={11} fill="currentColor" aria-hidden="true" />{signed(cell.dScore)} điểm</small>}
-          {cell?.dCount != null && cell.dCount !== 0 && <small className={`delta ${trend(cell.dCount, 0)}`}><MessageSquareQuote size={11} aria-hidden="true" />{signed(cell.dCount, 0)} đánh giá</small>}
+        return <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <span className="count"><strong>{cell.count.toLocaleString("vi-VN")}</strong> đánh giá</span>}
+          {cell?.dScore != null && Math.abs(cell.dScore) > EPSILON && <small className={`delta ${trend(cell.dScore, EPSILON)}`}>{signed(cell.dScore)} điểm</small>}
+          {cell?.dCount != null && cell.dCount !== 0 && <small className={`delta ${trend(cell.dCount, 0)}`}>{signed(cell.dCount, 0)} đánh giá</small>}
         </div>;
       },
     })),

@@ -862,6 +862,10 @@ tbody tr:hover { background: #fbfcfe; }
 .scoreboard tr.selected > * { background: #f2f6ff; }
 .scoreboard .cell { display: grid; gap: 2px; }
 .scoreboard .cell small { color: #5f6f86; font-size: 11px; white-space: nowrap; }
+.reach-table .cell .star-score { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: #9a6a12; }
+.scoreboard .cell .count, .reach-table .cell .count { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: #46586f; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reach-table .cell .star-score svg { flex: 0 0 auto; display: inline-block; }
+.scoreboard .cell .count strong, .reach-table .cell .count strong { display: inline; color: #285ca9; font-size: 13px; font-weight: 700; }
 .scoreboard .score { font-size: 15px; font-weight: 700; }
 .scoreboard .score.good { color: #247b5b; }
 .scoreboard .score.warn { color: #b7791f; }
