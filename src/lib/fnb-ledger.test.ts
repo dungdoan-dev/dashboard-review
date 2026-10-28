@@ -8,11 +8,11 @@ const pad = (cells: unknown[], n: number) => [...cells, ...Array(Math.max(0, n -
 // cafe: BK THU, titles on rows 1-3, totals on row 4, a merged group only has its label in the first cell (as Google Sheet gives it)
 const cafe = [
   pad(["BẢNG KÊ THU ĂN SÁNG, CAFE", "", "", "ĐƠN VỊ", "Ăn sáng, Cafe YZT", "Ăn sáng, Cafe YZT", "", "KỲ BÁO CÁO (tháng/năm)", OCT1], 14),
-  ["NGÀY", "NGƯỜI BÁN", "NỘI DUNG", "NGUỒN KHÁC", "", "KHÁCH TRỰC TIẾP", "", "", "SHOPEE FOOD", "", "GRAB FOOD", "", "Doanh thu khách trực tiếp", "GHI CHÚ"],
-  ["NGÀY", "NGƯỜI BÁN", "NỘI DUNG", "Tiền mặt", "Chuyển khoản", "Tiền mặt", "Chuyển khoản", "Thẻ POS", "Mã đơn", "Công nợ (+ phát sinh, − đã nhận)", "Mã đơn", "Công nợ (+ phát sinh, − đã nhận)", "Doanh thu khách trực tiếp", "GHI CHÚ"],
+  ["NGÀY", "NGƯỜI BÁN", "NỘI DUNG", "NGUỒN KHÁC", "", "KHÁCH TRỰC TIẾP", "", "", "SHOPEE FOOD", "", "GRAB FOOD", "", "Doanh thu khách trực tiếp", "GHI CHÚ", "Thu qua khách sạn"],
+  ["NGÀY", "NGƯỜI BÁN", "NỘI DUNG", "Tiền mặt", "Chuyển khoản", "Tiền mặt", "Chuyển khoản", "Thẻ POS", "Mã đơn", "Công nợ (+ phát sinh, − đã nhận)", "Mã đơn", "Công nợ (+ phát sinh, − đã nhận)", "Doanh thu khách trực tiếp", "GHI CHÚ", "Thu qua khách sạn"],
   ["TỔNG CỘNG THÁNG", "", "", 0, 0, 402400, 165000, 74000, "", 1314338, "", 0, 641400, ""],
   pad(["", "", "tồn shopee tháng 09", "", "", "", "", "", "", 1314338], 14), // the opening balance with the app has no date
-  [OCT1, "Tài", "", "", "", "", 71400, 74000, "", "", "GF-132", 45808, 145400, ""],
+  [OCT1, "Tài", "", "", "", "", 71400, 74000, "", "", "GF-132", 45808, 145400, "", 200000], // 200000: combo charged to hotel rooms
   [OCT1, "Trinh", "", "", 20000, 331000, 94000, "", "", "", "", -45808, 425000, "ca sáng"],
   [OCT1 + 1, "", "", "", "", "", "", "", "", "", "", "", "", ""], // a date and nothing else
 ];
@@ -71,7 +71,8 @@ test("the month's report per unit: sales, spending, funds (POS into the bank), t
   assert.deepEqual(["BK THU 10-2026", "BK CHI", "THU MINIMART", "chi minimart 10-2026", "NGUYÊN LIỆU CAFE", "Hướng dẫn"].map(fnbUnitOf), ["cafe", "cafe", "mart", "mart", null, null]);
   const r = fnbReport([{ name: "Danh mục", rows: [["x"]] }, { name: "BK THU", rows: cafe }, { name: "BK CHI", rows: chi }, { name: "THU MINIMART", rows: mart }], "2026-10");
   const [c, m] = r.units;
-  assert.deepEqual([c.unit, c.sales, c.spent.total, c.expenses, c.funds], ["cafe", { cash: 331000, bank: 165400, pos: 74000, total: 570400 }, 60000, 2, { cash: 331000 - 60000, bank: 165400 + 74000 + 20000 }]);
+  assert.equal(c.days[0].hotel, 200000); // charged to rooms: in the sales report, not in the counter income nor the funds below
+  assert.deepEqual([c.unit, c.sales, c.spent.total, c.expenses, c.funds], ["cafe", { cash: 331000, bank: 165400, pos: 74000, total: 570400, hotel: 200000 }, 60000, 2, { cash: 331000 - 60000, bank: 165400 + 74000 + 20000 }]);
   assert.deepEqual([m.unit, m.sales.total, m.apps.shopee, m.rental, m.tree.every((g) => g.total === 0)], ["mart", 8462878, 419528, 50000, true]);
   assert.deepEqual(r.units.map((u) => u.days.length), [1, 2]); // cafe: everything on the 1st
   assert.deepEqual(r.warnings, ["Mini mart: không thấy tab chi, chi tính 0."]); // "Chi NL cafe" is an old name of "Chi nguyên liệu pha chế": found

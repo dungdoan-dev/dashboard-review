@@ -30,6 +30,8 @@ export const FNB_EXPENSES: [string, string, string, string][] = [
   ["CP02", "Chi mua đồ dùng CCDC", "Bình lắc, ca đong, tamper, ly thủy tinh, khay, dụng cụ pha chế, dụng cụ phục vụ, đồng phục và CCDC khác.", group("CP02")],
   ["CP03", "Chi sửa chữa – Bảo dưỡng", "Sửa chữa, bảo trì, bảo dưỡng máy pha cà phê, máy xay, tủ lạnh, máy làm đá, thiết bị điện và CCDC.", group("CP03")],
   ["CP04", "Chi nguyên liệu pha chế", "Cà phê, trà, sữa, syrup, đường, kem, trái cây, bột, topping, bánh và nguyên liệu chế biến nhập kho.", food],
+  ["CP04", "Nguyên liệu ăn sáng", "Gà, thịt bò, thịt heo, xương, trứng, xúc xích, bánh mì, bún, phở, rau củ.", food], // the sheet's list has these two beside CP04: one line with it in the month's result (same code)
+  ["CP04", "Gia vị ăn sáng", "Muối, đường, nước mắm, hạt nêm, bột ngọt, tiêu, ớt, tỏi, hành, dầu ăn.", food],
   ["CP05", "Chi mua hàng hóa", "Bia, nước giải khát đóng chai, bánh đóng gói, hạt hướng dương, đồ ăn nhẹ và hàng hóa mua về bán nguyên trạng.", food],
   ["CP06", "Chi bao bì – Vật tư", "Ly giấy, nắp ly, ống hút, túi đựng bánh, túi quai, giấy ăn, bao tay, vật tư đóng gói, vật tư vệ sinh.", food],
   ["CP08", "Chi Sự kiện - cây xanh", "Khai trương, sự kiện, trang trí Tết, hoa, cây xanh, chậu cây, đất, phân bón, quà tặng khách và vật phẩm trang trí.", group("CP08")],

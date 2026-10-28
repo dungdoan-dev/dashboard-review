@@ -1,12 +1,13 @@
 // One month of the books of "Ăn sáng, Cafe YZT" in the Sơn Trà layout (BK THU, BK CHI, kho tabs, one Hướng dẫn, one Danh mục), from the finance team's file "KT thu chi Ăn sáng, Cafe YZT Tmm_yyyy.xlsx":
-//   node scripts/cafe-yzt-book.mjs "<finance file>" <mm> <yyyy> <out.xlsx>
+//   node scripts/cafe-yzt-book.mjs "<finance file>" <mm> <yyyy> <out.xlsx> ["<template.xlsx>"]
+// With a template (the current file of a month, e.g. the one the finance team got for the next month) the data is poured into it: tabs BK THU, BK CHI, the kho tabs (no month in the tab names), formulas and guides stay.
 // Figures are copied as the finance team typed them; every total is checked against the file and what differs is printed at the end (the file has a few formula slips).
 import fs from "node:fs";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import { buildStockFile } from "../src/lib/inventory-template.ts";
 
-const [src, mmArg, yyyyArg, out] = process.argv.slice(2);
+const [src, mmArg, yyyyArg, out, tplPath] = process.argv.slice(2);
 if (!src || !mmArg || !yyyyArg || !out) throw new Error('usage: node scripts/cafe-yzt-book.mjs "<finance file>" <mm> <yyyy> <out.xlsx>');
 const MM = Number(mmArg), YYYY = Number(yyyyArg), TAG = `${String(MM).padStart(2, "0")}-${YYYY}`;
 const UNIT = "Ăn sáng, Cafe YZT";
@@ -81,6 +82,21 @@ if (chiOwn.bank !== chiMine.bank) problems.push(`BK CHI tiền tài khoản: c�
 if (chiOwn.d2 !== chiMine.cash || chiOwn.e2 !== chiMine.bank) problems.push(`Ô tổng chi ở dòng 2 của kế toán (D2 = ${chiOwn.d2}, E2 = ${chiOwn.e2}) lấy =SUM(D4:D108): cộng luôn ô tổng D4 và dừng ở dòng 108 nên sai; tổng đúng ${chiMine.cash} tiền mặt, ${chiMine.bank} tài khoản. Ô "TỔNG CHI" ở đầu BK THU của kế toán lấy từ E2 nên cũng sai.`);
 for (const x of chi) if (x.date && !inMonth(x.date)) problems.push(`BK CHI dòng nguồn ${x.src}: ngày ${toDate(x.date).toISOString().slice(0, 10)} nằm ngoài tháng ${MM}/${YYYY}.`);
 
+// DT ĂN SÁNG, CF thu KS (left table): breakfast and cafe charged to hotel rooms, the hotel collects the money. Column B has the date, J the combos and I the amount on the first row of each combo.
+const ksDays = new Map();
+const ksSrc = wb.Sheets["DT ĂN SÁNG, CF thu KS"] ? rows("DT ĂN SÁNG, CF thu KS") : null;
+if (!ksSrc) problems.push('Không thấy tab "DT ĂN SÁNG, CF thu KS": thu qua khách sạn để trống.');
+for (let i = 4; i < (ksSrc?.length ?? 0); i++) {
+  const r = ksSrc[i], amount = num(r[8]);
+  if (!amount) continue;
+  if (typeof r[1] !== "number" || !inMonth(r[1])) { problems.push(`DT ĂN SÁNG, CF thu KS dòng nguồn ${i + 1}: ${amount} đ có ngày ngoài tháng ${MM}/${YYYY} hoặc không có ngày, không đưa vào.`); continue; }
+  const d = ksDays.get(r[1]) ?? { date: r[1], combos: 0, amount: 0 };
+  d.combos += num(r[9]); d.amount += amount; ksDays.set(r[1], d);
+}
+const ks = [...ksDays.values()].sort((a, b) => a.date - b.date);
+if (ksSrc && sum(ks, (x) => x.amount) !== num(ksSrc[3][8])) problems.push(`Thu qua khách sạn: cộng ${sum(ks, (x) => x.amount)} khác ô tổng I4 của kế toán ${num(ksSrc[3][8])} (ô đó cộng đến dòng 298).`);
+const ksNote = (d) => `Combo ăn sáng, cafe ghi vào phòng (${d.combos} combo)`;
+
 // danh mục chi: the list (column G) and the description lines of the guide (column F: "1. Chi mua TSCĐ" then its description)
 const cats = chiSrc.slice(4, 40).map((r) => text(r[6])).filter(Boolean);
 const guide = [];
@@ -134,6 +150,7 @@ const khos = GROUPS.map((g) => {
     // issues
     let j = refRow(n, 8), targetX = num(r[7]);
     const hFormula = String(bkWs.getCell(n, 8).formula ?? "");
+    items[items.length - 1].immediate = USED_UP.test(hFormula) || hFormula === `F${n}`; // bought and used up in the day: "Mua xuất luôn" in the template
     if (j && !same(name, xuat[j - 1][1])) {
       const j2 = rowByName(xuat, name, 5, 200), x2 = j2 ? num(xuat[j2 - 1][3]) : 0;
       if (x2 !== targetX && !USED_UP.test(hFormula)) problems.push(`${g.title}: dòng ${n} "${name}" lấy số xuất từ dòng ${j} của tab "xuất ra" là "${text(xuat[j - 1][1])}" (công thức lệch dòng): kế toán ghi xuất ${targetX}, dòng đúng của "${name}" là dòng ${j2 ?? "?"} với ${x2}; đã lấy số của dòng đúng.`);
@@ -161,16 +178,99 @@ const khos = GROUPS.map((g) => {
 // rows of the "mua vào" and "xuất ra" tabs that no item of the stock book reads, with money or quantity in them
 const orphan = (list, usedSet, qtyCol, moneyCol, label) => list.slice(5, 200).forEach((r, i) => { const row = i + 6; if (usedSet.has(row) || !text(r[1])) return; if (num(r[qtyCol]) || (moneyCol && num(r[moneyCol]))) problems.push(`Tab "${label}" dòng ${row} "${text(r[1])}" (${num(r[qtyCol])}${moneyCol ? `, tiền ${num(r[moneyCol])}` : ""}) không có trong bảng kê kho của kế toán nên chưa vào kho.`); });
 orphan(mua, used.mua, 3, 4, "mua vào"); orphan(xuat, used.xuat, 3, null, "xuất ra");
+// with a template, the Loại the finance team gave an item there ("Mua xuất luôn") counts as well as the formula of their file
+const t = tplPath ? new ExcelJS.Workbook() : null;
+if (t) {
+  await t.xlsx.readFile(tplPath);
+  for (const g of khos) {
+    const w = t.getWorksheet(g.title); if (!w) continue;
+    const kindOf = new Map(); for (let r = 5; r < 200; r++) if (text(w.getCell(r, 20).value)) kindOf.set(text(w.getCell(r, 20).value), text(w.getCell(r, 21).value));
+    for (const it of g.items) if (kindOf.get(it.name) === "Mua xuất luôn") it.immediate = true;
+  }
+}
 // closing stock by the template's rule against the finance file's own figures
 for (const g of khos) {
   let diff = 0;
   for (const it of g.items) {
+    if (it.immediate && tplPath) continue; // "Mua xuất luôn": nothing is left by the template's rule, the finance file's closing is checked only for the others
     const r = bk.slice(g.from - 1, g.to).find((x) => text(x[1]) === it.name);
     const inQ = sum(g.nhap.filter((n) => n[1] === it.name), (n) => n[2]), inV = sum(g.nhap.filter((n) => n[1] === it.name), (n) => n[3]), outQ = sum(g.xuat.filter((n) => n[2] === it.name), (n) => n[3]);
     const base = it.openQty + inQ, avg = base > 0 ? (it.openValue + inV) / base : 0, closeQ = base - outQ, closeV = it.openValue + inV - outQ * avg;
     if (Math.abs(closeQ - num(r[9])) > 1e-6) { diff++; problems.push(`${g.title}: "${it.name}" tồn cuối SL ${closeQ} khác bảng kê của kế toán ${num(r[9])}.`); }
     else if (Math.abs(closeV - num(r[10])) > 1) problems.push(`${g.title}: "${it.name}" tồn cuối giá trị ${Math.round(closeV)} khác bảng kê của kế toán ${Math.round(num(r[10]))}.`);
   }
+}
+
+// ---------- with a template: the data goes into the current file of a month ----------
+if (tplPath) {
+  const OLD_KIND = { "Chi NL cafe": "Chi nguyên liệu pha chế", "Chi NL ăn sáng": "Nguyên liệu ăn sáng", "Chi bao bì, vật tư": "Chi bao bì – Vật tư", "Quản lý,vận hành": "Chi quản lý, vận hành", "Chi Maketing": "Chi Marketing", "Chi mua TSCĐ": "Chi đầu tư TSCĐ" };
+  const tab = (name) => { const w = t.getWorksheet(name); if (!w) throw new Error(`Mẫu không có tab ${name}.`); return w; };
+  const wipe = (w, r0, r1, cols) => { for (let r = r0; r <= Math.min(r1, w.rowCount); r++) for (const c of cols) if (w.getCell(r, c).value !== null) w.getCell(r, c).value = null; };
+  const FIRST_ROW = 5, LAST_ROW = 504;
+
+  // Danh mục: the sellers and the kinds of chi
+  const dm = tab("Danh mục"), kinds = [], sellers = [];
+  for (let r = 2; r <= 40; r++) { const k = text(dm.getCell(r, 4).value), p = text(dm.getCell(r, 1).value); if (k) kinds.push(k); if (p) sellers.push(p); }
+  for (const who of new Set(thu.map((x) => x.who).filter(Boolean))) if (!sellers.includes(who)) { dm.getCell(2 + sellers.length, 1).value = who; sellers.push(who); problems.push(`Người bán “${who}” chưa có trong Danh mục: đã thêm vào cột NGƯỜI BÁN.`); }
+
+  // BK THU
+  const bt = tab("BK THU");
+  if (thu.length + ks.length > LAST_ROW - FIRST_ROW + 1) throw new Error("BK THU chỉ có 500 dòng.");
+  wipe(bt, FIRST_ROW, LAST_ROW, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15]);
+  thu.forEach((x, k) => {
+    const r = FIRST_ROW + k;
+    if (x.date) bt.getCell(r, 1).value = toDate(x.date);
+    if (x.who) bt.getCell(r, 2).value = x.who;
+    if (x.note) bt.getCell(r, 3).value = x.note;
+    x.v.forEach((v, j) => { if (v) bt.getCell(r, 4 + j).value = v; });
+    if (x.shopeeId) bt.getCell(r, 9).value = x.shopeeId;
+    if (x.shopee) bt.getCell(r, 10).value = x.shopee;
+    if (x.grabId) bt.getCell(r, 11).value = x.grabId;
+    if (x.grab) bt.getCell(r, 12).value = x.grab;
+    if (!x.date && /tồn/i.test(x.note)) bt.getCell(r, 14).value = "Công nợ đầu tháng, không phải doanh thu";
+  });
+  ks.forEach((d, k) => { const r = FIRST_ROW + thu.length + k; bt.getCell(r, 1).value = toDate(d.date); bt.getCell(r, 3).value = ksNote(d); bt.getCell(r, 15).value = d.amount; });
+  bt.getCell("I1").value = day(1);
+  const bankOpen = num(rows("TK TGNH")[2]?.[2]); // "Số dư đầu kỳ" of the finance team's bank book
+  if (bankOpen) { bt.getCell("U1").value = bankOpen; problems.push(`Đầu kỳ ngân hàng ${bankOpen} lấy từ ô C3 của tab TK TGNH; đầu kỳ tiền mặt để trống vì file kế toán không có số rõ ràng (ô A3 của BK THU VTCF là chữ).`); }
+
+  // BK CHI
+  const bc = tab("BK CHI");
+  if (chi.length > LAST_ROW - FIRST_ROW + 1) throw new Error("BK CHI chỉ có 500 dòng.");
+  wipe(bc, FIRST_ROW, LAST_ROW, [1, 2, 3, 4, 5, 6, 7]);
+  chi.forEach((x, k) => {
+    const r = FIRST_ROW + k, kind = OLD_KIND[x.cat] ?? x.cat;
+    if (!kinds.includes(kind)) throw new Error(`Hạng mục chi “${x.cat}” (dòng nguồn ${x.src}) không có tương ứng trong Danh mục của mẫu.`);
+    if (x.date) bc.getCell(r, 1).value = toDate(x.date);
+    bc.getCell(r, 2).value = kind; bc.getCell(r, 3).value = x.note;
+    if (x.cash) bc.getCell(r, 4).value = x.cash;
+    if (x.bank) bc.getCell(r, 5).value = x.bank;
+  });
+  bc.getCell("G1").value = day(1);
+  problems.push('Hạng mục “Chi NL ăn sáng” đã chuyển thành “Nguyên liệu ăn sáng” (gia vị ăn sáng nếu có ghi lẫn trong nội dung thì kế toán tách sang “Gia vị ăn sáng”).');
+
+  // kho: the item list (T..X), then the three lists
+  for (const g of khos) {
+    const w = tab(g.title);
+    let end = 5; while (text(w.getCell(end, 20).value) !== "Cộng" && end < 200) end++;
+    if (g.items.length > end - 5) throw new Error(`${g.title}: ${g.items.length} mặt hàng, mẫu chỉ có ${end - 5} dòng.`);
+    wipe(w, 5, end - 1, [20, 21, 22, 23, 24]);
+    g.items.forEach((it, k) => { const r = 5 + k; w.getCell(r, 20).value = it.name; w.getCell(r, 21).value = it.immediate ? "Mua xuất luôn" : it.kind; if (it.unit) w.getCell(r, 22).value = it.unit; w.getCell(r, 23).value = it.openQty; w.getCell(r, 24).value = it.openValue; if (it.immediate && (it.openQty || it.openValue)) problems.push(`${g.title}: "${it.name}" là “Mua xuất luôn” nhưng có tồn đầu ${it.openQty} (${it.openValue} đ): số tồn đầu được tính vào giá trị xuất của tháng.`); });
+    w.getCell("U4").value = day(1);
+    const skip = new Set(g.items.filter((it) => it.immediate).map((it) => it.name)); // a "Mua xuất luôn" item has no issue lines: what went out costs what was bought
+    const xuat = g.xuat.filter((x) => !skip.has(x[2]));
+    wipe(w, 5, 1504, [1, 2, 3, 4, 5]); wipe(w, 5, 6004, [7, 8, 9, 10, 11]); wipe(w, 5, 2004, [13, 14, 15, 16]);
+    const put = (col, list) => list.forEach((row, k) => row.forEach((v, j) => { if (v !== "" && v != null) w.getCell(5 + k, col + j).value = v; }));
+    put(1, g.nhap); put(7, xuat); put(13, g.kiem);
+    console.log(g.title + ":", g.items.length, "mặt hàng (" + skip.size + " mua xuất luôn),", g.nhap.length, "dòng nhập,", xuat.length, "dòng xuất,", g.kiem.length, "dòng kiểm kê");
+  }
+  for (const name of ["THU MINIMART", "CHI MINIMART"]) { const w = t.getWorksheet(name); if (w) w.state = "hidden"; } // no mini mart at this branch
+
+  t.calcProperties.fullCalcOnLoad = true; // the template's cached results are those of its own month
+  await t.xlsx.writeFile(out);
+  console.log("BK THU:", thu.length, "dòng +", ks.length, "ngày thu qua khách sạn", sum(ks, (x) => x.amount), "| BK CHI:", chi.length, "dòng | tiền mặt", chiMine.cash, "tài khoản", chiMine.bank);
+  console.log("VẤN ĐỀ CẦN KẾ TOÁN XEM:\n" + (problems.length ? problems.map((p) => "- " + p).join("\n") : "không"));
+  process.exit(0);
 }
 
 // ---------- the workbook: Hướng dẫn, Danh mục, BK THU, BK CHI, then the kho tabs ----------
@@ -194,6 +294,7 @@ book.calcProperties.fullCalcOnLoad = true;
     ["Nguồn khác (cột D, E)", "Tiền mặt, chuyển khoản không phải doanh thu bán hàng (ví dụ vốn góp, luân chuyển vào quỹ)."],
     ["Khách trực tiếp (cột F, G, H)", "Tiền mặt, chuyển khoản (banking), thẻ POS của khách mua tại quầy."],
     ["Shopee Food (cột I, J), Grab Food (cột K, L)", "Mã đơn và số công nợ với ứng dụng: dương là đơn phát sinh, âm là ứng dụng đã chuyển tiền. Dòng “tồn shopee tháng trước” là công nợ đầu tháng, không phải doanh thu. Tổng của hai cột này là công nợ còn lại (xem “Tổng hợp tháng” bên phải)."],
+    ["Thu qua khách sạn (cột O)", "Combo, cafe của khách ở khách sạn, ghi vào phòng: tiền do khách sạn thu. Mỗi dòng một ngày, nhập thành tiền (ví dụ 53 combo 100K trong tháng thì tổng các dòng là 5.300.000). Không phải tiền vào quỹ của quán nên không vào bảng theo ngày. Dashboard tính vào doanh thu Ăn sáng, cafe và trừ khỏi doanh thu khách sạn."],
     ["Doanh thu (cột M)", "Tự cộng tiền mặt, chuyển khoản và POS của khách trực tiếp (F + G + H). Không cộng nguồn khác và công nợ ứng dụng."],
     ["Bảng theo ngày (cột P đến W)", "Tự cộng thu chi tiền mặt và ngân hàng theo ngày, chi lấy từ tab BK CHI cùng tháng. Nhập số dư đầu kỳ tiền mặt và ngân hàng ở ô vàng hàng 1. Thẻ POS không vào hai quỹ này (tiền về sau); cột W chỉ để xem."],
     ["Thưởng theo người bán", "Bảng dưới bảng theo ngày: tiền mặt, chuyển khoản, POS của từng người bán, thưởng 5% và phần còn lại cho khách sạn, theo cách tính của kế toán."],
@@ -252,16 +353,16 @@ book.calcProperties.fullCalcOnLoad = true;
     ["Tiền mặt", "KHÁCH TRỰC TIẾP", GREEN, 13], ["Chuyển khoản", "", GREEN, 13], ["Thẻ POS", "", GREEN, 13],
     ["Mã đơn", "SHOPEE FOOD", BLUE, 11], ["Công nợ\n(+ phát sinh, − đã nhận)", "", BLUE, 15],
     ["Mã đơn", "GRAB FOOD", BLUE, 11], ["Công nợ\n(+ phát sinh, − đã nhận)", "", BLUE, 15],
-    ["Doanh thu\nkhách trực tiếp", "DOANH THU", GREY, 15], ["Ghi chú", "GHI CHÚ", NAVY, 22],
+    ["Doanh thu\nkhách trực tiếp", "DOANH THU", GREY, 15], ["Ghi chú", "GHI CHÚ", NAVY, 22], ["Thu qua\nkhách sạn", "KHÁCH SẠN", ORANGE, 15],
   ];
   cols.forEach(([name, group, color, width], i) => { head(ws.getCell(2, i + 1), color); head(ws.getCell(3, i + 1), color); ws.getCell(2, i + 1).value = group || null; ws.getCell(3, i + 1).value = name; ws.getColumn(i + 1).width = width; });
-  for (const c of [1, 2, 3, 13, 14]) ws.mergeCells(2, c, 3, c);
-  ws.getCell(2, 1).value = "NGÀY"; ws.getCell(2, 2).value = "NGƯỜI BÁN"; ws.getCell(2, 3).value = "NỘI DUNG"; ws.getCell(2, 13).value = "Doanh thu\nkhách trực tiếp"; ws.getCell(2, 14).value = "GHI CHÚ";
+  for (const c of [1, 2, 3, 13, 14, 15]) ws.mergeCells(2, c, 3, c);
+  ws.getCell(2, 1).value = "NGÀY"; ws.getCell(2, 2).value = "NGƯỜI BÁN"; ws.getCell(2, 3).value = "NỘI DUNG"; ws.getCell(2, 13).value = "Doanh thu\nkhách trực tiếp"; ws.getCell(2, 14).value = "GHI CHÚ"; ws.getCell(2, 15).value = "Thu qua\nkhách sạn";
   ws.mergeCells("D2:E2"); ws.mergeCells("F2:H2"); ws.mergeCells("I2:J2"); ws.mergeCells("K2:L2");
   ws.getRow(1).height = 32; ws.getRow(2).height = 22; ws.getRow(3).height = 48;
   for (let r = FIRST; r <= LAST; r++) {
     const band = r % 2 === 1 ? fill(BAND) : null;
-    for (let c = 1; c <= 14; c++) {
+    for (let c = 1; c <= 15; c++) {
       const cell = ws.getCell(r, c);
       if (c === 1) put(cell, { fl: band, al: { horizontal: "center", vertical: "middle" }, fmt: "dd/mm/yyyy", bd: BORDER });
       else if (c === 9 || c === 11) put(cell, { fl: band, fmt: "@", bd: BORDER });
@@ -284,11 +385,11 @@ book.calcProperties.fullCalcOnLoad = true;
     if (x.grab) ws.getCell(r, 12).value = x.grab;
     if (!x.date && /tồn/i.test(x.note)) ws.getCell(r, 14).value = "Công nợ đầu tháng, không phải doanh thu";
   });
+  ks.forEach((d, k) => { const r = FIRST + thu.length + k; ws.getCell(r, 1).value = toDate(d.date); ws.getCell(r, 3).value = ksNote(d); ws.getCell(r, 15).value = d.amount; });
 
   // panel by day: cash and bank, spending from the BK CHI tab of the same month
   const pw = [12, 14, 14, 16, 14, 14, 16, 14];
   pw.forEach((w, i) => { ws.getColumn(16 + i).width = w; });
-  ws.getColumn(15).width = 3;
   const chiRef = (col) => `INDIRECT("'BK CHI "&TEXT($Z$1,$AA$1)&"'!$${col}$4:$${col}$503")`;
   const gh = [["NGÀY", NAVY], ["TIỀN MẶT", GREEN], ["", GREEN], ["", GREEN], ["NGÂN HÀNG", BLUE], ["", BLUE], ["", BLUE], ["THẺ POS", GREY]];
   gh.forEach(([t, color], i) => { head(ws.getCell(2, 16 + i), color); head(ws.getCell(3, 16 + i), color); ws.getCell(2, 16 + i).value = t || null; });

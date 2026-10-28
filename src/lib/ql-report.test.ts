@@ -5,7 +5,7 @@ import type { CheckoutDay } from "./bluejay-checkout.ts";
 import type { FnbReport } from "./fnb-ledger.ts";
 
 const day = (date: string, o: Partial<CheckoutDay> = {}): CheckoutDay => ({ date, rooms: 0, room: 0, service: 0, total: 0, excludedRooms: 0, excludedRoom: 0, excludedService: 0, ...o });
-const unit = (label: string, days: { date: string; income: number; cash: number; bank: number; expense: number }[]) => ({ label, days }) as unknown as FnbReport["units"][number];
+const unit = (label: string, days: { date: string; income: number; cash: number; bank: number; expense: number; hotel?: number }[]) => ({ label, days: days.map((d) => ({ hotel: 0, ...d })) }) as unknown as FnbReport["units"][number];
 
 test("the weeks of the month, cut at the month's ends, and a last column for the month", () => {
   assert.deepEqual(monthRange("2026-02"), { from: "2026-02-01", to: "2026-02-28" });
@@ -46,7 +46,7 @@ test("the month's result: one column per unit and a total, hotel costs from the 
   const e = (kind: string, cash: number) => ({ row: 1, date: "2026-10-05", kind, note: "", cash, bank: 0, visa: 0, commission: 0, cardFee: 0 });
   const hotel = { summary: { income: { commission: 30, otherDeduction: 20 } }, expenses: [e("Chi sửa chữa – Bảo dưỡng", 400), { ...e("Chi sửa chữa – Bảo dưỡng", 999), date: "2026-09-30" }] } as never;
   const tree = [{ group: "Chi phí vận hành", total: 60, kinds: [{ name: "Chi mua hàng hóa", total: 60 }] }];
-  const fnb = { units: [{ label: "Mini mart", sales: { total: 500 }, tree }] } as unknown as FnbReport;
+  const fnb = { units: [{ label: "Mini mart", sales: { total: 500, hotel: 0 }, tree }] } as unknown as FnbReport;
   const r = qlResult("2026-10", { days: [day("2026-10-02", { room: 1000, service: 100, excludedRoom: 50 })], hotel, fnb });
   const by = (label: string) => r.rows.find((x) => x.label.startsWith(label))!.values;
   assert.deepEqual(r.columns, ["Khách sạn", "Mini mart", "Tổng"]);
@@ -54,6 +54,23 @@ test("the month's result: one column per unit and a total, hotel costs from the 
   assert.deepEqual(by("II, TỔNG CHI PHÍ"), [400, 60, 460]); // the 30 September line is out of the month
   assert.deepEqual(by("Chi mua hàng hóa"), [0, 60, 60]);
   assert.deepEqual(by("III, Lợi nhuận"), [700, 440, 1140]);
+});
+
+test("breakfast and cafe charged to hotel rooms: taken out of the hotel's revenue, added to the F&B unit's sales, the total is unchanged and no fund moves", () => {
+  const days = [day("2026-10-02", { room: 1000, service: 300 })];
+  const cafe = unit("Ăn sáng, cafe", [{ date: "2026-10-02", income: 40, cash: 30, bank: 10, expense: 15, hotel: 200 }]);
+  const fnb = { units: [cafe] } as unknown as FnbReport;
+  const { rows } = qlWeekly("2026-10", { days, fnb });
+  const by = (label: string) => rows.find((r) => r.label.startsWith(label))!.values;
+  assert.deepEqual(by("Trừ: Ăn sáng, cafe thu qua khách sạn"), [-200, 0, 0, 0, 0, -200]);
+  assert.deepEqual(by("Doanh thu khách sạn sau trừ"), [1100, 0, 0, 0, 0, 1100]);
+  assert.deepEqual([by("Thu bán hàng")[0], by("Thu qua khách sạn")[0], by("Thu − chi")[0]], [240, 200, 225]);
+  assert.deepEqual(by("Doanh thu khách sạn + thu bán hàng"), [1340, 0, 0, 0, 0, 1340]); // 1300 hotel + 40 counter, as without the move
+  const none = qlWeekly("2026-10", { days, fnb: { units: [unit("Ăn sáng, cafe", [{ date: "2026-10-02", income: 40, cash: 30, bank: 10, expense: 15 }])] } as unknown as FnbReport }).rows;
+  assert.ok(!none.some((r) => r.label.startsWith("Trừ: Ăn sáng") || r.label.startsWith("Thu qua khách sạn"))); // no rows when nothing went through the hotel
+  const r = qlResult("2026-10", { days, fnb: { units: [{ label: "Ăn sáng, cafe", sales: { total: 40, hotel: 200 }, tree: [] }] } as unknown as FnbReport });
+  const kq = (label: string) => r.rows.find((x) => x.label.startsWith(label))!.values;
+  assert.deepEqual([kq("Tiền dịch vụ"), kq("Thu bán hàng"), kq("I, TỔNG DOANH THU")], [[100, 0, 100], [0, 240, 240], [100 + 1000, 240, 1340]]);
 });
 
 test("the cash book and the bank book day by day: opening, in and out per unit, closing, and the sheet's own closing to compare with", () => {

@@ -21,6 +21,9 @@ export function qlWeekly(month: string, input: { days?: CheckoutDay[]; finance?:
   const section = (label: string) => row(label, columns.map(() => 0), "section");
   const rows: ReportRow[] = [];
   let hotelTotal: number[] | null = null;
+  // Breakfast and cafe of hotel guests charged to the room: collected by the hotel, so inside the hotel's revenue, but they are the F&B unit's sales
+  const via = add(columns.map(() => 0), ...(input.fnb?.units ?? []).map((u) => sumDays(u.days, (x) => x.hotel))), hasVia = via.some((v) => v);
+  let hotelNet: number[] | null = null;
 
   if (input.days) {
     const d = input.days;
@@ -28,8 +31,10 @@ export function qlWeekly(month: string, input: { days?: CheckoutDay[]; finance?:
     hotelTotal = add(room, service, excluded);
     rows.push(section("KHÁCH SẠN · DOANH THU THEO NGÀY TRẢ PHÒNG (Blue Jay)"), row("Đêm của đặt phòng", sumDays(d, (x) => x.rooms)), row("Tiền phòng", room), row("Tiền dịch vụ", service),
       row("Tổng doanh thu (không tính M-Standard / Unassigned)", add(room, service), "total"), row("M-Standard / Unassigned", excluded), row("Tổng doanh thu có M-Standard / Unassigned", hotelTotal, "total"));
+    hotelNet = hasVia ? add(hotelTotal, via.map((v) => 0 - v)) : hotelTotal;
+    if (hasVia) rows.push(row("Trừ: Ăn sáng, cafe thu qua khách sạn (ghi vào phòng)", via.map((v) => 0 - v)), row("Doanh thu khách sạn sau trừ Ăn sáng, cafe", hotelNet, "total"));
     const deduction = input.finance?.rows.find((r) => r.label.startsWith("Giảm trừ doanh thu"));
-    if (deduction) rows.push(row("Giảm trừ doanh thu (hoa hồng, phí quẹt thẻ)", deduction.values), row("Doanh thu sau giảm trừ", add(hotelTotal, deduction.values), "total")); // the deduction is negative
+    if (deduction) rows.push(row("Giảm trừ doanh thu (hoa hồng, phí quẹt thẻ)", deduction.values), row("Doanh thu sau giảm trừ", add(hotelNet, deduction.values), "total")); // the deduction is negative
   }
   if (input.finance) {
     const from = input.finance.rows.findIndex((r) => r.label.startsWith("2. "));
@@ -37,11 +42,11 @@ export function qlWeekly(month: string, input: { days?: CheckoutDay[]; finance?:
   }
   let sales: number[] | null = null;
   for (const u of input.fnb?.units ?? []) {
-    const thu = sumDays(u.days, (x) => x.income), chi = sumDays(u.days, (x) => x.expense);
+    const counter = sumDays(u.days, (x) => x.income), hotel = sumDays(u.days, (x) => x.hotel), thu = add(counter, hotel), chi = sumDays(u.days, (x) => x.expense);
     sales = sales ? add(sales, thu) : thu;
-    rows.push(section(u.label.toUpperCase()), row("Thu bán hàng", thu, "total"), row("Thu tiền mặt", sumDays(u.days, (x) => x.cash)), row("Thu chuyển khoản (gồm POS)", sumDays(u.days, (x) => x.bank)), row("Chi", chi, "total"), row("Thu − chi", add(thu, chi.map((v) => 0 - v))));
+    rows.push(section(u.label.toUpperCase()), row("Thu bán hàng", thu, "total"), row("Thu tiền mặt", sumDays(u.days, (x) => x.cash)), row("Thu chuyển khoản (gồm POS)", sumDays(u.days, (x) => x.bank)), ...(hotel.some((v) => v) ? [row("Thu qua khách sạn (ghi vào phòng, tiền ở khách sạn)", hotel)] : []), row("Chi", chi, "total"), row("Thu − chi", add(thu, chi.map((v) => 0 - v))));
   }
-  if (hotelTotal && sales) rows.push(section("TỔNG"), row("Doanh thu khách sạn + thu bán hàng Ăn sáng, cafe, mini mart", add(hotelTotal, sales), "total"));
+  if (hotelNet && sales) rows.push(section("TỔNG"), row("Doanh thu khách sạn + thu bán hàng Ăn sáng, cafe, mini mart", add(hotelNet, sales), "total")); // hotelNet: the part moved to the F&B unit is counted once
   return { columns, rows };
 }
 
@@ -116,15 +121,16 @@ export function qlResult(month: string, input: { days?: CheckoutDay[]; hotel?: {
   const { from, to } = monthRange(month);
   type Unit = { label: string; room: number; service: number; sales: number; commission: number; otherDeduction: number; tree: ReturnType<typeof costTree> };
   const units: Unit[] = [];
+  const via = input.days ? (input.fnb?.units ?? []).reduce((t, u) => t + u.sales.hotel, 0) : 0; // breakfast and cafe charged to hotel rooms: inside the hotel's service revenue, moved to the F&B unit
   if (input.days || input.hotel) {
     const d = (input.days ?? []).filter((x) => x.date >= from && x.date <= to), inc = input.hotel?.summary.income;
     units.push({
-      label: "Khách sạn", room: d.reduce((t, x) => t + x.room + x.excludedRoom, 0), service: d.reduce((t, x) => t + x.service + x.excludedService, 0), sales: 0,
+      label: "Khách sạn", room: d.reduce((t, x) => t + x.room + x.excludedRoom, 0), service: d.reduce((t, x) => t + x.service + x.excludedService, 0) - via, sales: 0,
       commission: inc?.commission ?? 0, otherDeduction: inc?.otherDeduction ?? 0,
       tree: input.hotel ? costTree(input.hotel.expenses.filter((e) => e.date >= from && e.date <= to)) : [],
     });
   }
-  for (const u of input.fnb?.units ?? []) units.push({ label: u.label, room: 0, service: 0, sales: u.sales.total, commission: 0, otherDeduction: 0, tree: u.tree });
+  for (const u of input.fnb?.units ?? []) units.push({ label: u.label, room: 0, service: 0, sales: u.sales.total + u.sales.hotel, commission: 0, otherDeduction: 0, tree: u.tree });
   const withTotal = (v: number[]) => [...v, v.reduce((a, b) => a + b, 0)];
   const each = (f: (u: Unit) => number) => withTotal(units.map(f));
   const row = (label: string, values: number[], kind: ReportRow["kind"] = "line", extra: { stt?: string; code?: string; note?: string } = {}): KqRow => ({ label, kind, values, ...extra });
@@ -144,8 +150,8 @@ export function qlResult(month: string, input: { days?: CheckoutDay[]; hotel?: {
     row("I, TỔNG DOANH THU (I=1-2)", revenue, "total"),
     row("Doanh thu khách sạn và bán hàng", gross, "total", { stt: "1", code: "I" }),
     row("Tiền phòng", each((u) => u.room), "line", { code: "1.1", note: "Theo ngày trả phòng, gồm M-Standard / Unassigned" }),
-    row("Tiền dịch vụ", each((u) => u.service), "line", { code: "1.2", note: "Minibar, giặt ủi, dịch vụ ngoài, thu khác: Blue Jay chỉ trả gộp theo đặt phòng" }),
-    row("Thu bán hàng", each((u) => u.sales), "line", { code: "1.3", note: "Ăn sáng, cafe, mini mart" }),
+    row("Tiền dịch vụ", each((u) => u.service), "line", { code: "1.2", note: `Minibar, giặt ủi, dịch vụ ngoài, thu khác: Blue Jay chỉ trả gộp theo đặt phòng${via ? "; đã trừ Ăn sáng, cafe thu qua khách sạn" : ""}` }),
+    row("Thu bán hàng", each((u) => u.sales), "line", { code: "1.3", note: via ? "Ăn sáng, cafe, mini mart; Ăn sáng, cafe gồm phần thu qua khách sạn" : "Ăn sáng, cafe, mini mart" }),
     row("Các khoản giảm trừ doanh thu", deduction, "total", { stt: "2", code: "II" }),
     row("Hoa hồng nền tảng", commission, "line", { code: "2.1" }), row("Phí quẹt thẻ, giảm giá khách hàng", other, "line", { code: "2.2" }),
     row("II, TỔNG CHI PHÍ HĐKD (II = 1+2+3+4+5)", cost, "total"), ...costRows,

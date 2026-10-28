@@ -85,6 +85,7 @@ export function BluejayFnbFinance({ scopeId }: { scopeId: number | null }) {
           <h3>{u.label}{u.name && <small> · {u.name}</small>}</h3>
           <div className="summary-kpis">
             <Kpi label="Thu bán hàng" value={num(u.sales.total)} hint={`Tiền mặt ${num(u.sales.cash)} · chuyển khoản ${num(u.sales.bank)}${u.unit === "cafe" ? ` · POS ${num(u.sales.pos)}` : ""}`} />
+            {u.sales.hotel !== 0 && <Kpi label="Thu qua khách sạn" value={num(u.sales.hotel)} hint="Combo, cafe ghi vào phòng: khách sạn thu tiền. Tính vào doanh thu của đơn vị, trừ khỏi doanh thu khách sạn trong Báo cáo quản lý" />}
             <Kpi label="Chi" value={num(u.spent.total)} hint={`Tiền mặt ${num(u.spent.cash)} · chuyển khoản ${num(u.spent.bank + u.spent.visa)}`} />
             <Kpi label="Thu − chi" value={signed(u.sales.total - u.spent.total)} />
             <Kpi label="Biến động tiền mặt" value={signed(u.funds.cash)} hint={u.other.cash ? `Gồm ${num(u.other.cash)} nguồn khác` : undefined} />

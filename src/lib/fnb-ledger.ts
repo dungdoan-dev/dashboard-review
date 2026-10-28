@@ -11,8 +11,9 @@ const text = (v: unknown) => String(v ?? "").trim();
 
 export type FnbLayout = "cafe" | "mart";
 /** One row of an income tab. cash, bank, pos: paid by guests at the counter; otherCash, otherBank: money that is not sales (capital, transfers into the fund);
- * shopee, grab: the running balance with the app (+ the app owes us, - the app paid); voided, rental: mini mart only (cancelled goods, boat rental). */
-export type FnbIncomeLine = { row: number; date: string; seller: string; note: string; cash: number; bank: number; pos: number; otherCash: number; otherBank: number; shopee: number; grab: number; voided: number; rental: number };
+ * shopee, grab: the running balance with the app (+ the app owes us, - the app paid); hotel: breakfast and cafe of hotel guests charged to the room, the money is collected by the hotel (cafe only, not part of any fund here);
+ * voided, rental: mini mart only (cancelled goods, boat rental). */
+export type FnbIncomeLine = { row: number; date: string; seller: string; note: string; cash: number; bank: number; pos: number; otherCash: number; otherBank: number; shopee: number; grab: number; hotel: number; voided: number; rental: number };
 export type FnbIncome = { sheet: string; layout: FnbLayout; month: string; unit: string; lines: FnbIncomeLine[] };
 
 /** Sales of a row: what guests paid at the counter. The app balances are debts, not sales. */
@@ -42,16 +43,16 @@ export function parseFnbIncome(name: string, rows: unknown[][]): FnbIncome {
   const upper = rows[top].map(norm), lower = (rows[top + 1] ?? []).map(norm);
   const find = (g: string | null, re: RegExp) => upper.findIndex((_, i) => (re.test(lower[i] ?? "") || re.test(upper[i])) && (g === null || groups[i] === g));
   const col = layout === "cafe"
-    ? { date: find(null, /^ngay$/), seller: find(null, /^nguoi ban$/), note: find(null, /^noi dung$/), otherCash: find("nguon khac", /^tien mat$/), otherBank: find("nguon khac", /^chuyen khoan$/), cash: find("khach truc tiep", /^tien mat$/), bank: find("khach truc tiep", /^chuyen khoan$/), pos: find("khach truc tiep", /^the pos$/), shopee: find("shopee food", /^cong no/), grab: find("grab food", /^cong no/), voided: -1, rental: -1 }
-    : { date: find(null, /^ngay$/), seller: -1, note: find(null, /^noi dung$/), otherCash: -1, otherBank: -1, cash: find(null, /^tien mat$/), bank: find(null, /^chuyen khoan/), pos: -1, shopee: find(null, /^shopee food$/), grab: find(null, /^grab food$/), voided: find(null, /^tong hang huy$/), rental: find(null, /^thue phao$/) };
+    ? { date: find(null, /^ngay$/), seller: find(null, /^nguoi ban$/), note: find(null, /^noi dung$/), otherCash: find("nguon khac", /^tien mat$/), otherBank: find("nguon khac", /^chuyen khoan$/), cash: find("khach truc tiep", /^tien mat$/), bank: find("khach truc tiep", /^chuyen khoan$/), pos: find("khach truc tiep", /^the pos$/), shopee: find("shopee food", /^cong no/), grab: find("grab food", /^cong no/), hotel: find(null, /^thu qua khach san/), voided: -1, rental: -1 }
+    : { date: find(null, /^ngay$/), seller: -1, note: find(null, /^noi dung$/), otherCash: -1, otherBank: -1, cash: find(null, /^tien mat$/), bank: find(null, /^chuyen khoan/), pos: -1, shopee: find(null, /^shopee food$/), grab: find(null, /^grab food$/), hotel: -1, voided: find(null, /^tong hang huy$/), rental: find(null, /^thue phao$/) };
   if (col.date < 0 || col.cash < 0 || col.bank < 0) throw new Error(`Bảng thu “${name}” thiếu cột “Ngày”, “Tiền mặt” hoặc “Chuyển khoản”.`);
   const at = (r: unknown[], c: number) => (c >= 0 ? r[c] : undefined);
   const lines: FnbIncomeLine[] = [];
   for (let i = top + 2; i < rows.length; i++) {
     const r = rows[i], date = ledgerDate(r[col.date]);
     if (!date) continue; // the total row, the opening balance row (no date) and blank rows
-    const line: FnbIncomeLine = { row: i + 1, date, seller: text(at(r, col.seller)), note: text(at(r, col.note)), cash: num(at(r, col.cash)), bank: num(at(r, col.bank)), pos: num(at(r, col.pos)), otherCash: num(at(r, col.otherCash)), otherBank: num(at(r, col.otherBank)), shopee: num(at(r, col.shopee)), grab: num(at(r, col.grab)), voided: num(at(r, col.voided)), rental: num(at(r, col.rental)) };
-    const money = [line.cash, line.bank, line.pos, line.otherCash, line.otherBank, line.shopee, line.grab, line.voided, line.rental].some((v) => v !== 0);
+    const line: FnbIncomeLine = { row: i + 1, date, seller: text(at(r, col.seller)), note: text(at(r, col.note)), cash: num(at(r, col.cash)), bank: num(at(r, col.bank)), pos: num(at(r, col.pos)), otherCash: num(at(r, col.otherCash)), otherBank: num(at(r, col.otherBank)), shopee: num(at(r, col.shopee)), grab: num(at(r, col.grab)), hotel: num(at(r, col.hotel)), voided: num(at(r, col.voided)), rental: num(at(r, col.rental)) };
+    const money = [line.cash, line.bank, line.pos, line.otherCash, line.otherBank, line.shopee, line.grab, line.hotel, line.voided, line.rental].some((v) => v !== 0);
     if (money || line.seller) lines.push(line); // a date typed down the page with nothing on it is not a line
   }
   const month = monthOf(beside(rows, top, /^ky bao cao/)) || monthOf(name.match(/d{1,2}[/-]d{4}/)?.[0] ?? "");
@@ -97,11 +98,11 @@ export function fnbReport(sheets: { name: string; rows: unknown[][] }[], month =
     if (!expenseTabs.length) warnings.push(`${label}: không thấy tab chi, chi tính 0.`);
     const lines = incomes.flatMap((i) => i.lines), expenses = expenseTabs.flatMap((s) => parseExpenses(s.rows)).map((e) => ({ ...e, kind: OLD_KIND.get(norm(e.kind)) ?? e.kind }));
     const sum = (f: (l: FnbIncomeLine) => number) => lines.reduce((t, l) => t + f(l), 0);
-    const sales = { cash: sum((l) => l.cash), bank: sum((l) => l.bank), pos: sum((l) => l.pos), total: sum(fnbSales) };
+    const sales = { cash: sum((l) => l.cash), bank: sum((l) => l.bank), pos: sum((l) => l.pos), total: sum(fnbSales), hotel: sum((l) => l.hotel) }; // total: counter sales (what the funds get); hotel: charged to hotel rooms, on top of total in the revenue
     const spent = { cash: expenses.reduce((t, e) => t + e.cash, 0), bank: expenses.reduce((t, e) => t + e.bank, 0), visa: expenses.reduce((t, e) => t + e.visa, 0), total: expenses.reduce((t, e) => t + paid(e), 0) };
-    const days = new Map<string, { date: string; income: number; cash: number; bank: number; expense: number; inCash: number; inBank: number; outCash: number; outBank: number }>(); // cash, bank: sales (bank = transfers + POS); inCash, inBank: all money in (other sources too); outCash, outBank: money out
-    const day = (date: string) => days.get(date) ?? days.set(date, { date, income: 0, cash: 0, bank: 0, expense: 0, inCash: 0, inBank: 0, outCash: 0, outBank: 0 }).get(date)!;
-    for (const l of lines) { const d = day(l.date); d.income += fnbSales(l); d.cash += l.cash; d.bank += l.bank + l.pos; d.inCash += l.cash + l.otherCash; d.inBank += l.bank + l.pos + l.otherBank; }
+    const days = new Map<string, { date: string; income: number; hotel: number; cash: number; bank: number; expense: number; inCash: number; inBank: number; outCash: number; outBank: number }>(); // cash, bank: sales (bank = transfers + POS); inCash, inBank: all money in (other sources too); outCash, outBank: money out
+    const day = (date: string) => days.get(date) ?? days.set(date, { date, income: 0, hotel: 0, cash: 0, bank: 0, expense: 0, inCash: 0, inBank: 0, outCash: 0, outBank: 0 }).get(date)!;
+    for (const l of lines) { const d = day(l.date); d.income += fnbSales(l); d.hotel += l.hotel; d.cash += l.cash; d.bank += l.bank + l.pos; d.inCash += l.cash + l.otherCash; d.inBank += l.bank + l.pos + l.otherBank; }
     for (const e of expenses) { const d = day(e.date); d.expense += paid(e); d.outCash += e.cash; d.outBank += e.bank + e.visa; }
     const tree = costTree(expenses, unit === "mart" ? MART_EXPENSES : FNB_EXPENSES);
     const unlisted = tree.find((g) => g.group === UNLISTED)?.kinds ?? [];

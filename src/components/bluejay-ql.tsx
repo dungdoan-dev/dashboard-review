@@ -182,7 +182,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
         </details>
         {parties.length > 0 && <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Thu chi các bên <small>để đối chiếu với file kế toán</small></h4></summary>
-          <p className="summary-note">Tiền thu và chi của khách sạn, Ăn sáng cafe và mini mart trong tháng, cùng số với bảng “Dòng tiền” (khách sạn: tiền khách trả − cọc đã nhận trước + cọc chưa ở; Ăn sáng, cafe, mini mart: bán hàng + thu khác, POS tính vào ngân hàng). Từng dòng thu, chi có trong file Excel: mỗi bên một sheet (“Thu chi Khách sạn”, Ăn sáng cafe, Mini mart), thu bên trái, chi bên phải.</p>
+          <p className="summary-note">Tiền thu và chi của khách sạn, Ăn sáng cafe và mini mart trong tháng, cùng số với bảng “Dòng tiền” (khách sạn: tiền khách trả − cọc đã nhận trước + cọc chưa ở; Ăn sáng, cafe, mini mart: bán hàng + thu khác, POS tính vào ngân hàng; phần thu qua khách sạn không phải tiền vào quỹ của quán nên không có ở đây). Từng dòng thu, chi có trong file Excel: mỗi bên một sheet (“Thu chi Khách sạn”, Ăn sáng cafe, Mini mart), thu bên trái, chi bên phải.</p>
           <ReachTable rows={parties} rowKey={(p) => p.label} columns={partyCols} sortable={false} compact />
         </details>}
         {books && books.cash.cols.length > 0 && bookTable("Sổ quỹ tiền mặt (TK TM)", books.cash, `Số dư đầu kỳ ${num(books.cash.opening)}${books.cash.opening ? " (nhập ở đầu bảng kê thu)" : ": chưa thấy ô “Đầu kỳ tiền mặt” ở đầu bảng kê nên tính từ 0"}. Thu khách sạn gồm cọc của khách chưa ở. Khách sạn, Ăn sáng cafe và mini mart chung một quỹ.`)}
@@ -206,7 +206,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
         </details>}
         {result && <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Bảng kết quả hoạt động kinh doanh tháng {loaded.month.slice(5)}/{loaded.month.slice(0, 4)}</h4></summary>
-          <p className="summary-note">Doanh thu khách sạn theo ngày trả phòng, gồm M-Standard / Unassigned; Ăn sáng, cafe, mini mart là thu bán hàng. Chi phí theo ngày chi trong tháng (khác trang Kết quả HĐKD, nơi dòng ghi “lương tháng 7” được tính vào tháng 7), xếp nhóm như báo cáo tuần của kế toán.{!loaded.hotel && " Chưa đọc được bảng kê khách sạn nên chi phí và giảm trừ của khách sạn tính 0."}</p>
+          <p className="summary-note">Doanh thu khách sạn theo ngày trả phòng, gồm M-Standard / Unassigned; Ăn sáng, cafe, mini mart là thu bán hàng. Combo, cafe của khách ở khách sạn (cột “Thu qua khách sạn” của BK THU) được trừ khỏi doanh thu khách sạn và tính vào Ăn sáng, cafe. Chi phí theo ngày chi trong tháng (khác trang Kết quả HĐKD, nơi dòng ghi “lương tháng 7” được tính vào tháng 7), xếp nhóm như báo cáo tuần của kế toán.{!loaded.hotel && " Chưa đọc được bảng kê khách sạn nên chi phí và giảm trừ của khách sạn tính 0."}</p>
           <ReachTable rows={result.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} columns={resultCols} sortable={false} compact rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />
         </details>}
       </>}
