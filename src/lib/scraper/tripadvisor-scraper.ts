@@ -1,5 +1,5 @@
 import { extractTripadvisorNotice } from "./tripadvisor-notice";
-import { decodeHtmlText, extractRankLabel } from "./tripadvisor-rank";
+import { decodeHtmlText, extractRankLabel, tripadvisorFetchUrl } from "./tripadvisor-rank";
 
 export interface TripadvisorTarget {
   id: string;
@@ -177,7 +177,7 @@ async function scrapeTripadvisorTarget(target: TripadvisorTarget, apiKey: string
   try {
     const requestUrl = new URL(ZENROWS_FETCH_ENDPOINT);
     requestUrl.searchParams.set("apikey", apiKey);
-    requestUrl.searchParams.set("url", target.tripadvisorUrl);
+    requestUrl.searchParams.set("url", tripadvisorFetchUrl(target.tripadvisorUrl));
     requestUrl.searchParams.set("mode", "auto");
     requestUrl.searchParams.set("proxy_country", "vn");
     requestUrl.searchParams.set("original_status", "true");
