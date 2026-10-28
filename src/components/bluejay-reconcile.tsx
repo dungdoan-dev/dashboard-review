@@ -35,7 +35,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const [lockMessage, setLockMessage] = useState("");
   const [kind, setKind] = useState<SheetKind>("hotel");
   const lockMonth = ledger?.month || month;
-  const sheetUrl = useSheetUrl(scopeId);
+  const sheetUrl = useSheetUrl(scopeId, month);
 
   const key = ledger && scopeId ? `${scopeId}|${ledger.from}|${ledger.to}` : "";
   useEffect(() => {

@@ -10,9 +10,9 @@ async function handle(request: Request, action: "status" | "lock" | "unlock") {
   if (denied) return fail(denied.message, denied.status);
   const q = new URL(request.url).searchParams;
   const hotel = Number(q.get("hotel")), month = q.get("month") ?? "", week = q.get("week");
-  const sheetId = BLUEJAY_HOTELS.some((h) => h.id === hotel) ? await sheetIdOf(hotel, "hotel") : undefined;
-  if (!sheetId) return fail("Khách sạn không hợp lệ hoặc chưa có Google Sheet.", 400);
   if (!/^\d{4}-\d{2}$/.test(month)) return fail("Tháng không hợp lệ.", 400);
+  const sheetId = BLUEJAY_HOTELS.some((h) => h.id === hotel) ? await sheetIdOf(hotel, "hotel", month) : undefined;
+  if (!sheetId) return fail("Khách sạn không hợp lệ hoặc tháng này chưa có Google Sheet.", 400);
   if (action !== "status" && (!isDate(week) || mondayOf(week) !== week)) return fail("Tuần không hợp lệ (cần ngày thứ Hai).", 400);
   try {
     return Response.json(await sheetLock({ action, hotel, sheetId, month, week: week ?? undefined }));

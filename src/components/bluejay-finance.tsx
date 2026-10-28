@@ -46,7 +46,7 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
   const [kind, setKind] = useState<SheetKind>("hotel");
   const [sheetLink, setSheetLink] = useState<{ url: string; gid: number } | null>(null);
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-  const sheetUrl = useSheetUrl(scopeId);
+  const sheetUrl = useSheetUrl(scopeId, month);
 
   const report = useMemo(() => (income ? financeReport(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
   const summary = useMemo(() => (income ? summarizeFinance(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);

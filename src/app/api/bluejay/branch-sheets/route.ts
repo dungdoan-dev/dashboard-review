@@ -5,33 +5,41 @@ import { checkSheet, serviceAccountEmail } from "@/lib/google-sheets";
 import { isSheetKind, sheetIdFromLink, sheetUrl } from "@/lib/ledger-sheets";
 
 const fail = (message: string, status: number) => Response.json({ message }, { status });
+const MONTH = /^\d{4}-\d{2}$/;
 const BAD_LINK = "Link không đúng: dán link Google Sheet (docs.google.com/spreadsheets/d/…) hoặc mã của sheet.";
 
-// Cài đặt → Link Google Sheet: the two links of every branch (hotel; Ăn sáng, cafe, mini mart). Admin only.
-export async function GET() {
+// Cài đặt → Link Google Sheet: the two links of every branch (hotel; Ăn sáng, cafe, mini mart) for a month (?month=YYYY-MM, default this month); shared = the month has none of its own. Admin only.
+export async function GET(request: Request) {
   const denied = await bluejayViewer();
   if (denied) return fail(denied.message, denied.status);
+  const month = new URL(request.url).searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
+  if (!MONTH.test(month)) return fail("Tháng không hợp lệ.", 400);
   try {
-    const links = await branchSheets();
+    const links = await branchSheets(month);
     return Response.json({
       serviceEmail: serviceAccountEmail(),
-      branches: BLUEJAY_HOTELS.map((h) => ({ hotel: h.id, name: h.name, hotelUrl: links[h.id]?.hotel ? sheetUrl(links[h.id].hotel!) : null, fnbUrl: links[h.id]?.fnb ? sheetUrl(links[h.id].fnb!) : null })),
+      month,
+      branches: BLUEJAY_HOTELS.map((h) => {
+        const hotel = links[h.id]?.hotel, fnb = links[h.id]?.fnb;
+        return { hotel: h.id, name: h.name, hotelUrl: hotel ? sheetUrl(hotel.id) : null, hotelShared: !!hotel && !hotel.own, fnbUrl: fnb ? sheetUrl(fnb.id) : null, fnbShared: !!fnb && !fnb.own };
+      }),
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e), 500);
   }
 }
 
-// Save one link (an empty link removes it): { hotel, kind, link }.
+// Save one link of a month (an empty link removes it): { hotel, kind, month, link }.
 export async function PUT(request: Request) {
   const denied = await bluejayViewer();
   if (denied) return fail(denied.message, denied.status);
-  const body = await request.json().catch(() => ({})) as { hotel?: unknown; kind?: unknown; link?: unknown };
+  const body = await request.json().catch(() => ({})) as { hotel?: unknown; kind?: unknown; month?: unknown; link?: unknown };
   if (!BLUEJAY_HOTELS.some((h) => h.id === body.hotel) || !isSheetKind(body.kind) || typeof body.link !== "string") return fail("Chi nhánh hoặc loại sheet không hợp lệ.", 400);
+  if (typeof body.month !== "string" || !MONTH.test(body.month)) return fail("Tháng không hợp lệ.", 400);
   const id = body.link.trim() ? sheetIdFromLink(body.link) : null;
   if (body.link.trim() && !id) return fail(BAD_LINK, 400);
   try {
-    await saveBranchSheet(body.hotel as number, body.kind, id);
+    await saveBranchSheet(body.hotel as number, body.kind, body.month, id);
     return Response.json({ ok: true });
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e), 500);

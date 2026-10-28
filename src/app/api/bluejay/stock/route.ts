@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (!isSheetKind(kind)) return Response.json({ message: "Loại sheet không hợp lệ." }, { status: 400 });
   const [year, mm] = month.split("-"), from = `${month}-01`, to = new Date(Date.UTC(Number(year), Number(mm), 0)).toISOString().slice(0, 10);
   try {
-    const id = await sheetIdOf(hotel, kind);
+    const id = await sheetIdOf(hotel, kind, month);
     if (!id) return Response.json({ message: kind === "fnb" ? "Chi nhánh này chưa có link Ăn sáng, cafe, mini mart. Thêm ở Cài đặt → Link Google Sheet." : "Khách sạn này chưa có Google Sheet." }, { status: 404 });
     const sheets = await readStockSheets(id, month, kind);
     if (!sheets.length) return Response.json({ message: `Không thấy sheet kho (cần các tab ${KHO_KINDS[kind].map((k) => k.toUpperCase()).join(", ")}; mỗi tháng một file, hoặc thêm “${mm}/${year}” vào tên tab).` }, { status: 404 });

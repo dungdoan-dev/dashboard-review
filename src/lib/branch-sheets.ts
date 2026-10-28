@@ -1,43 +1,53 @@
 import { serviceDb } from "@/lib/bluejay";
-import type { SheetKind } from "@/lib/ledger-sheets";
+import { pickLinks, type BranchSheets, type LinkRow as Row, type SheetKind } from "@/lib/ledger-sheets";
 
-// The Google Sheet links of every branch, from the table branch_sheets (Cài đặt → Link Google Sheet). Server only.
-export type BranchSheets = Record<number, Partial<Record<SheetKind, string>>>;
+// The Google Sheet links of every branch, from the table branch_sheets (Cài đặt → Link Google Sheet): every month has its own link per branch and kind. Server only.
+// A link kept with month "" (the ones saved before links were per month) serves every month that has none of its own.
 
-let cache: { at: number; links: BranchSheets } | null = null;
+let cache: { at: number; rows: Row[] } | null = null;
 const TTL = 60_000; // shortcut: per server instance, a link changed in Cài đặt reaches another instance within a minute
 
-// The four hotel links the migration seeds: used only while the table does not exist yet, so a deploy before the migration keeps working.
-const BEFORE_MIGRATION: BranchSheets = {
-  5381: { hotel: "1HvweFPj0RlzUA3qUaBYVQOoHh8PrBLpuTvDIqIelTmU" },
-  6836: { hotel: "1LJgUrctGwBPcynAjdHZlG4u8kbhCpuZGk4R9GWxciOk" },
-  6495: { hotel: "1b_38S409K5glxanqYGUU8IpsKroV0Gq8h5ppeK006Tc" },
-  6209: { hotel: "15_6wGXPamuVApuTmyeUDH01J2OFHgr-d0GeTWVUhcIo" },
-};
-const tableMissing = (e: { code?: string; message?: string }) => e.code === "42P01" || e.code === "PGRST205" || /branch_sheets/.test(e.message ?? "");
+// The four hotel links the first migration seeds: used only while the table does not exist yet, so a deploy before the migration keeps working.
+const BEFORE_MIGRATION: Row[] = [
+  { hotel_id: 5381, kind: "hotel", month: "", sheet_id: "1HvweFPj0RlzUA3qUaBYVQOoHh8PrBLpuTvDIqIelTmU" },
+  { hotel_id: 6836, kind: "hotel", month: "", sheet_id: "1LJgUrctGwBPcynAjdHZlG4u8kbhCpuZGk4R9GWxciOk" },
+  { hotel_id: 6495, kind: "hotel", month: "", sheet_id: "1b_38S409K5glxanqYGUU8IpsKroV0Gq8h5ppeK006Tc" },
+  { hotel_id: 6209, kind: "hotel", month: "", sheet_id: "15_6wGXPamuVApuTmyeUDH01J2OFHgr-d0GeTWVUhcIo" },
+];
+type DbError = { code?: string; message?: string };
+const noMonthColumn = (e: DbError) => e.code === "42703" || e.code === "PGRST204" || /\bmonth\b/.test(e.message ?? "");
+const tableMissing = (e: DbError) => e.code === "42P01" || e.code === "PGRST205" || /branch_sheets/.test(e.message ?? "");
+const MIGRATION = "20261028000000_branch_sheets_month.sql";
 
-export async function branchSheets(): Promise<BranchSheets> {
-  if (cache && Date.now() - cache.at < TTL) return cache.links;
-  const { data, error } = await serviceDb().from("branch_sheets").select("hotel_id, kind, sheet_id");
+async function rows(): Promise<Row[]> {
+  if (cache && Date.now() - cache.at < TTL) return cache.rows;
+  let { data, error } = await serviceDb().from("branch_sheets").select("hotel_id, kind, month, sheet_id");
+  if (error && noMonthColumn(error)) ({ data, error } = await serviceDb().from("branch_sheets").select("hotel_id, kind, sheet_id")); // before the month migration
   if (error) {
     if (tableMissing(error)) return BEFORE_MIGRATION;
     throw new Error(`Không đọc được link Google Sheet: ${error.message}`);
   }
-  const links: BranchSheets = {};
-  for (const r of data ?? []) (links[r.hotel_id] ??= {})[r.kind as SheetKind] = r.sheet_id;
-  cache = { at: Date.now(), links };
-  return links;
+  const list = (data ?? []).map((r: Partial<Row> & { hotel_id: number; kind: SheetKind; sheet_id: string }) => ({ hotel_id: r.hotel_id, kind: r.kind, month: r.month ?? "", sheet_id: r.sheet_id }));
+  cache = { at: Date.now(), rows: list };
+  return list;
 }
 
-/** The sheet id of a branch for a kind, undefined when the branch has none. */
-export async function sheetIdOf(hotel: number, kind: SheetKind) {
-  return (await branchSheets())[hotel]?.[kind];
+/** The links of every branch for a month (YYYY-MM): the one saved for that month, else the shared one. */
+export async function branchSheets(month: string): Promise<BranchSheets> {
+  return pickLinks(await rows(), month);
 }
 
-/** Sets (id) or removes (null) the link of a branch; the cache is dropped on this instance. */
-export async function saveBranchSheet(hotel: number, kind: SheetKind, id: string | null) {
+/** The sheet id of a branch for a kind and a month, undefined when there is none. */
+export async function sheetIdOf(hotel: number, kind: SheetKind, month: string) {
+  return (await branchSheets(month))[hotel]?.[kind]?.id;
+}
+
+/** Sets (id) or removes (null) the link of a branch for a month; the cache is dropped on this instance. */
+export async function saveBranchSheet(hotel: number, kind: SheetKind, month: string, id: string | null) {
   const table = serviceDb().from("branch_sheets");
-  const { error } = id ? await table.upsert({ hotel_id: hotel, kind, sheet_id: id, updated_at: new Date().toISOString() }) : await table.delete().eq("hotel_id", hotel).eq("kind", kind);
+  const { error } = id
+    ? await table.upsert({ hotel_id: hotel, kind, month, sheet_id: id, updated_at: new Date().toISOString() }, { onConflict: "hotel_id,kind,month" })
+    : await table.delete().eq("hotel_id", hotel).eq("kind", kind).eq("month", month);
   cache = null;
-  if (error) throw new Error(tableMissing(error) ? "Chưa có bảng branch_sheets: chạy migration 20261026000000_branch_sheets.sql trong Supabase." : error.message);
+  if (error) throw new Error(noMonthColumn(error) ? `Chưa có cột tháng: chạy migration ${MIGRATION} trong Supabase.` : tableMissing(error) ? "Chưa có bảng branch_sheets: chạy migration 20261026000000_branch_sheets.sql rồi " + MIGRATION + " trong Supabase." : error.message);
 }

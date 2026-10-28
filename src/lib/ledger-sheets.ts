@@ -5,6 +5,20 @@ export type SheetKind = "hotel" | "fnb";
 export const SHEET_KINDS: { kind: SheetKind; label: string }[] = [{ kind: "hotel", label: "Khách sạn" }, { kind: "fnb", label: "Ăn sáng, cafe, mini mart" }];
 export const isSheetKind = (v: unknown): v is SheetKind => v === "hotel" || v === "fnb";
 
+export type LinkRow = { hotel_id: number; kind: SheetKind; month: string; sheet_id: string };
+export type BranchSheets = Record<number, Partial<Record<SheetKind, { id: string; own: boolean }>>>; // own = saved for that month, not the shared one
+
+/** The links of every branch for a month (YYYY-MM): the one saved for that month, else the shared one (month ""), links of other months never. */
+export function pickLinks(list: LinkRow[], month: string): BranchSheets {
+  const links: BranchSheets = {};
+  for (const r of list) {
+    if (r.month !== month && r.month !== "") continue;
+    const own = r.month === month, have = (links[r.hotel_id] ??= {})[r.kind];
+    if (!have || (own && !have.own)) links[r.hotel_id][r.kind] = { id: r.sheet_id, own };
+  }
+  return links;
+}
+
 /** Address of a spreadsheet (no tab), to open it in the browser. */
 export const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
 

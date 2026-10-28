@@ -28,7 +28,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
   const [busy, setBusy] = useState(false);
   const [kind, setKind] = useState<SheetKind>("hotel");
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-  const sheetUrl = useSheetUrl(scopeId, kind);
+  const sheetUrl = useSheetUrl(scopeId, month, kind);
   const changeKind = (k: SheetKind) => { setKind(k); setLoaded(null); setError(""); }; // the other sheet has other tabs: what is on screen is of the old one
   const from = `${month}-01`, to = monthEnd(month);
 

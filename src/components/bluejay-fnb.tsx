@@ -20,7 +20,7 @@ function useFnbBook(scopeId: number | null) {
   const [report, setReport] = useState<(Report & { name: string; link: string | null }) | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const sheetUrl = useSheetUrl(scopeId, "fnb");
+  const sheetUrl = useSheetUrl(scopeId, month, "fnb");
   const show = (sheets: { name: string; rows: unknown[][] }[], name: string, link: string | null) => { setReport({ ...fnbReport(sheets, month), name, link }); };
 
   async function fromSheet() {

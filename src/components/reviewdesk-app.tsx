@@ -263,6 +263,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isTripadvisorRankPage = pathname === "/tripadvisor-rank";
   const isReportDataPage = isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage;
   const isSettingsPage = pathname === "/settings";
+  const [settingsTab, setSettingsTab] = useState<"locations" | "sync" | "import" | "sheets">("locations");
   const isDetailPage = pathname === "/detail";
   const isSummaryPage = pathname === "/summary";
   const isBluejayRevenuePage = pathname === "/bluejay-revenue";
@@ -1847,9 +1848,13 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
           {isSettingsPage && <section className="settings-page-heading"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h1>Cấu hình workspace</h1><p>Quản lý cách tính báo cáo và thông tin liên kết của từng cơ sở.</p></section>}
 
-          {isSettingsPage && <section className="manual-import" aria-label="Nhập thủ công ShopeeFood"><div><h3>Nhập thủ công ShopeeFood</h3><p>ShopeeFood chưa có cách lấy tự động. Mở cửa sổ nhập để điền điểm và số đánh giá cho tất cả chi nhánh cùng lúc, chọn được ngày.</p></div><div className="manual-import-actions">{shopeefoodButtons}</div></section>}
+          {isSettingsPage && <div className="settings-tabs range-presets reconcile-filter" role="group" aria-label="Mục cài đặt">
+            {([["locations", "Cơ sở"], ["sync", "Đồng bộ tự động"], ["import", "Nhập số liệu"], ["sheets", "Bluejay & Google Sheet"]] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={settingsTab === key} onClick={() => setSettingsTab(key)}>{label}</button>)}
+          </div>}
 
-          {isSettingsPage && <section className="manual-import" aria-label="GrabFood hàng loạt"><div><h3>GrabFood hàng loạt</h3><p>Cào điểm và số đánh giá GrabFood cho {grabLocations.length} cơ sở Cafe và Mart 24h (lần lượt từng cơ sở, cần đã lưu tài khoản Grab), sau đó chốt hôm nay.{grabBulk ? ` Đang chạy: ${grabBulk.progress}` : ""}</p></div><div className="manual-import-actions">
+          {isSettingsPage && settingsTab === "import" && <section className="manual-import" aria-label="Nhập thủ công ShopeeFood"><div><h3>Nhập thủ công ShopeeFood</h3><p>ShopeeFood chưa có cách lấy tự động. Mở cửa sổ nhập để điền điểm và số đánh giá cho tất cả chi nhánh cùng lúc, chọn được ngày.</p></div><div className="manual-import-actions">{shopeefoodButtons}</div></section>}
+
+          {isSettingsPage && settingsTab === "import" && <section className="manual-import" aria-label="GrabFood hàng loạt"><div><h3>GrabFood hàng loạt</h3><p>Cào điểm và số đánh giá GrabFood cho {grabLocations.length} cơ sở Cafe và Mart 24h (lần lượt từng cơ sở, cần đã lưu tài khoản Grab), sau đó chốt hôm nay.{grabBulk ? ` Đang chạy: ${grabBulk.progress}` : ""}</p></div><div className="manual-import-actions">
             <button type="button" className="button button-primary" onClick={() => void crawlGrabfoodBulk()} disabled={!!grabBulk || crawling || !grabLocations.length}>{grabBulk?.action === "crawl" ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}{grabBulk?.action === "crawl" ? "Đang cào…" : "Cào GrabFood hàng loạt"}</button>
             <button type="button" className="button button-outline" onClick={() => void finalizeGrabfoodBulk()} disabled={!!grabBulk || crawling || !grabLocations.length}>{grabBulk?.action === "finalize" ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}Chốt GrabFood hôm nay</button>
           </div></section>}
@@ -2130,15 +2135,17 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </>}
 
 
-          {isSettingsPage && <>
+          {isSettingsPage && settingsTab === "sync" && <>
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="hotel" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="cafe" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="mart" />
             <AutomaticSyncSettings userId={user?.id ?? null} locations={locations} locationType="entertainment" />
+          </>}
+          {isSettingsPage && settingsTab === "sheets" && <>
             <BluejaySyncSettings />
             <BranchSheetsSettings />
           </>}
-          {isSettingsPage && <details className="location-settings-section settings-panel" id="settings-locations" aria-labelledby="location-settings-title" open>
+          {isSettingsPage && settingsTab === "locations" && <details className="location-settings-section settings-panel" id="settings-locations" aria-labelledby="location-settings-title" open>
             <summary className="location-settings-heading">
               <div><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT · CƠ SỞ</div><h2 id="location-settings-title">Cấu hình cơ sở</h2><p>Quản lý thông tin và liên kết nền tảng cho từng cơ sở.</p></div>
               <button className="button button-primary" onClick={(event) => { event.preventDefault(); openLocationModal(); }}><Plus size={16} />Thêm cơ sở</button>
