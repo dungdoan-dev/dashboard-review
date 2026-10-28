@@ -6,16 +6,12 @@ export const SHEET_KINDS: { kind: SheetKind; label: string }[] = [{ kind: "hotel
 export const isSheetKind = (v: unknown): v is SheetKind => v === "hotel" || v === "fnb";
 
 export type LinkRow = { hotel_id: number; kind: SheetKind; month: string; sheet_id: string };
-export type BranchSheets = Record<number, Partial<Record<SheetKind, { id: string; own: boolean }>>>; // own = saved for that month, not the shared one
+export type BranchSheets = Record<number, Partial<Record<SheetKind, { id: string }>>>;
 
-/** The links of every branch for a month (YYYY-MM): the one saved for that month, else the shared one (month ""), links of other months never. */
+/** The links of every branch for a month (YYYY-MM): only the ones saved for that month. A month without a link has none, so nothing is read from another month's sheet by mistake (rows with month "" from before the monthly links are not used). */
 export function pickLinks(list: LinkRow[], month: string): BranchSheets {
   const links: BranchSheets = {};
-  for (const r of list) {
-    if (r.month !== month && r.month !== "") continue;
-    const own = r.month === month, have = (links[r.hotel_id] ??= {})[r.kind];
-    if (!have || (own && !have.own)) links[r.hotel_id][r.kind] = { id: r.sheet_id, own };
-  }
+  for (const r of list) if (r.month === month) (links[r.hotel_id] ??= {})[r.kind] = { id: r.sheet_id };
   return links;
 }
 

@@ -8,7 +8,7 @@ const fail = (message: string, status: number) => Response.json({ message }, { s
 const MONTH = /^\d{4}-\d{2}$/;
 const BAD_LINK = "Link không đúng: dán link Google Sheet (docs.google.com/spreadsheets/d/…) hoặc mã của sheet.";
 
-// Cài đặt → Link Google Sheet: the two links of every branch (hotel; Ăn sáng, cafe, mini mart) for a month (?month=YYYY-MM, default this month); shared = the month has none of its own. Admin only.
+// Cài đặt → Link Google Sheet: the two links of every branch (hotel; Ăn sáng, cafe, mini mart) for a month (?month=YYYY-MM, default this month); a link not saved for that month is null. Admin only.
 export async function GET(request: Request) {
   const denied = await bluejayViewer();
   if (denied) return fail(denied.message, denied.status);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       month,
       branches: BLUEJAY_HOTELS.map((h) => {
         const hotel = links[h.id]?.hotel, fnb = links[h.id]?.fnb;
-        return { hotel: h.id, name: h.name, hotelUrl: hotel ? sheetUrl(hotel.id) : null, hotelShared: !!hotel && !hotel.own, fnbUrl: fnb ? sheetUrl(fnb.id) : null, fnbShared: !!fnb && !fnb.own };
+        return { hotel: h.id, name: h.name, hotelUrl: hotel ? sheetUrl(hotel.id) : null, fnbUrl: fnb ? sheetUrl(fnb.id) : null };
       }),
     });
   } catch (e) {

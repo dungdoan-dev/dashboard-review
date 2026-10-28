@@ -5,13 +5,12 @@ import { FileSpreadsheet, LoaderCircle } from "lucide-react";
 import { SHEET_KINDS, type SheetKind } from "@/lib/ledger-sheets";
 import { resetSheetUrls } from "@/components/use-sheet-url";
 
-type Branch = { hotel: number; name: string; hotelUrl: string | null; fnbUrl: string | null; hotelShared: boolean; fnbShared: boolean };
+type Branch = { hotel: number; name: string; hotelUrl: string | null; fnbUrl: string | null };
 type State = { serviceEmail: string; month: string; branches: Branch[] };
 type Check = { name: string; ledger: string[]; stock: string[]; messages: string[] };
 
 const key = (hotel: number, kind: SheetKind) => `${hotel}:${kind}`;
 const urlOf = (b: Branch, kind: SheetKind) => (kind === "fnb" ? b.fnbUrl : b.hotelUrl) ?? "";
-const sharedOf = (b: Branch, kind: SheetKind) => (kind === "fnb" ? b.fnbShared : b.hotelShared);
 
 async function call(method: "GET" | "PUT" | "POST", body?: object, month = "") {
   const res = await fetch(`/api/bluejay/branch-sheets${method === "GET" ? `?month=${month}` : ""}`, { method, cache: "no-store", ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) }).catch(() => null);
@@ -74,7 +73,6 @@ export function BranchSheetsSettings() {
               <button className="button button-primary" type="button" onClick={() => void save(b, kind)} disabled={!!busy}>{busy === k && <LoaderCircle size={16} className="spin" />}Lưu</button>
               <button className="button button-outline" type="button" onClick={() => void check(b, kind)} disabled={!!busy || !(draft[k] ?? "").trim()}>Kiểm tra</button>
             </div>
-            {sharedOf(b, kind) && !!urlOf(b, kind) && <p className="sheet-note">Link chung cho các tháng chưa có link riêng. Bấm Lưu để đặt cho tháng {month.slice(5)}/{month.slice(0, 4)}.</p>}
             {(notes[k] ?? []).map((line, i) => <p className="sheet-note" role="status" key={i}>{line}</p>)}
           </div>; })}
         </section>)}

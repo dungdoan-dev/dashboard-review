@@ -2,18 +2,11 @@ import { serviceDb } from "@/lib/bluejay";
 import { pickLinks, type BranchSheets, type LinkRow as Row, type SheetKind } from "@/lib/ledger-sheets";
 
 // The Google Sheet links of every branch, from the table branch_sheets (Cài đặt → Link Google Sheet): every month has its own link per branch and kind. Server only.
-// A link kept with month "" (the ones saved before links were per month) serves every month that has none of its own.
+// A month without a link has none: the old shared links (month "") are not used.
 
 let cache: { at: number; rows: Row[] } | null = null;
 const TTL = 60_000; // shortcut: per server instance, a link changed in Cài đặt reaches another instance within a minute
 
-// The four hotel links the first migration seeds: used only while the table does not exist yet, so a deploy before the migration keeps working.
-const BEFORE_MIGRATION: Row[] = [
-  { hotel_id: 5381, kind: "hotel", month: "", sheet_id: "1HvweFPj0RlzUA3qUaBYVQOoHh8PrBLpuTvDIqIelTmU" },
-  { hotel_id: 6836, kind: "hotel", month: "", sheet_id: "1LJgUrctGwBPcynAjdHZlG4u8kbhCpuZGk4R9GWxciOk" },
-  { hotel_id: 6495, kind: "hotel", month: "", sheet_id: "1b_38S409K5glxanqYGUU8IpsKroV0Gq8h5ppeK006Tc" },
-  { hotel_id: 6209, kind: "hotel", month: "", sheet_id: "15_6wGXPamuVApuTmyeUDH01J2OFHgr-d0GeTWVUhcIo" },
-];
 type DbError = { code?: string; message?: string };
 const noMonthColumn = (e: DbError) => e.code === "42703" || e.code === "PGRST204" || /\bmonth\b/.test(e.message ?? "");
 const tableMissing = (e: DbError) => e.code === "42P01" || e.code === "PGRST205" || /branch_sheets/.test(e.message ?? "");
@@ -24,7 +17,7 @@ async function rows(): Promise<Row[]> {
   let { data, error } = await serviceDb().from("branch_sheets").select("hotel_id, kind, month, sheet_id");
   if (error && noMonthColumn(error)) ({ data, error } = await serviceDb().from("branch_sheets").select("hotel_id, kind, sheet_id")); // before the month migration
   if (error) {
-    if (tableMissing(error)) return BEFORE_MIGRATION;
+    if (tableMissing(error)) return []; // before the first migration there are no links
     throw new Error(`Không đọc được link Google Sheet: ${error.message}`);
   }
   const list = (data ?? []).map((r: Partial<Row> & { hotel_id: number; kind: SheetKind; sheet_id: string }) => ({ hotel_id: r.hotel_id, kind: r.kind, month: r.month ?? "", sheet_id: r.sheet_id }));
@@ -32,7 +25,7 @@ async function rows(): Promise<Row[]> {
   return list;
 }
 
-/** The links of every branch for a month (YYYY-MM): the one saved for that month, else the shared one. */
+/** The links of every branch for a month (YYYY-MM): only the ones saved for that month. */
 export async function branchSheets(month: string): Promise<BranchSheets> {
   return pickLinks(await rows(), month);
 }
