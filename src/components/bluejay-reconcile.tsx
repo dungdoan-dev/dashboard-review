@@ -20,7 +20,7 @@ const BASIS = { payment: "Thanh toán", service: "Dịch vụ" } as const;
 
 type Stored = { key: string; bookings: RevenueBooking[]; missingWeeks: string[]; message: string };
 
-/** Upload the monthly cash ledger and compare it with the bookings already stored from Blue Jay (no call to Blue Jay, so any time of day works). */
+/** Read the month's cash ledger from the hotel's Google Sheet (link in Cài đặt) and compare it with the bookings already stored from Blue Jay (no call to Blue Jay, so any time of day works). */
 export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const [ledger, setLedger] = useState<(Ledger & { name: string }) | null>(null);
   const [fileError, setFileError] = useState("");
@@ -53,20 +53,6 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
   const result = useMemo(() => (ledger && ready && stored ? reconcile(ledger, stored.bookings) : null), [ledger, ready, stored]);
   const rows = result ? result.items.filter((item) => shown.includes(item.kind)) : [];
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
-
-  async function onFile(file: File | undefined) {
-    if (!file) return;
-    setFileError(""); setStored(null);
-    try {
-      const book = XLSX.read(await file.arrayBuffer());
-      const sheets = book.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, defval: "" }) }));
-      const parsed = parseLedgerWorkbook(sheets);
-      setLedger({ ...parsed, name: `${file.name} · ${parsed.sheet}` }); setFromSheet(false); setSheetLink(null);
-    } catch (error) {
-      setLedger(null);
-      setFileError(error instanceof Error ? error.message : "Không đọc được file Excel.");
-    }
-  }
 
   const lockUrl = (week = "") => `/api/bluejay/sheet-lock?hotel=${scopeId}&month=${lockMonth}${week ? `&week=${week}` : ""}`;
   async function loadLocked() {
@@ -143,13 +129,9 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
       <div className="summary-hero">
         <div>
           <h1>Đối soát bảng kê thu tiền · {hotelName || "chưa chọn khách sạn"}</h1>
-          <p>So bảng kê thu tiền khách sạn (Excel) với đặt phòng đã lưu từ Blue Jay, không gọi Blue Jay nên dùng được mọi giờ. Chỉ so khoản khách sạn trực tiếp thu: khách lẻ so toàn bộ thanh toán, khách OTA so tiền dịch vụ.</p>
+          <p>So bảng kê thu tiền khách sạn (Google Sheet của tháng) với đặt phòng đã lưu từ Blue Jay, không gọi Blue Jay nên dùng được mọi giờ. Chỉ so khoản khách sạn trực tiếp thu: khách lẻ so toàn bộ thanh toán, khách OTA so tiền dịch vụ.</p>
         </div>
         <div className="summary-controls">
-          <label className="button button-outline" aria-disabled={!scopeId}>
-            <FileSpreadsheet size={15} />{ledger ? "Chọn file khác" : "Chọn file bảng kê (.xlsx)"}
-            <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void onFile(event.target.files?.[0]); event.target.value = ""; }} />
-          </label>
           <input type="month" aria-label="Tháng bảng kê" value={month} onChange={(event) => setMonth(event.target.value)} disabled={!scopeId} />
           <button type="button" disabled={!scopeId || !month || loadingSheet} onClick={() => void onSheet()}><FileSpreadsheet size={15} />{loadingSheet ? "Đang đọc Google Sheet…" : "Lấy từ Google Sheet"}</button>
           {sheetUrl && <a className="button button-outline" href={fromSheet && sheetLink ? `${sheetLink.url}#gid=${sheetLink.gid}` : sheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Mở Google Sheet</a>}
@@ -173,7 +155,7 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
         </tbody></table>
       </details>}
       {stored?.key === key && stored.message && <div className="alert alert-error" role="alert"><span>{stored.message}</span></div>}
-      {scopeId && !ledger && !fileError && <p className="summary-note">Chưa có file. Chọn file bảng kê của tháng cần đối soát; kỳ đối soát tự lấy theo ngày nhỏ nhất và lớn nhất trong file.</p>}
+      {scopeId && !ledger && !fileError && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”; kỳ đối soát tự lấy theo ngày nhỏ nhất và lớn nhất trong bảng kê.</p>}
       {ledger && !result && !fileError && !(stored?.key === key && stored.message) && scopeId && <p className="summary-note">Đang đối soát…</p>}
 
       {ledger && result && stored && <>

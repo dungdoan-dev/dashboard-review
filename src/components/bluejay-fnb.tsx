@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import * as XLSX from "xlsx";
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
-import { fnbReport, fnbUnitOf } from "@/lib/fnb-ledger";
+import { fnbReport } from "@/lib/fnb-ledger";
 import { ReachTable, type Col } from "@/components/reach-table";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
@@ -14,7 +13,7 @@ const signed = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(
 type Report = ReturnType<typeof fnbReport>;
 type Unit = Report["units"][number];
 
-/** The F&B ledger of a month, from the branch's Google Sheet or an uploaded file: one report per unit (Ăn sáng, cafe / Mini mart). */
+/** The F&B ledger of a month, from the branch's Google Sheet of that month (link in Cài đặt): one report per unit (Ăn sáng, cafe / Mini mart). */
 function useFnbBook(scopeId: number | null) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [report, setReport] = useState<(Report & { name: string; link: string | null }) | null>(null);
@@ -33,16 +32,7 @@ function useFnbBook(scopeId: number | null) {
       show(body.sheets, "Google Sheet", body.sheetUrl ? `${body.sheetUrl}#gid=${body.gid ?? 0}` : null);
     } catch (e) { setReport(null); setError(e instanceof Error ? e.message : "Không đọc được Google Sheet."); } finally { setBusy(false); }
   }
-  async function fromFile(file: File | undefined) {
-    if (!file) return;
-    setError("");
-    try {
-      const book = XLSX.read(await file.arrayBuffer());
-      const sheets = book.SheetNames.filter((n) => fnbUnitOf(n)).map((name) => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, defval: "" }) }));
-      show(sheets, file.name, null);
-    } catch (e) { setReport(null); setError(e instanceof Error ? e.message : "Không đọc được file Excel."); }
-  }
-  return { month, setMonth, report, error, busy, sheetUrl, fromSheet, fromFile };
+  return { month, setMonth, report, error, busy, sheetUrl, fromSheet };
 }
 type Book = ReturnType<typeof useFnbBook>;
 
@@ -50,10 +40,6 @@ function Controls({ scopeId, book }: { scopeId: number | null; book: Book }) {
   return <div className="summary-controls">
     <input type="month" aria-label="Tháng bảng kê" value={book.month} onChange={(event) => event.target.value && book.setMonth(event.target.value)} disabled={!scopeId} />
     <button type="button" disabled={!scopeId || book.busy} onClick={() => void book.fromSheet()}><FileSpreadsheet size={15} />{book.busy ? "Đang đọc Google Sheet…" : "Lấy từ Google Sheet"}</button>
-    <label className="button button-outline" aria-disabled={!scopeId}>
-      <FileSpreadsheet size={15} />Chọn file Ăn sáng, cafe, mini mart (.xlsx)
-      <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void book.fromFile(event.target.files?.[0]); event.target.value = ""; }} />
-    </label>
     {book.sheetUrl && <a className="button button-outline" href={book.report?.link ?? book.sheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Mở Google Sheet</a>}
   </div>;
 }
@@ -62,7 +48,7 @@ function Alerts({ scopeId, book }: { scopeId: number | null; book: Book }) {
   return <>
     {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Mỗi chi nhánh có link Ăn sáng, cafe, mini mart riêng.</span></div>}
     {book.error && <div className="alert alert-error" role="alert"><span>{book.error}</span></div>}
-    {scopeId && !book.report && !book.error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”, hoặc chọn file.</p>}
+    {scopeId && !book.report && !book.error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”.</p>}
   </>;
 }
 

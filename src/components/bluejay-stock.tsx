@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -49,16 +48,6 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
       setLoaded({ name: "Google Sheet", khos, sold: body.minibarSold ?? null, storedWeeks: (body.storedWeeks ?? []).length }); setKhoName(khos[0].sheet);
     } catch (e) { setLoaded(null); setError(e instanceof Error ? e.message : "Không đọc được Google Sheet."); } finally { setBusy(false); }
   }
-  async function onFile(file: File | undefined) {
-    if (!file) return;
-    setError("");
-    try {
-      const book = XLSX.read(await file.arrayBuffer());
-      const khos = sheetsOf(book.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, defval: "" }) })));
-      if (!khos.length) throw new Error("Không thấy sheet kho nào (cần bảng TỒN KHO với cột “Mặt hàng”, “Tồn đầu (SL)”).");
-      setLoaded({ name: file.name, khos, sold: null, storedWeeks: 0 }); setKhoName(khos[0].sheet);
-    } catch (e) { setError(e instanceof Error ? e.message : "Không đọc được file Excel."); }
-  }
 
   const lineCols: Col<StockLine>[] = [
     { label: "Mặt hàng", text: (l) => l.item.name },
@@ -99,17 +88,13 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
         <div className="summary-controls">
           <input type="month" aria-label="Tháng" value={month} onChange={(event) => event.target.value && setMonth(event.target.value)} disabled={!scopeId} />
           <button type="button" disabled={!scopeId || busy} onClick={() => void onSheet()}><FileSpreadsheet size={15} />{busy ? "Đang đọc Google Sheet…" : "Lấy từ Google Sheet"}</button>
-          <label className="button button-outline" aria-disabled={!scopeId}>
-            <FileSpreadsheet size={15} />Chọn file kho (.xlsx)
-            <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void onFile(event.target.files?.[0]); event.target.value = ""; }} />
-          </label>
           {sheetUrl && <a className="button button-outline" href={sheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Mở Google Sheet</a>}
         </div>
       </div>
 
       {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Mỗi kho thuộc một khách sạn.</span></div>}
       {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}
-      {scopeId && !loaded && !error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”, hoặc chọn file kho.</p>}
+      {scopeId && !loaded && !error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”.</p>}
 
       {loaded && kho && report && <>
         <div className="range-presets" role="group" aria-label="Loại kho">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -29,12 +28,8 @@ function findExpenses(sheets: Sheets) {
   for (const s of sheets) { try { return { name: s.name, lines: parseExpenses(s.rows) }; } catch { /* not the expense sheet */ } }
   return null;
 }
-const fromBook = async (file: File): Promise<Sheets> => {
-  const book = XLSX.read(await file.arrayBuffer());
-  return book.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, defval: "" }) }));
-};
 
-/** Income and expense of one hotel for a month, read from its income ledger (Google Sheet or file) and its expense ledger (same sheet, or a file). */
+/** Income and expense of one hotel for a month, read from the hotel's Google Sheet of that month (link in Cài đặt): the income tab and the expense tab. */
 export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
   const [income, setIncome] = useState<(Ledger & { name: string }) | null>(null);
   const [expense, setExpense] = useState<{ name: string; lines: ExpenseLine[] } | null>(null);
@@ -66,30 +61,11 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
       setOutside(findOutside(body.sheets));
       const found = findExpenses(body.sheets);
       setExpense(found && { name: `Google Sheet · ${found.name}`, lines: found.lines });
-      if (!found) setNote("Google Sheet này chưa có tab bảng kê chi của tháng này. Chọn file bảng kê chi (.xlsx) để xem phần chi.");
+      if (!found) setNote("Google Sheet này chưa có tab bảng kê chi của tháng này.");
     } catch (e) {
       setIncome(null); setExpense(null); setOutside(null);
       setError(e instanceof Error ? e.message : "Không đọc được Google Sheet.");
     } finally { setBusy(false); }
-  }
-
-  async function onFile(file: File | undefined, kind: "income" | "expense") {
-    if (!file) return;
-    setError(""); setNote("");
-    try {
-      const sheets = await fromBook(file);
-      if (kind === "income") {
-        const parsed = parseLedgerWorkbook(sheets);
-        setIncome({ ...parsed, name: `${file.name} · ${parsed.sheet}` }); setSheetLink(null);
-        setOutside(findOutside(sheets));
-        const found = findExpenses(sheets);
-        if (found) setExpense({ name: `${file.name} · ${found.name}`, lines: found.lines });
-      } else {
-        const found = findExpenses(sheets);
-        if (!found) throw new Error("Không thấy sheet bảng kê chi (cần cột “Hạng mục” và “Nội dung chi”).");
-        setExpense({ name: `${file.name} · ${found.name}`, lines: found.lines });
-      }
-    } catch (e) { setError(e instanceof Error ? e.message : "Không đọc được file Excel."); }
   }
 
   const s = summary;
@@ -141,19 +117,11 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
       <div className="summary-hero">
         <div>
           <h1>Thu chi · {hotelName || "chưa chọn khách sạn"}</h1>
-          <p>Số liệu thu và chi của một tháng, cộng từ bảng kê thu và bảng kê chi đã nhập. Thu là tiền khách sạn đã nhận (gồm cọc của khách đã ở); biến động quỹ tính như sổ quỹ và sổ tiền gửi: không tính cọc đã ở, tính cọc chưa ở.</p>
+          <p>Số liệu thu và chi của một tháng, cộng từ bảng kê thu và bảng kê chi trong Google Sheet của tháng (link ở Cài đặt). Thu là tiền khách sạn đã nhận (gồm cọc của khách đã ở); biến động quỹ tính như sổ quỹ và sổ tiền gửi: không tính cọc đã ở, tính cọc chưa ở.</p>
         </div>
         <div className="summary-controls">
           <input type="month" aria-label="Tháng bảng kê" value={month} onChange={(event) => setMonth(event.target.value)} disabled={!scopeId} />
           <button type="button" disabled={!scopeId || !month || busy} onClick={() => void onSheet()}><FileSpreadsheet size={15} />{busy ? "Đang đọc Google Sheet…" : "Lấy từ Google Sheet"}</button>
-          <label className="button button-outline" aria-disabled={!scopeId}>
-            <FileSpreadsheet size={15} />Chọn file bảng kê thu (.xlsx)
-            <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void onFile(event.target.files?.[0], "income"); event.target.value = ""; }} />
-          </label>
-          <label className="button button-outline" aria-disabled={!scopeId}>
-            <FileSpreadsheet size={15} />{expense ? "Chọn file chi khác" : "Chọn file bảng kê chi (.xlsx)"}
-            <input type="file" accept=".xlsx,.xls" hidden disabled={!scopeId} onChange={(event) => { void onFile(event.target.files?.[0], "expense"); event.target.value = ""; }} />
-          </label>
           {sheetUrl && <a className="button button-outline" href={sheetLink ? `${sheetLink.url}#gid=${sheetLink.gid}` : sheetUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Mở Google Sheet</a>}
           <button type="button" onClick={() => void import("@/lib/bluejay-expense-template").then((m) => m.downloadExpenseTemplate())}><FileDown size={15} />Tải file mẫu chi</button>
         </div>
@@ -162,7 +130,7 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
       {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Mỗi bảng kê chỉ thuộc một khách sạn.</span></div>}
       {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}
       {note && <p className="summary-note bad" role="alert">{note}</p>}
-      {scopeId && !income && !error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”, hoặc chọn file bảng kê thu.</p>}
+      {scopeId && !income && !error && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy từ Google Sheet”.</p>}
 
       {income && s && <>
         <p className="summary-note">Thu: <strong>{income.name}</strong> · {income.entries.length} dòng · kỳ {fmtDate(income.from)} – {fmtDate(income.to)}. Chi: {expense ? <><strong>{expense.name}</strong> · {expense.lines.length} dòng</> : "chưa có"}.</p>

@@ -35,7 +35,7 @@ const STEPS: Cell[][] = [
   ["2", "Hàng 1: chọn khách sạn ở ô E1 và nhập kỳ báo cáo ở ô J1."],
   ["3", "Từ hàng 4, nhập từng khoản thu, mỗi khoản một dòng, theo bảng “Hướng dẫn từng mục” bên dưới."],
   ["4", "Lưu thành file .xlsx, giữ nguyên tên sheet “BK THU TIỀN KS”."],
-  ["5", "Vào Vận hành, Đối soát bảng kê. Chọn đúng khách sạn ở thanh trên rồi bấm “Chọn file bảng kê”. Đọc kết quả theo bảng “Cách đọc kết quả”."],
+  ["5", "Vào Vận hành, Đối soát bảng kê. Chọn đúng khách sạn ở thanh trên, chọn tháng rồi bấm “Lấy từ Google Sheet” (link của tháng đặt ở Cài đặt). Đọc kết quả theo bảng “Cách đọc kết quả”."],
 ];
 
 const RESULTS: Cell[][] = [
