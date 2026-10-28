@@ -5,6 +5,7 @@ import { weekColumns, type Balances, type ExpenseLine, type FinanceReport, type 
 import { EXPENSES, FNB_EXPENSES, MART_EXPENSES } from "./expense-kinds.ts";
 import { costTree } from "./pnl.ts";
 import type { FnbReport } from "./fnb-ledger.ts";
+import type { LedgerEntry } from "./bluejay-reconcile.ts";
 
 export const monthRange = (month: string) => {
   const [y, m] = month.split("-").map(Number);
@@ -151,4 +152,33 @@ export function qlResult(month: string, input: { days?: CheckoutDay[]; hotel?: {
     row("III, Lợi nhuận thuần từ HĐKD (III = I-II)", revenue.map((v, i) => v - cost[i]), "total", { code: "VI" }),
   ];
   return { columns: [...units.map((u) => u.label), "Tổng"], rows };
+}
+
+export type PartyLine = { date: string; what: string; note: string; cash: number; bank: number; card: number };
+export type Party = { label: string; thu: PartyLine[]; chi: PartyLine[] };
+const lineTotal = (l: PartyLine) => l.cash + l.bank + l.card;
+export const partyTotals = (lines: PartyLine[]) => lines.reduce((t, l) => ({ cash: t.cash + l.cash, bank: t.bank + l.bank, card: t.card + l.card, all: t.all + lineTotal(l) }), { cash: 0, bank: 0, card: 0, all: 0 });
+
+/** The money in (thu) and out (chi) of each party, line by line, to check against the accountant's files: the hotel, then every F&B unit. The amounts are the ones of "Dòng tiền" (qlFunds): hotel thu = takings - deposits already received + deposits of guests not staying yet,
+ * F&B thu = counter sales + other money in (POS and transfers count as bank). Hotel lines are cut to the month; the F&B lines are those of the unit's tabs (a line outside the month is already reported in the notes). */
+export function qlParties(month: string, input: { hotel?: { entries: LedgerEntry[]; expenses: ExpenseLine[] }; fnb?: FnbReport }): Party[] {
+  const { from, to } = monthRange(month);
+  const byDate = (a: PartyLine, b: PartyLine) => a.date.localeCompare(b.date);
+  const chiOf = (list: ExpenseLine[]) => list.map((e): PartyLine => ({ date: e.date, what: e.kind, note: e.note, cash: e.cash, bank: e.bank, card: e.visa })).filter((l) => lineTotal(l) !== 0).sort(byDate);
+  const parties: Party[] = [];
+  const h = input.hotel;
+  if (h) parties.push({
+    label: "Khách sạn",
+    thu: h.entries.filter((e) => e.date >= from && e.date <= to).map((e): PartyLine => ({
+      date: e.date, what: [e.service, e.platform].filter(Boolean).join(" · "), note: [e.id, e.note].filter(Boolean).join(" · "),
+      cash: e.taken.cash - e.deposit.cash + e.advance.cash, bank: e.taken.bank - e.deposit.bank + e.advance.bank, card: e.taken.card - e.deposit.card + e.advance.card,
+    })).filter((l) => lineTotal(l) !== 0).sort(byDate),
+    chi: chiOf(h.expenses.filter((e) => e.date >= from && e.date <= to)),
+  });
+  for (const u of input.fnb?.units ?? []) parties.push({
+    label: u.label,
+    thu: u.ledger.income.map((l): PartyLine => ({ date: l.date, what: l.seller || "Thu bán hàng", note: l.note, cash: l.cash + l.otherCash, bank: l.bank + l.pos + l.otherBank, card: 0 })).filter((l) => lineTotal(l) !== 0).sort(byDate),
+    chi: chiOf(u.ledger.expense),
+  });
+  return parties;
 }

@@ -112,7 +112,7 @@ export function fnbReport(sheets: { name: string; rows: unknown[][] }[], month =
     if (month && sheetMonth && sheetMonth !== month) warnings.push(`${label}: kỳ báo cáo trong sheet là ${sheetMonth.slice(5)}/${sheetMonth.slice(0, 4)}, khác tháng đang chọn.`);
     const otherCash = sum((l) => l.otherCash), otherBank = sum((l) => l.otherBank);
     return [{
-      unit, label, name: incomes.find((i) => i.unit)?.unit ?? "", sales, spent, expenses: expenses.length, incomeLines: lines.length,
+      unit, label, name: incomes.find((i) => i.unit)?.unit ?? "", sales, spent, expenses: expenses.length, incomeLines: lines.length, ledger: { income: lines, expense: expenses },
       other: { cash: otherCash, bank: otherBank }, apps: { shopee: sum((l) => l.shopee), grab: sum((l) => l.grab) }, voided: sum((l) => l.voided), rental: sum((l) => l.rental),
       funds: { cash: sales.cash + otherCash - spent.cash, bank: sales.bank + sales.pos + otherBank - spent.bank - spent.visa },
       days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)), tree, balances: ledgerBalances(own),

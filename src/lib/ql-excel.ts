@@ -1,7 +1,7 @@
 // The Excel file of the management report (the finance team's "QL HĐKD" layout): one sheet per table of the page, ruled with borders, real numbers (not text) so Excel can sum and chart them.
 // Built with exceljs (borders, colours); the page loads this file only when the file is downloaded. Tests run it with plain Node, so imports use ".ts".
 import ExcelJS from "exceljs";
-import type { Book, FundLine, qlResult, qlWeekly } from "./ql-report.ts";
+import { partyTotals, type Book, type FundLine, type Party, type qlResult, type qlWeekly } from "./ql-report.ts";
 import type { parseOutsideServices } from "./outside-services.ts";
 import type { StockReport } from "./inventory.ts";
 import type { ChannelCounts } from "./ql-channels.ts";
@@ -64,6 +64,7 @@ export type QlExtra = {
   outside?: ReturnType<typeof parseOutsideServices> | null;      // the "DV Ngoài" tab of the hotel's sheet
   stocks?: { name: string; fnb: boolean; report: StockReport }[]; // one per kho tab
   channels?: ChannelCounts;                                       // bookings and cancellations per channel per week
+  parties?: Party[];                                              // thu and chi of the hotel and each F&B unit, line by line
 };
 
 const sheetName = (name: string, fnb: boolean, taken: Set<string>) => {
@@ -86,6 +87,23 @@ function outsideRows(o: NonNullable<QlExtra["outside"]>): TRow[] {
   ];
 }
 
+/** The "Thu chi các bên" sheet: the totals of each party on top (thu, chi, thu − chi), then its thu lines and its chi lines, each with a total row. */
+function partyRows(parties: Party[]): TRow[] {
+  const money = (t: ReturnType<typeof partyTotals>): Cell[] => [t.cash, t.bank, t.card, t.all];
+  const rows: TRow[] = [{ kind: "section", cells: ["TỔNG HỢP"] }];
+  for (const p of parties) {
+    const thu = partyTotals(p.thu), chi = partyTotals(p.chi);
+    rows.push({ cells: [p.label, "Thu", `${p.thu.length} dòng`, ...money(thu)] }, { cells: ["", "Chi", `${p.chi.length} dòng`, ...money(chi)] },
+      { kind: "total", cells: ["", "Thu − chi", "", thu.cash - chi.cash, thu.bank - chi.bank, thu.card - chi.card, thu.all - chi.all] });
+  }
+  for (const p of parties) for (const [name, lines] of [["THU", p.thu], ["CHI", p.chi]] as const) {
+    rows.push({ kind: "section", cells: [`${p.label.toUpperCase()} · ${name} (${lines.length} dòng)`] });
+    for (const l of lines) rows.push({ cells: [new Date(`${l.date}T00:00:00Z`), l.what, l.note, l.cash || null, l.bank || null, l.card || null, l.cash + l.bank + l.card] });
+    rows.push({ kind: "total", cells: ["", "TỔNG", "", ...money(partyTotals(lines))] });
+  }
+  return rows;
+}
+
 /** The "OTA-OTP" sheet: a week per row, BOOK and HỦY for each OTA, a blank column, then the same for the direct channels; zero is left blank as in the finance team's sheet. */
 function channelTable(c: ChannelCounts): { head: string[]; rows: TRow[] } {
   const pair = (k: string) => [`${k.toUpperCase()}\nBOOK`, `${k.toUpperCase()}\nHỦY`];
@@ -105,7 +123,7 @@ function stockRows(r: StockReport): TRow[] {
   ];
 }
 
-/** title: e.g. "BÁO CÁO QL · SƠN TRÀ SEA · THÁNG 10/2026". debt: OTA still owing. notes: what could not be read, so the file says it too. */
+/** title: e.g. "BÁO CÁO QUẢN LÝ · SƠN TRÀ SEA · THÁNG 10/2026". debt: OTA still owing. notes: what could not be read, so the file says it too. */
 export function qlWorkbook(title: string, weekly: ReturnType<typeof qlWeekly>, funds: FundLine[], result: ReturnType<typeof qlResult>, debt?: { bookings: number; balance: number }, notes: string[] = [], extra: QlExtra = {}) {
   const book = new ExcelJS.Workbook();
   const lines = (rows: { label: string; kind: "section" | "total" | "line"; values: number[] }[]): TRow[] => rows.map((r) => ({ kind: r.kind, cells: r.kind === "section" ? [r.label] : [r.label, ...r.values] }));
@@ -115,21 +133,22 @@ export function qlWorkbook(title: string, weekly: ReturnType<typeof qlWeekly>, f
   table(book, "Dòng tiền", title, ["Quỹ", "Dư đầu kỳ", "Thu vào", "Chi ra", "Biến động", "Dư cuối kỳ"], fundRows);
   // the finance team's sheet: STT, Chỉ tiêu, Mã số, the values, Ghi chú
   const kq: TRow[] = result.rows.map((r) => ({ kind: r.kind, cells: [r.stt ?? "", r.label, r.code ?? "", ...r.values, r.note ?? ""] }));
-  table(book, "KQ HĐKD", title.replace(/^BÁO CÁO QL/, "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH"), ["STT", "Chỉ tiêu", "Mã số", ...result.columns, "Ghi chú"], kq, { widths: [7, 52, 9, ...result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
+  table(book, "KQ HĐKD", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH"), ["STT", "Chỉ tiêu", "Mã số", ...result.columns, "Ghi chú"], kq, { widths: [7, 52, 9, ...result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
+  if (extra.parties?.length) table(book, "Thu chi các bên", title.replace(/^BÁO CÁO QUẢN LÝ/, "THU CHI CÁC BÊN"), ["Ngày", "Nội dung", "Ghi chú", "Tiền mặt", "Ngân hàng", "Thẻ visa", "Tổng"], partyRows(extra.parties), { widths: [16, 36, 50, 16, 16, 14, 16], labelCol: 1, frozenCols: 0 });
   for (const [name, heading, b] of [["TK TM", "SỔ QUỸ TIỀN MẶT (TK TM)", extra.books?.cash], ["TK TG NH", "SỔ TIỀN GỬI NGÂN HÀNG (TK TG NH)", extra.books?.bank]] as const) {
     if (!b || !b.cols.length) continue;
     const { head, rows } = bookRows(b);
-    table(book, name, title.replace(/^BÁO CÁO QL/, heading), head, rows, { widths: [6, 14, 16, ...b.cols.map(() => 17), 16], labelCol: 1, frozenCols: 2 });
+    table(book, name, title.replace(/^BÁO CÁO QUẢN LÝ/, heading), head, rows, { widths: [6, 14, 16, ...b.cols.map(() => 17), 16], labelCol: 1, frozenCols: 2 });
   }
-  if (extra.outside?.lines.length) table(book, "DV Ngoài", title.replace(/^BÁO CÁO QL/, "DỊCH VỤ NGOÀI"), ["Ngày đặt", "ID phòng", "Dịch vụ", "Diễn giải", "Giá DV thuê", "Giá bán DV", "Lợi nhuận", "Chiết khấu 20%"], outsideRows(extra.outside), { widths: [14, 12, 28, 40, 16, 16, 16, 16], labelCol: 2, frozenCols: 0 });
+  if (extra.outside?.lines.length) table(book, "DV Ngoài", title.replace(/^BÁO CÁO QUẢN LÝ/, "DỊCH VỤ NGOÀI"), ["Ngày đặt", "ID phòng", "Dịch vụ", "Diễn giải", "Giá DV thuê", "Giá bán DV", "Lợi nhuận", "Chiết khấu 20%"], outsideRows(extra.outside), { widths: [14, 12, 28, 40, 16, 16, 16, 16], labelCol: 2, frozenCols: 0 });
   if (extra.channels) {
     const { head, rows } = channelTable(extra.channels);
-    table(book, "OTA-OTP", title.replace(/^BÁO CÁO QL/, "BẢNG TỔNG HỢP OTA, OTP"), head, rows, { widths: [30, ...head.slice(1).map((h) => (h ? 10 : 3))] });
+    table(book, "OTA-OTP", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG TỔNG HỢP OTA, OTP"), head, rows, { widths: [30, ...head.slice(1).map((h) => (h ? 10 : 3))] });
   }
   const taken = new Set(book.worksheets.map((w) => w.name));
   for (const s of extra.stocks ?? []) {
     if (!s.report.lines.length) continue;
-    table(book, sheetName(s.name, s.fnb, taken), title.replace(/^BÁO CÁO QL/, `BẢNG KÊ HÀNG HÓA ${s.name.replace(/\s*\d{1,2}[/-]\d{4}$/, "").toUpperCase()}`), ["STT", "Tên hàng hóa", "Loại", "ĐVT", "Tồn đầu (SL)", "Tồn đầu (giá trị)", "Mua vào (SL)", "Mua vào (giá trị)", "Xuất (SL)", "Xuất (giá trị)", "Tồn cuối (SL)", "Tồn cuối (giá trị)", "Chênh kiểm kê (giá trị)"], stockRows(s.report), { widths: [6, 36, 14, 9, 12, 16, 12, 16, 12, 16, 12, 16, 16], labelCol: 1, frozenCols: 2 });
+    table(book, sheetName(s.name, s.fnb, taken), title.replace(/^BÁO CÁO QUẢN LÝ/, `BẢNG KÊ HÀNG HÓA ${s.name.replace(/\s*\d{1,2}[/-]\d{4}$/, "").toUpperCase()}`), ["STT", "Tên hàng hóa", "Loại", "ĐVT", "Tồn đầu (SL)", "Tồn đầu (giá trị)", "Mua vào (SL)", "Mua vào (giá trị)", "Xuất (SL)", "Xuất (giá trị)", "Tồn cuối (SL)", "Tồn cuối (giá trị)", "Chênh kiểm kê (giá trị)"], stockRows(s.report), { widths: [6, 36, 14, 9, 12, 16, 12, 16, 12, 16, 12, 16, 16], labelCol: 1, frozenCols: 2 });
   }
   if (notes.length) table(book, "Ghi chú", "Ghi chú khi lấy số liệu", ["Ghi chú"], notes.map((n) => ({ cells: [n] })), { widths: [120] });
   return book;

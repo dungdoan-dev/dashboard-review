@@ -4,21 +4,21 @@ import { useMemo, useState } from "react";
 import { ArrowDownToLine, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS, addDays } from "@/lib/bluejay-metrics";
-import { parseLedgerWorkbook } from "@/lib/bluejay-reconcile";
+import { parseLedgerWorkbook, type LedgerEntry } from "@/lib/bluejay-reconcile";
 import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { financeReport, ledgerBalances, parseExpenses, summarizeFinance, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary } from "@/lib/finance-summary";
 import { fnbReport, type FnbReport } from "@/lib/fnb-ledger";
 import { parseOutsideServices, type OutsideLine, type OutsideService } from "@/lib/outside-services";
 import { parseInventorySheet, stockReport, type StockReport } from "@/lib/inventory";
 import type { ChannelCounts, ChannelWeek } from "@/lib/ql-channels";
-import { monthRange, qlBooks, qlFunds, qlResult, qlWeekly, type Book, type FundLine } from "@/lib/ql-report";
+import { monthRange, partyTotals, qlBooks, qlFunds, qlParties, qlResult, qlWeekly, type Book, type FundLine, type Party } from "@/lib/ql-report";
 import type { DebtRow } from "@/lib/bluejay-debt";
 import { ReachTable, type Col } from "@/components/reach-table";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => fmtDate(date).slice(0, 5); // dd/mm
 type Sheets = { name: string; rows: unknown[][] }[];
-type Loaded = { month: string; days?: CheckoutDay[]; finance?: FinanceReport; hotel?: { summary: FinanceSummary; expenses: ExpenseLine[]; balances: Balances }; fnb?: FnbReport; debt?: { bookings: number; balance: number }; outside?: ReturnType<typeof parseOutsideServices> | null; stocks?: { name: string; fnb: boolean; report: StockReport }[]; channels?: ChannelCounts; notes: string[] };
+type Loaded = { month: string; days?: CheckoutDay[]; finance?: FinanceReport; hotel?: { summary: FinanceSummary; entries: LedgerEntry[]; expenses: ExpenseLine[]; balances: Balances }; fnb?: FnbReport; debt?: { bookings: number; balance: number }; outside?: ReturnType<typeof parseOutsideServices> | null; stocks?: { name: string; fnb: boolean; report: StockReport }[]; channels?: ChannelCounts; notes: string[] };
 type StockSheets = { name: string; rows: unknown[][]; red?: [number, number][] }[];
 
 async function getJson(url: string) {
@@ -65,7 +65,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
         const expenses = sheets.flatMap((s) => { try { return [parseExpenses(s.rows)]; } catch { return []; } })[0] ?? [];
         out.finance = financeReport(ledger.entries, expenses, { from, to });
         out.outside = sheets.flatMap((x) => { try { return [parseOutsideServices(x.rows)]; } catch { return []; } })[0] ?? null;
-        out.hotel = { summary: summarizeFinance(ledger.entries, expenses, { from, to }), expenses, balances: ledgerBalances(sheets) };
+        out.hotel = { summary: summarizeFinance(ledger.entries, expenses, { from, to }), entries: ledger.entries, expenses, balances: ledgerBalances(sheets) };
       } catch (e) { out.notes.push(`Bảng kê khách sạn: ${e instanceof Error ? e.message : String(e)}`); }
     } else out.notes.push(`Bảng kê khách sạn: ${why(hotel)}`);
     if (fnb.status === "fulfilled") {
@@ -91,6 +91,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
   const table = useMemo(() => (loaded ? qlWeekly(loaded.month, loaded) : null), [loaded]);
   const funds = useMemo(() => (loaded ? qlFunds({ hotel: loaded.hotel?.summary, balances: loaded.hotel?.balances, fnb: loaded.fnb }) : []), [loaded]);
   const result = useMemo(() => (loaded ? qlResult(loaded.month, loaded) : null), [loaded]);
+  const parties = useMemo(() => (loaded && (loaded.hotel || loaded.fnb) ? qlParties(loaded.month, { hotel: loaded.hotel, fnb: loaded.fnb }) : []), [loaded]);
   const books = useMemo(() => (loaded && (loaded.hotel || loaded.fnb) ? qlBooks(loaded.month, { hotel: loaded.hotel && { summary: loaded.hotel.summary, balances: loaded.hotel.balances }, fnb: loaded.fnb }) : null), [loaded]);
   type Row = NonNullable<typeof table>["rows"][number] & { i: number }; // i: the same label can come twice (every F&B unit has a "Thu − chi")
   const cols: Col<Row>[] = table ? [
@@ -100,8 +101,8 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
 
   function exportExcel() {
     if (!loaded || !table || !result) return;
-    const title = `BÁO CÁO QL · ${hotelName.toUpperCase()} · THÁNG ${loaded.month.slice(5)}/${loaded.month.slice(0, 4)}`;
-    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-ql-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels })));
+    const title = `BÁO CÁO QUẢN LÝ · ${hotelName.toUpperCase()} · THÁNG ${loaded.month.slice(5)}/${loaded.month.slice(0, 4)}`;
+    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-quan-ly-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels, parties })));
   }
 
   const fundCols: Col<FundLine>[] = [
@@ -121,6 +122,12 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
       { label: `${k} · book`, value: (w) => w.counts[k]?.book ?? 0, text: (w) => (w.counts[k]?.book ? String(w.counts[k].book) : "") },
       { label: `${k} · hủy`, value: (w) => w.counts[k]?.cancel ?? 0, text: (w) => (w.counts[k]?.cancel ? String(w.counts[k].cancel) : "") },
     ]),
+  ];
+  const partyCols: Col<Party>[] = [
+    { label: "Bên", text: (p) => p.label },
+    ...([["Thu tiền mặt", "thu", "cash"], ["Thu ngân hàng", "thu", "bank"], ["Thu thẻ visa", "thu", "card"], ["Tổng thu", "thu", "all"], ["Chi tiền mặt", "chi", "cash"], ["Chi ngân hàng", "chi", "bank"], ["Chi visa", "chi", "card"], ["Tổng chi", "chi", "all"]] as const).map(([label, side, k]): Col<Party> => money(label, (p) => partyTotals(p[side])[k])),
+    money("Thu − chi", (p) => partyTotals(p.thu).all - partyTotals(p.chi).all),
+    money("Dòng thu", (p) => p.thu.length), money("Dòng chi", (p) => p.chi.length),
   ];
   type StockRow = NonNullable<Loaded["stocks"]>[number];
   const stockCols: Col<StockRow>[] = [{ label: "Kho", text: (k) => `${k.fnb ? "Ăn sáng, cafe, mini mart · " : ""}${k.name}` }, money("Số mặt hàng", (k) => k.report.lines.length), money("Tồn đầu", (k) => k.report.totals.openValue), money("Mua vào", (k) => k.report.totals.receiptValue), money("Xuất", (k) => k.report.totals.issueValue), money("Tồn cuối", (k) => k.report.totals.closingValue), money("Chênh kiểm kê", (k) => k.report.totals.countDiffValue)];
@@ -150,7 +157,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
     <section className="summary-report">
       <div className="summary-hero">
         <div>
-          <h1>Báo cáo QL · {hotelName || "chưa chọn khách sạn"}</h1>
+          <h1>Báo cáo quản lý · {hotelName || "chưa chọn khách sạn"}</h1>
           <p>Mỗi cột là một tuần (thứ Hai đến Chủ nhật, cắt theo tháng). Doanh thu khách sạn tính theo ngày trả phòng từ Blue Jay, cùng cách với kế toán; tiền thu, chi lấy từ bảng kê Google Sheet; Ăn sáng, cafe, mini mart lấy từ sheet của chi nhánh. Nâng hạng phòng đang nằm trong tiền dịch vụ.</p>
         </div>
         <div className="summary-controls">
@@ -159,7 +166,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
           {loaded && table && result && <button type="button" onClick={exportExcel}><ArrowDownToLine size={15} />Xuất Excel</button>}
         </div>
       </div>
-      {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Báo cáo QL theo từng chi nhánh.</span></div>}
+      {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Báo cáo quản lý theo từng chi nhánh.</span></div>}
       {scopeId && !loaded && <p className="summary-note">Chưa có dữ liệu. Chọn tháng rồi bấm “Lấy số liệu”.</p>}
       {loaded && table && <>
         {loaded.notes.map((n) => <p className="summary-note bad" role="alert" key={n}>{n}</p>)}
@@ -173,6 +180,11 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
           {funds.length === 0 ? <p className="summary-note">Chưa đọc được bảng kê nào.</p> : <ReachTable rows={funds} rowKey={(l) => l.label} columns={fundCols} sortable={false} compact rowClass={(l) => (l.total ? "report-total" : undefined)} />}
           {loaded.debt && <div className="summary-kpis"><div className="summary-kpi"><span>OTA chưa thanh toán</span><strong>{num(loaded.debt.balance)}</strong><small>{loaded.debt.bookings} đặt phòng OTA đã trả phòng còn nợ, tính đến hôm nay (không phụ thuộc tháng chọn)</small></div></div>}
         </details>
+        {parties.length > 0 && <details className="summary-chart wide revenue-fold" open>
+          <summary><h4>Thu chi các bên <small>để đối chiếu với file kế toán</small></h4></summary>
+          <p className="summary-note">Tiền thu và chi của khách sạn, Ăn sáng cafe và mini mart trong tháng, cùng số với bảng “Dòng tiền” (khách sạn: tiền khách trả − cọc đã nhận trước + cọc chưa ở; Ăn sáng, cafe, mini mart: bán hàng + thu khác, POS tính vào ngân hàng). Từng dòng thu, chi của mỗi bên có trong file Excel (sheet “Thu chi các bên”).</p>
+          <ReachTable rows={parties} rowKey={(p) => p.label} columns={partyCols} sortable={false} compact />
+        </details>}
         {books && books.cash.cols.length > 0 && bookTable("Sổ quỹ tiền mặt (TK TM)", books.cash, `Số dư đầu kỳ ${num(books.cash.opening)}${books.cash.opening ? " (nhập ở đầu bảng kê thu)" : ": chưa thấy ô “Đầu kỳ tiền mặt” ở đầu bảng kê nên tính từ 0"}. Thu khách sạn gồm cọc của khách chưa ở. Khách sạn, Ăn sáng cafe và mini mart chung một quỹ.`)}
         {books && books.bank.cols.length > 0 && bookTable("Sổ tiền gửi ngân hàng (TK TG NH)", books.bank, `Số dư đầu kỳ ${num(books.bank.opening)}${books.bank.opening ? " (nhập ở đầu bảng kê thu)" : ": chưa thấy ô “Đầu kỳ ngân hàng” ở đầu bảng kê nên tính từ 0"}. Chỉ tài khoản khách sạn vào số dư; tài khoản Ăn sáng cafe, mini mart ghi bên cạnh.`)}
         {loaded.outside && loaded.outside.lines.length > 0 && <details className="summary-chart wide revenue-fold">

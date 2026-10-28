@@ -76,3 +76,26 @@ test("a kind the units name differently is one line, under the hotel's name", ()
   const r = qlResult("2026-10", { days: [], hotel, fnb });
   assert.deepEqual(r.rows.filter((x) => /^Chi (Marketing|mua đồ dùng)/.test(x.label)).map((x) => [x.label, x.values]), [["Chi mua đồ dùng CCDC", [10, 5, 15]], ["Chi Marketing – OTA", [400, 60, 460]]]);
 });
+
+test("thu chi of each party line by line add up to the money in and out of the fund table", async () => {
+  const { summarizeFinance } = await import("./finance-summary.ts");
+  const { qlFunds, qlParties, partyTotals } = await import("./ql-report.ts");
+  const f = (cash = 0, bank = 0, card = 0) => ({ cash, bank, card });
+  const entry = (date: string, taken: ReturnType<typeof f>, deposit = f(), advance = f()) => ({ row: 1, date, id: "B1", platform: "Booking", service: "Tiền phòng", note: "", taken, deposit, advance, pos: 0, commission: 0, otherDeduction: 0 });
+  const entries = [entry("2026-10-02", f(500, 300), f(100)), entry("2026-10-03", f(0, 0), f(), f(0, 200)), entry("2026-09-30", f(999)), entry("2026-10-04", f(0, 0, 50))];
+  const e = (date: string, kind: string, cash: number, bank: number, visa = 0) => ({ row: 1, date, kind, note: "x", cash, bank, visa, commission: 0, cardFee: 0 });
+  const expenses = [e("2026-10-05", "Chi khác", 70, 0), e("2026-10-06", "Chi khác", 0, 40, 10), e("2026-09-29", "Chi khác", 5, 0)];
+  const summary = summarizeFinance(entries, expenses, { from: "2026-10-01", to: "2026-10-31" });
+  const ledger = { income: [{ date: "2026-10-02", seller: "Tài", note: "", cash: 100, bank: 20, pos: 30, otherCash: 5, otherBank: 6, shopee: 0, grab: 0, voided: 0, rental: 0, row: 1 }], expense: [e("2026-10-03", "Chi mua hàng hóa", 40, 8)] };
+  const fnb = { units: [{ label: "Mini mart", sales: { cash: 100, bank: 20, pos: 30, total: 150 }, other: { cash: 5, bank: 6 }, spent: { cash: 40, bank: 8, visa: 0 }, funds: { cash: 65, bank: 48 }, balances: { openCash: null, openBank: null }, ledger }] } as never;
+  const funds = qlFunds({ hotel: summary, fnb });
+  const parties = qlParties("2026-10", { hotel: { entries, expenses }, fnb });
+  assert.deepEqual(parties.map((p) => p.label), ["Khách sạn", "Mini mart"]);
+  assert.deepEqual([parties[0].thu.length, parties[0].chi.length], [3, 2]); // the 30 September receipt and the 29 September payment are out of the month
+  for (const [p, prefix] of [[parties[0], "Khách sạn"], [parties[1], "Mini mart"]] as const) {
+    const thu = partyTotals(p.thu), chi = partyTotals(p.chi), cash = funds.find((l) => l.label.startsWith(`${prefix} · tiền mặt`))!, bank = funds.find((l) => l.label.startsWith(`${prefix} · ngân hàng`) || l.label.startsWith(`${prefix} · tài khoản`))!;
+    assert.deepEqual([thu.cash, chi.cash], [cash.in, cash.out], prefix + " tiền mặt");
+    assert.deepEqual([thu.bank, chi.bank], [bank.in, bank.out], prefix + " ngân hàng");
+  }
+  assert.deepEqual(partyTotals(parties[0].thu), { cash: 400, bank: 500, card: 50, all: 950 }); // 500-100 cash, 300 + 200 bank, 50 card
+});
