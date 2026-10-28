@@ -317,7 +317,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
-  const hrOnly = isHr(user); // read-only account: only the Nhân sự page
+  const hrOnly = isHr(user); // hr account: only Nhân sự (read-only) and Tuyển dụng
   const [loading, setLoading] = useState(supabaseConfigured);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -666,7 +666,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }, [user, loadLocations]);
 
   useEffect(() => {
-    if (isHr(user) && pathname !== "/nhan-su") router.replace("/nhan-su"); // an hr account has no other page
+    if (isHr(user) && pathname !== "/nhan-su" && pathname !== "/hr") router.replace("/nhan-su"); // an hr account has only these two pages
   }, [user, pathname, router]);
 
   useEffect(() => {
@@ -1808,7 +1808,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </>)}
           {navGroup("nhan-su", "NHÂN SỰ", true, <>
             <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
-            {!hrOnly && <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>}
+            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
           </>)}
           {!hrOnly && navGroup("review", "REVIEW", true, <>
             <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>

@@ -23,8 +23,9 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   // API routes are admin-only (cron routes are excluded by the matcher and use CRON_SECRET). Pages gate on the client; data is gated by RLS.
-  const hrRead = isHr(data?.claims) && request.method === "GET" && request.nextUrl.pathname === "/api/nhan-su"; // the one thing an hr account may call
-  if (request.nextUrl.pathname.startsWith("/api/") && !isAdmin(data?.claims) && !hrRead) {
+  const path = request.nextUrl.pathname;
+  const hrAllowed = isHr(data?.claims) && ((path === "/api/nhan-su" && request.method === "GET") || path === "/api/hr"); // what an hr account may call: the staff list (read) and recruitment (read and write)
+  if (path.startsWith("/api/") && !isAdmin(data?.claims) && !hrAllowed) {
     return NextResponse.json({ message: "Chỉ tài khoản admin được truy cập." }, { status: 403 });
   }
   return response;

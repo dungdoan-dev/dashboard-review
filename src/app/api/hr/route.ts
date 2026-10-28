@@ -1,4 +1,4 @@
-import { bluejayViewer } from "@/lib/bluejay-auth";
+import { hrViewer } from "@/lib/bluejay-auth";
 import { ID_PATTERN, cleanFields, isEntity } from "@/lib/hr-forms";
 
 export const maxDuration = 60;
@@ -25,7 +25,7 @@ async function callScript(url: URL, init?: RequestInit) {
 const reply = (r: Awaited<ReturnType<typeof callScript>>) => ("body" in r ? Response.json(r.body) : Response.json({ message: r.message }, { status: r.status }));
 
 export async function GET() {
-  const denied = await bluejayViewer();
+  const denied = await hrViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   const cfg = config();
   if (!cfg) return Response.json(NOT_CONFIGURED, { status: 500 });
@@ -35,9 +35,9 @@ export async function GET() {
   return reply(await callScript(url));
 }
 
-// Create, edit or delete one row: { entity, action: "save" | "delete", id?, fields? }. Only admins; the fields are cut down to the form's own list first.
+// Create, edit or delete one row: { entity, action: "save" | "delete", id?, fields? }. Admins and hr accounts; the fields are cut down to the form's own list first.
 export async function POST(request: Request) {
-  const denied = await bluejayViewer();
+  const denied = await hrViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ message: "Yêu cầu không hợp lệ." }, { status: 415 });
   const cfg = config();
