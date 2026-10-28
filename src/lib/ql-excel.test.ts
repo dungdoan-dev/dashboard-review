@@ -75,14 +75,18 @@ test("the OTA-OTP sheet: a row per week, BOOK and HỦY per OTA, a blank column,
   assert.deepEqual([ws.getCell(4, 1).value, ws.getCell(4, 2).value, ws.getCell(4, 3).value, ws.getCell(4, 9).value, ws.getCell(4, 10).value, ws.getCell(5, 1).value, ws.getCell(5, 1).font?.bold], ["Tuần 40 (01/10-04/10)", 3, null, 1, 2, "CẢ THÁNG", true]);
 });
 
-test("the thu chi sheet has each party's totals on top, then its lines with a total row", () => {
-  const line = (date: string, what: string, cash: number, bank = 0) => ({ date, what, note: "", cash, bank, card: 0 });
-  const parties = [{ label: "Khách sạn", thu: [line("2026-10-02", "Tiền phòng", 500, 300)], chi: [line("2026-10-03", "Chi khác", 70)] }, { label: "Mini mart", thu: [], chi: [] }];
+test("one thu chi sheet per party: thu on the left, chi on the right, totals first, a blank column between", () => {
+  const line = (date: string, what: string, cash: number, bank = 0, note = "") => ({ date, what, note, cash, bank, card: 0 });
+  const parties = [{ label: "Khách sạn", thu: [line("2026-10-02", "Tiền phòng", 500, 300, "B1"), line("2026-10-04", "Minibar", 20)], chi: [line("2026-10-03", "Chi khác", 70, 0, "đá")] }, { label: "Mini mart", thu: [], chi: [line("2026-10-05", "Chi mua hàng hóa", 0, 90)] }];
   const wb = qlWorkbook("BÁO CÁO QUẢN LÝ · X", qlWeekly("2026-10", {}), [], qlResult("2026-10", {}), undefined, [], { parties });
-  const ws = wb.getWorksheet("Thu chi các bên")!;
-  const row = (r: number) => [1, 2, 4, 5, 7].map((c) => ws.getCell(r, c).value);
-  assert.deepEqual(row(5), ["Khách sạn", "Thu", 500, 300, 800]);
-  assert.deepEqual(row(7), ["", "Thu − chi", 430, 300, 730]);
-  assert.equal(ws.getCell(1, 1).value, "THU CHI CÁC BÊN · X");
-  assert.equal(qlWorkbook("x", qlWeekly("2026-10", {}), [], qlResult("2026-10", {})).getWorksheet("Thu chi các bên"), undefined); // no parties: no sheet
+  const ws = wb.getWorksheet("Thu chi Khách sạn")!;
+  const row = (r: number, cols: number[]) => cols.map((c) => ws.getCell(r, c).value);
+  assert.equal(ws.getCell(1, 1).value, "THU CHI KHÁCH SẠN · X");
+  assert.deepEqual([row(3, [1, 9])], [["Ngày thu", "Ngày chi"]]);
+  assert.deepEqual(row(4, [1, 4, 5, 7, 9, 12, 13, 15]), ["TỔNG THU", 520, 300, 820, "TỔNG CHI", 70, 0, 70]);
+  assert.deepEqual(row(5, [1, 4, 5, 7]), ["THU − CHI", 450, 300, 750]);
+  assert.deepEqual([row(6, [2, 3, 4, 10, 11, 12]), row(7, [2, 4, 10, 12])], [["Tiền phòng", "B1", 500, "Chi khác", "đá", 70], ["Minibar", 20, null, null]]); // the longer side runs on alone
+  assert.equal(ws.getCell(6, 8).value, null);
+  assert.deepEqual(wb.worksheets.map((w) => w.name).filter((n) => n.startsWith("Thu chi")), ["Thu chi Khách sạn", "Thu chi Mini mart"]);
+  assert.equal(qlWorkbook("x", qlWeekly("2026-10", {}), [], qlResult("2026-10", {})).worksheets.some((w) => w.name.startsWith("Thu chi")), false); // no parties: no sheet
 });

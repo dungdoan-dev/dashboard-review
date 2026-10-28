@@ -1,7 +1,7 @@
 // The Excel file of the management report (the finance team's "QL HĐKD" layout): one sheet per table of the page, ruled with borders, real numbers (not text) so Excel can sum and chart them.
 // Built with exceljs (borders, colours); the page loads this file only when the file is downloaded. Tests run it with plain Node, so imports use ".ts".
 import ExcelJS from "exceljs";
-import { partyTotals, type Book, type FundLine, type Party, type qlResult, type qlWeekly } from "./ql-report.ts";
+import { partyTotals, type Book, type FundLine, type Party, type PartyLine, type qlResult, type qlWeekly } from "./ql-report.ts";
 import type { parseOutsideServices } from "./outside-services.ts";
 import type { StockReport } from "./inventory.ts";
 import type { ChannelCounts } from "./ql-channels.ts";
@@ -87,21 +87,21 @@ function outsideRows(o: NonNullable<QlExtra["outside"]>): TRow[] {
   ];
 }
 
-/** The "Thu chi các bên" sheet: the totals of each party on top (thu, chi, thu − chi), then its thu lines and its chi lines, each with a total row. */
-function partyRows(parties: Party[]): TRow[] {
-  const money = (t: ReturnType<typeof partyTotals>): Cell[] => [t.cash, t.bank, t.card, t.all];
-  const rows: TRow[] = [{ kind: "section", cells: ["TỔNG HỢP"] }];
-  for (const p of parties) {
-    const thu = partyTotals(p.thu), chi = partyTotals(p.chi);
-    rows.push({ cells: [p.label, "Thu", `${p.thu.length} dòng`, ...money(thu)] }, { cells: ["", "Chi", `${p.chi.length} dòng`, ...money(chi)] },
-      { kind: "total", cells: ["", "Thu − chi", "", thu.cash - chi.cash, thu.bank - chi.bank, thu.card - chi.card, thu.all - chi.all] });
-  }
-  for (const p of parties) for (const [name, lines] of [["THU", p.thu], ["CHI", p.chi]] as const) {
-    rows.push({ kind: "section", cells: [`${p.label.toUpperCase()} · ${name} (${lines.length} dòng)`] });
-    for (const l of lines) rows.push({ cells: [new Date(`${l.date}T00:00:00Z`), l.what, l.note, l.cash || null, l.bank || null, l.card || null, l.cash + l.bank + l.card] });
-    rows.push({ kind: "total", cells: ["", "TỔNG", "", ...money(partyTotals(lines))] });
-  }
-  return rows;
+/** One sheet per party (hotel, each F&B unit): thu on the left, chi on the right with a blank column between, line by line; the totals come first, then thu − chi under the thu side. */
+function partySheet(book: ExcelJS.Workbook, name: string, title: string, p: Party) {
+  const thu = partyTotals(p.thu), chi = partyTotals(p.chi), money = (t: ReturnType<typeof partyTotals>): Cell[] => [t.cash, t.bank, t.card, t.all];
+  const date = (d: string) => new Date(`${d}T00:00:00Z`), blank = (n: number): Cell[] => Array(n).fill(null);
+  const left = (l: PartyLine): Cell[] => [date(l.date), l.what, l.note, l.cash || null, l.bank || null, l.card || null, l.cash + l.bank + l.card];  // Ngày, Nội dung, Ghi chú
+  const right = (l: PartyLine): Cell[] => [date(l.date), l.what, l.note, l.cash || null, l.bank || null, l.card || null, l.cash + l.bank + l.card]; // Ngày, Hạng mục, Nội dung chi
+  const rows: TRow[] = [
+    { kind: "total", cells: ["TỔNG THU", "", "", ...money(thu), null, "TỔNG CHI", "", "", ...money(chi)] },
+    { kind: "total", cells: ["THU − CHI", "", "", thu.cash - chi.cash, thu.bank - chi.bank, thu.card - chi.card, thu.all - chi.all, ...blank(8)] },
+  ];
+  for (let i = 0; i < Math.max(p.thu.length, p.chi.length); i++) rows.push({ cells: [...(p.thu[i] ? left(p.thu[i]) : blank(7)), null, ...(p.chi[i] ? right(p.chi[i]) : blank(7))] });
+  const head = ["Ngày thu", "Nội dung thu", "Ghi chú", "Tiền mặt", "Ngân hàng", "Thẻ visa", "Tổng thu", "", "Ngày chi", "Hạng mục chi", "Nội dung chi", "Tiền mặt", "Ngân hàng", "Thẻ visa", "Tổng chi"];
+  const ws = table(book, name, title, head, rows, { widths: [12, 30, 34, 15, 15, 12, 15, 3, 12, 28, 34, 15, 15, 12, 15], labelCol: 1, frozenCols: 0 });
+  for (let r = 3; r <= 3 + rows.length; r++) { const c = ws.getCell(r, 8); c.border = {}; c.fill = { type: "pattern", pattern: "none" }; c.value = null; } // the blank column between thu and chi is not part of either table
+  return ws;
 }
 
 /** The "OTA-OTP" sheet: a week per row, BOOK and HỦY for each OTA, a blank column, then the same for the direct channels; zero is left blank as in the finance team's sheet. */
@@ -134,7 +134,8 @@ export function qlWorkbook(title: string, weekly: ReturnType<typeof qlWeekly>, f
   // the finance team's sheet: STT, Chỉ tiêu, Mã số, the values, Ghi chú
   const kq: TRow[] = result.rows.map((r) => ({ kind: r.kind, cells: [r.stt ?? "", r.label, r.code ?? "", ...r.values, r.note ?? ""] }));
   table(book, "KQ HĐKD", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH"), ["STT", "Chỉ tiêu", "Mã số", ...result.columns, "Ghi chú"], kq, { widths: [7, 52, 9, ...result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
-  if (extra.parties?.length) table(book, "Thu chi các bên", title.replace(/^BÁO CÁO QUẢN LÝ/, "THU CHI CÁC BÊN"), ["Ngày", "Nội dung", "Ghi chú", "Tiền mặt", "Ngân hàng", "Thẻ visa", "Tổng"], partyRows(extra.parties), { widths: [16, 36, 50, 16, 16, 14, 16], labelCol: 1, frozenCols: 0 });
+  const named = new Set(book.worksheets.map((w) => w.name));
+  for (const p of extra.parties ?? []) partySheet(book, sheetName(`Thu chi ${p.label}`, false, named), title.replace(/^BÁO CÁO QUẢN LÝ/, `THU CHI ${p.label.toUpperCase()}`), p);
   for (const [name, heading, b] of [["TK TM", "SỔ QUỸ TIỀN MẶT (TK TM)", extra.books?.cash], ["TK TG NH", "SỔ TIỀN GỬI NGÂN HÀNG (TK TG NH)", extra.books?.bank]] as const) {
     if (!b || !b.cols.length) continue;
     const { head, rows } = bookRows(b);

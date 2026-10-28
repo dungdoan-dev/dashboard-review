@@ -182,7 +182,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
         </details>
         {parties.length > 0 && <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Thu chi các bên <small>để đối chiếu với file kế toán</small></h4></summary>
-          <p className="summary-note">Tiền thu và chi của khách sạn, Ăn sáng cafe và mini mart trong tháng, cùng số với bảng “Dòng tiền” (khách sạn: tiền khách trả − cọc đã nhận trước + cọc chưa ở; Ăn sáng, cafe, mini mart: bán hàng + thu khác, POS tính vào ngân hàng). Từng dòng thu, chi của mỗi bên có trong file Excel (sheet “Thu chi các bên”).</p>
+          <p className="summary-note">Tiền thu và chi của khách sạn, Ăn sáng cafe và mini mart trong tháng, cùng số với bảng “Dòng tiền” (khách sạn: tiền khách trả − cọc đã nhận trước + cọc chưa ở; Ăn sáng, cafe, mini mart: bán hàng + thu khác, POS tính vào ngân hàng). Từng dòng thu, chi có trong file Excel: mỗi bên một sheet (“Thu chi Khách sạn”, Ăn sáng cafe, Mini mart), thu bên trái, chi bên phải.</p>
           <ReachTable rows={parties} rowKey={(p) => p.label} columns={partyCols} sortable={false} compact />
         </details>}
         {books && books.cash.cols.length > 0 && bookTable("Sổ quỹ tiền mặt (TK TM)", books.cash, `Số dư đầu kỳ ${num(books.cash.opening)}${books.cash.opening ? " (nhập ở đầu bảng kê thu)" : ": chưa thấy ô “Đầu kỳ tiền mặt” ở đầu bảng kê nên tính từ 0"}. Thu khách sạn gồm cọc của khách chưa ở. Khách sạn, Ăn sáng cafe và mini mart chung một quỹ.`)}
