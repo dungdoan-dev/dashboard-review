@@ -51,7 +51,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
-import { isAdmin } from "@/lib/admin";
+import { canUse, isHr } from "@/lib/admin";
 import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
@@ -317,6 +317,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
+  const hrOnly = isHr(user); // read-only account: only the Nhân sự page
   const [loading, setLoading] = useState(supabaseConfigured);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -649,19 +650,24 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       // `user` and the access token may come from a session stored before the admin role was granted:
       // ask the auth server, and refresh the token (RLS reads the role from it) before deciding or loading data.
       const { data: claims } = await supabase.auth.getClaims();
-      if (!isAdmin(user) || !isAdmin(claims?.claims)) {
+      if (!canUse(user) || !canUse(claims?.claims)) {
         const { data: fresh } = await supabase.auth.getUser();
-        if (!isAdmin(fresh.user)) {
+        if (!canUse(fresh.user)) {
           await supabase.auth.signOut();
-          setError("Tài khoản không có quyền truy cập. Chỉ tài khoản admin được đăng nhập.");
+          setError("Tài khoản không có quyền truy cập. Chỉ tài khoản admin hoặc nhân sự được đăng nhập.");
           return;
         }
         await supabase.auth.refreshSession();
-        if (!isAdmin(user)) { setUser(fresh.user); return; } // re-runs this effect with the admin user
+        if (!canUse(user)) { setUser(fresh.user); return; } // re-runs this effect with the new role
       }
+      if (isHr(user)) return; // an hr account sees only Nhân sự: no review data to load
       await loadLocations();
     })();
   }, [user, loadLocations]);
+
+  useEffect(() => {
+    if (isHr(user) && pathname !== "/nhan-su") router.replace("/nhan-su"); // an hr account has no other page
+  }, [user, pathname, router]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -1774,7 +1780,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     return <div className="center-state"><LoaderCircle className="spin" size={22} /><span>Đang kết nối không gian làm việc…</span></div>;
   }
 
-  if (supabaseConfigured && !isAdmin(user)) {
+  if (supabaseConfigured && !canUse(user)) {
     return <AuthScreen error={error} onClearError={() => setError("")} />;
   }
 
@@ -1790,7 +1796,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
         </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          {navGroup("van-hanh", "VẬN HÀNH", false, <>
+          {!hrOnly && navGroup("van-hanh", "VẬN HÀNH", false, <>
             <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
             <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
             <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
@@ -1802,15 +1808,15 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </>)}
           {navGroup("nhan-su", "NHÂN SỰ", true, <>
             <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
-            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
+            {!hrOnly && <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>}
           </>)}
-          {navGroup("review", "REVIEW", true, <>
+          {!hrOnly && navGroup("review", "REVIEW", true, <>
             <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
             <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
             <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
             <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
           </>)}
-          {navGroup("tiep-can", "TIẾP CẬN", true, <>
+          {!hrOnly && navGroup("tiep-can", "TIẾP CẬN", true, <>
             <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
             <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
             <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
@@ -1821,7 +1827,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </>)}
         </nav>
         <div className="sidebar-bottom">
-          <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>
+          {!hrOnly && <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>}
           <button className="profile-row" type="button" onClick={() => { if (supabaseConfigured) void logout(); }} disabled={!supabaseConfigured} aria-label={supabaseConfigured ? "Đăng xuất" : "Chế độ xem demo"}><span className="profile-avatar">{user?.email?.slice(0, 1).toUpperCase() || "D"}</span><span className="profile-meta"><strong>{user?.email || "Chế độ demo"}</strong><small>{supabaseConfigured ? "Tài khoản Supabase" : "Chưa kết nối Supabase"}</small></span>{supabaseConfigured ? <LogOut size={16} /> : <CircleHelp size={16} />}</button>
         </div>
       </aside>
@@ -1873,7 +1879,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isGoogleAnalyticsPage && <GoogleAnalytics />}
           {isTiktokPage && <TiktokPage />}
           {isHrPage && <HrPage />}
-          {isNhanSuPage && <NhanSuPage />}
+          {isNhanSuPage && <NhanSuPage canSync={!hrOnly} />}
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayQlPage ? <BluejayQl scopeId={bluejayHotel?.id ?? null} /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 

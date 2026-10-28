@@ -38,7 +38,7 @@ function Due({ title, rows, empty }: { title: string; rows: { s: HrStaffRow; dat
 }
 
 /** Nhân sự: the staff of the HR Google Sheets, copied into the database every day at 08:00 (/api/nhan-su). */
-export function NhanSuPage() {
+export function NhanSuPage({ canSync = true }: { canSync?: boolean }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [unit, setUnit] = useState(""); // "" = all units
   const [tab, setTab] = useState<Tab>("overview");
@@ -86,7 +86,7 @@ export function NhanSuPage() {
         <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo đơn vị">
           <button type="button" aria-pressed={!unit} onClick={() => setUnit("")}>Tất cả ({units.length})</button>
           {units.map((u) => <button type="button" key={u} aria-pressed={unit === u} onClick={() => setUnit(u)}>{u}</button>)}
-          <button type="button" disabled={busy} onClick={() => void sync()}><RefreshCw size={15} className={busy ? "spin" : undefined} />{busy ? "Đang lấy…" : "Cập nhật số liệu"}</button>
+          {canSync && <button type="button" disabled={busy} onClick={() => void sync()}><RefreshCw size={15} className={busy ? "spin" : undefined} />{busy ? "Đang lấy…" : "Cập nhật số liệu"}</button>}
         </div>
       </div>
       {notice && <p className="summary-note" role="status">{notice}</p>}

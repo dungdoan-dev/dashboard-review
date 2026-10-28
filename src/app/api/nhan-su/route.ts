@@ -1,5 +1,5 @@
 import { serviceDb } from "@/lib/bluejay";
-import { bluejayViewer } from "@/lib/bluejay-auth";
+import { bluejayViewer, hrViewer } from "@/lib/bluejay-auth";
 import { readHr, syncHr } from "@/lib/hr-sync";
 
 export const maxDuration = 60;
@@ -8,7 +8,7 @@ const fail = (message: string, status: number) => Response.json({ message }, { s
 
 // Staff of the HR Google Sheets from the database (GET); the page button copies them from the sheets now (POST).
 export async function GET() {
-  const denied = await bluejayViewer();
+  const denied = await hrViewer();
   if (denied) return fail(denied.message, denied.status);
   try {
     return Response.json(await readHr(serviceDb()));
