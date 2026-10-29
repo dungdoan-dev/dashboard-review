@@ -1396,3 +1396,6 @@ select { cursor: pointer; }
 .reach-table.ruled table { border-top: 1px solid #b8c4d6; border-left: 1px solid #b8c4d6; }
 .reach-table.ruled th, .reach-table.ruled td { height: auto; border-right: 1px solid #b8c4d6; border-bottom: 1px solid #b8c4d6; } /* the global td is 67px high */
 .reach-table.ruled thead th { padding: 9px 10px; background: #dbe6f5; color: #1f3a5f; text-align: center; vertical-align: middle; }
+
+/* A read-only account (role mkt, class on .app-shell): the buttons that write are hidden; the server and the database refuse them anyway. */
+.read-only [data-write], .read-only .dashboard-add-location, .read-only .report-dashboard-actions, .read-only .platform-table-actions, .read-only .report-import-trigger, .read-only .manual-import-bar { display: none; }

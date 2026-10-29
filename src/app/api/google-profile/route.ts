@@ -1,5 +1,5 @@
 import { serviceDb } from "@/lib/bluejay";
-import { bluejayViewer } from "@/lib/bluejay-auth";
+import { bluejayViewer, reachViewer } from "@/lib/bluejay-auth";
 import { addDays, isDate, todayVN } from "@/lib/bluejay-metrics";
 import { MAX_DAYS, readGoogleProfile, syncGoogleProfile } from "@/lib/google-profile";
 
@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 // Google Maps figures of a date range from the stored days. No call to Windsor.
 export async function GET(request: Request) {
-  const denied = await bluejayViewer();
+  const denied = await reachViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   const q = new URL(request.url).searchParams;
   const from = q.get("from"), to = q.get("to");

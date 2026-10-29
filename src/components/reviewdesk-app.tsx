@@ -51,7 +51,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
-import { canUse, isHr } from "@/lib/admin";
+import { canUse, isHr, isMkt } from "@/lib/admin";
 import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
@@ -320,6 +320,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
   const hrOnly = isHr(user); // hr account: only Nhân sự (read-only) and Tuyển dụng
+  const mktOnly = isMkt(user); // mkt account: only Review and Tiếp cận, read-only
   const [loading, setLoading] = useState(supabaseConfigured);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -669,6 +670,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
 
   useEffect(() => {
     if (isHr(user) && pathname !== "/nhan-su" && pathname !== "/hr") router.replace("/nhan-su"); // an hr account has only these two pages
+    if (isMkt(user) && ["/bluejay", "/hr", "/nhan-su", "/settings"].some((p) => pathname.startsWith(p))) router.replace("/"); // a mkt account has no operations, HR or settings page
   }, [user, pathname, router]);
 
   useEffect(() => {
@@ -1787,7 +1789,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }
 
   return (
-    <div className={`app-shell ${collapsed ? "collapsed" : ""}`} onClick={navigateWithinDashboard}>
+    <div className={`app-shell ${collapsed ? "collapsed" : ""} ${mktOnly ? "read-only" : ""}`} onClick={navigateWithinDashboard}>
       {navOpen && <button className="sidebar-backdrop" type="button" aria-label="Đóng menu" onClick={() => setNavOpen(false)} />}
       <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onMouseOver={(event) => showTip(event.target)} onFocus={(event) => showTip(event.target)} onMouseLeave={() => setTip(null)} onBlur={() => setTip(null)} onScroll={() => setTip(null)} onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
         <div className="brand-row">
@@ -1798,7 +1800,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
         </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
-          {!hrOnly && navGroup("van-hanh", "VẬN HÀNH", false, <>
+          {!hrOnly && !mktOnly && navGroup("van-hanh", "VẬN HÀNH", false, <>
             <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
             <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
             <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
@@ -1809,7 +1811,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isBluejayQlPage ? "active" : ""}`} href="/bluejay-ql" data-tip="Báo cáo quản lý"><ClipboardList size={17} /><span>Báo cáo quản lý</span></Link>
             <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
           </>)}
-          {navGroup("nhan-su", "NHÂN SỰ", true, <>
+          {!mktOnly && navGroup("nhan-su", "NHÂN SỰ", true, <>
             <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
             <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
           </>)}
@@ -1830,7 +1832,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           </>)}
         </nav>
         <div className="sidebar-bottom">
-          {!hrOnly && <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>}
+          {!hrOnly && !mktOnly && <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>}
           <button className="profile-row" type="button" onClick={() => { if (supabaseConfigured) void logout(); }} disabled={!supabaseConfigured} aria-label={supabaseConfigured ? "Đăng xuất" : "Chế độ xem demo"}><span className="profile-avatar">{user?.email?.slice(0, 1).toUpperCase() || "D"}</span><span className="profile-meta"><strong>{user?.email || "Chế độ demo"}</strong><small>{supabaseConfigured ? "Tài khoản Supabase" : "Chưa kết nối Supabase"}</small></span>{supabaseConfigured ? <LogOut size={16} /> : <CircleHelp size={16} />}</button>
         </div>
       </aside>
