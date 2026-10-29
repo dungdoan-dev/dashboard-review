@@ -5,7 +5,7 @@ import { FileSpreadsheet, LoaderCircle } from "lucide-react";
 import { SHEET_KINDS, type SheetKind } from "@/lib/ledger-sheets";
 import { resetSheetUrls } from "@/components/use-sheet-url";
 
-type Branch = { hotel: number; name: string; hotelUrl: string | null; fnbUrl: string | null };
+type Branch = { hotel: number; name: string; standalone?: boolean; hotelUrl: string | null; fnbUrl: string | null };
 type State = { serviceEmail: string; month: string; branches: Branch[] };
 type Check = { name: string; ledger: string[]; stock: string[]; messages: string[] };
 
@@ -58,7 +58,7 @@ export function BranchSheetsSettings() {
   }
 
   return <details className="automatic-sync-section settings-panel" id="settings-branch-sheets" aria-labelledby="branch-sheets-title">
-    <summary className="automatic-sync-heading"><div className="section-kicker"><FileSpreadsheet size={14} /> CÀI ĐẶT · VẬN HÀNH</div><h2 id="branch-sheets-title">Link Google Sheet</h2><p>Mỗi tháng có 8 link: mỗi chi nhánh 2 link, Khách sạn (thu chi và kho) và Ăn sáng, cafe, mini mart (thu chi và kho). Chọn tháng, dán link, bấm Lưu: link được lưu riêng cho tháng đó. Bấm Kiểm tra để xem sheet có đủ tab của tháng.</p></summary>
+    <summary className="automatic-sync-heading"><div className="section-kicker"><FileSpreadsheet size={14} /> CÀI ĐẶT · VẬN HÀNH</div><h2 id="branch-sheets-title">Link Google Sheet</h2><p>Mỗi tháng có 9 link: mỗi khách sạn 2 link, đơn vị không có khách sạn (VTDC HCM) 1 link. Hai loại link: Khách sạn (thu chi và kho) và Ăn sáng, cafe, mini mart (thu chi và kho). Chọn tháng, dán link, bấm Lưu: link được lưu riêng cho tháng đó. Bấm Kiểm tra để xem sheet có đủ tab của tháng.</p></summary>
     {!data ? <p>{message || "Đang tải link…"}</p> : <div className="sheet-links">
       <div className="sheet-links-bar">
         <p className="form-hint">Chia sẻ mỗi sheet (chỉ xem) cho <strong>{data.serviceEmail || "tài khoản đọc Google Sheet (chưa cấu hình)"}</strong> trước khi kiểm tra.</p>
@@ -67,7 +67,7 @@ export function BranchSheetsSettings() {
       <div className="sheet-branches" aria-busy={shownMonth !== month}>
         {data.branches.map((b) => <section className="sheet-branch" key={b.hotel} aria-label={b.name}>
           <h3>{b.name}</h3>
-          {SHEET_KINDS.map(({ kind, label }) => { const k = key(b.hotel, kind); return <div className="sheet-row" key={kind}>
+          {SHEET_KINDS.filter(({ kind }) => !b.standalone || kind === "fnb").map(({ kind, label }) => { const k = key(b.hotel, kind); return <div className="sheet-row" key={kind}>
             <label className="field"><span>{label}</span><input type="url" placeholder="https://docs.google.com/spreadsheets/d/…" value={draft[k] ?? ""} onChange={(event) => setDraft((d) => ({ ...d, [k]: event.target.value }))} /></label>
             <div className="sheet-actions">
               <button className="button button-primary" type="button" onClick={() => void save(b, kind)} disabled={!!busy}>{busy === k && <LoaderCircle size={16} className="spin" />}Lưu</button>

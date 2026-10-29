@@ -1,6 +1,6 @@
 import { bluejayViewer } from "@/lib/bluejay-auth";
 import { readServiceItems, serviceDb } from "@/lib/bluejay";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BLUEJAY_HOTELS, isStandalone } from "@/lib/bluejay-metrics";
 import { sheetIdOf } from "@/lib/branch-sheets";
 import { KHO_KINDS, readStockSheets } from "@/lib/google-sheets";
 import { isSheetKind, sheetUrl } from "@/lib/ledger-sheets";
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   const q = new URL(request.url).searchParams;
   const hotel = Number(q.get("hotel")), month = q.get("month") ?? "", kind = q.get("kind") ?? "hotel";
-  if (!BLUEJAY_HOTELS.some((h) => h.id === hotel)) return Response.json({ message: "Khách sạn không hợp lệ." }, { status: 400 });
+  if (!BLUEJAY_HOTELS.some((h) => h.id === hotel) && !(isStandalone(hotel) && kind === "fnb")) return Response.json({ message: "Khách sạn không hợp lệ." }, { status: 400 });
   if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ message: "Tháng không hợp lệ." }, { status: 400 });
   if (!isSheetKind(kind)) return Response.json({ message: "Loại sheet không hợp lệ." }, { status: 400 });
   const [year, mm] = month.split("-"), from = `${month}-01`, to = new Date(Date.UTC(Number(year), Number(mm), 0)).toISOString().slice(0, 10);

@@ -9,6 +9,11 @@ export const BLUEJAY_HOTELS = [
   { id: 6209, name: "Yzistel Hoi An", color: "#eda100" },
 ];
 
+// Units with no hotel (VTDC HCM, a cafe on its own): they have only the Ăn sáng, cafe, mini mart sheet. Not in BLUEJAY_HOTELS: Blue Jay is never asked about them and the hotel pages do not list them.
+export const STANDALONE_UNITS = [{ id: 9001, name: "VTDC HCM", color: "#8b5cf6" }];
+export const BRANCHES = [...BLUEJAY_HOTELS, ...STANDALONE_UNITS]; // every branch that can have a Google Sheet link
+export const isStandalone = (id: unknown) => STANDALONE_UNITS.some((u) => u.id === id);
+
 // ---- dates: "YYYY-MM-DD" strings in Vietnam local time; arithmetic in UTC to avoid zone drift ----
 export const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 export const addDays = (s: string, n: number) => new Date(new Date(`${s}T00:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);

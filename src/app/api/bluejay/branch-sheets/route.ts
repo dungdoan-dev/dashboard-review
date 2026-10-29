@@ -1,5 +1,5 @@
 import { bluejayViewer } from "@/lib/bluejay-auth";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BRANCHES, isStandalone } from "@/lib/bluejay-metrics";
 import { branchSheets, saveBranchSheet } from "@/lib/branch-sheets";
 import { checkSheet, serviceAccountEmail } from "@/lib/google-sheets";
 import { isSheetKind, sheetIdFromLink, sheetUrl } from "@/lib/ledger-sheets";
@@ -19,9 +19,9 @@ export async function GET(request: Request) {
     return Response.json({
       serviceEmail: serviceAccountEmail(),
       month,
-      branches: BLUEJAY_HOTELS.map((h) => {
+      branches: BRANCHES.map((h) => {
         const hotel = links[h.id]?.hotel, fnb = links[h.id]?.fnb;
-        return { hotel: h.id, name: h.name, hotelUrl: hotel ? sheetUrl(hotel.id) : null, fnbUrl: fnb ? sheetUrl(fnb.id) : null };
+        return { hotel: h.id, name: h.name, standalone: isStandalone(h.id), hotelUrl: hotel ? sheetUrl(hotel.id) : null, fnbUrl: fnb ? sheetUrl(fnb.id) : null };
       }),
     });
   } catch (e) {
@@ -34,7 +34,7 @@ export async function PUT(request: Request) {
   const denied = await bluejayViewer();
   if (denied) return fail(denied.message, denied.status);
   const body = await request.json().catch(() => ({})) as { hotel?: unknown; kind?: unknown; month?: unknown; link?: unknown };
-  if (!BLUEJAY_HOTELS.some((h) => h.id === body.hotel) || !isSheetKind(body.kind) || typeof body.link !== "string") return fail("Chi nhánh hoặc loại sheet không hợp lệ.", 400);
+  if (!BRANCHES.some((h) => h.id === body.hotel) || !isSheetKind(body.kind) || typeof body.link !== "string" || (isStandalone(body.hotel) && body.kind !== "fnb")) return fail("Chi nhánh hoặc loại sheet không hợp lệ.", 400);
   if (typeof body.month !== "string" || !MONTH.test(body.month)) return fail("Tháng không hợp lệ.", 400);
   const id = body.link.trim() ? sheetIdFromLink(body.link) : null;
   if (body.link.trim() && !id) return fail(BAD_LINK, 400);

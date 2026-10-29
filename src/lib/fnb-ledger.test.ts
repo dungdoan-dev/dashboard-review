@@ -91,3 +91,15 @@ test("the day rows carry the money in and out of each fund (other sources too) a
   const withBalance = cafe.map((row, i) => (i === 0 ? [...row.slice(0, 13), "Đầu kỳ tiền mặt", 777] : row));
   assert.equal(fnbReport([{ name: "BK THU", rows: withBalance }]).units[0].balances.openCash, 777);
 });
+
+test("Be Food column (VTDC only): read when the tab has it, 0 and hasBe false for the other cafes", () => {
+  const withBe = cafe.map((r, i) => [...r.slice(0, 14), ...(i === 1 ? ["BE FOOD"] : i === 2 ? ["Công nợ (+ phát sinh, − đã nhận)"] : i === 5 ? [-99495] : [""])]);
+  const inc = parseFnbIncome("BK THU 10-2026", withBe);
+  assert.equal(inc.hasBe, true);
+  assert.deepEqual(inc.lines.map((l) => l.be), [-99495, 0]);
+  assert.equal(inc.lines[0].grab, 45808); // Be Food is not added to Grab
+  const plain = parseFnbIncome("BK THU 10-2026", cafe);
+  assert.deepEqual([plain.hasBe, plain.lines.map((l) => l.be)], [false, [0, 0]]);
+  const report = fnbReport([{ name: "BK THU 10-2026", rows: withBe }, { name: "BK CHI 10-2026", rows: chi }], "2026-10");
+  assert.deepEqual([report.units[0].hasBe, report.units[0].apps.be], [true, -99495]);
+});

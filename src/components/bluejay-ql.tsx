@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ArrowDownToLine, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { BLUEJAY_HOTELS, addDays } from "@/lib/bluejay-metrics";
+import { BRANCHES, addDays, isStandalone } from "@/lib/bluejay-metrics";
 import { parseLedgerWorkbook, type LedgerEntry } from "@/lib/bluejay-reconcile";
 import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { financeReport, ledgerBalances, parseExpenses, summarizeFinance, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary } from "@/lib/finance-summary";
@@ -33,20 +33,22 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [busy, setBusy] = useState(false);
-  const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
+  const hotelName = BRANCHES.find((h) => h.id === scopeId)?.name ?? "";
 
   async function load() {
     if (!scopeId) return;
     setBusy(true);
     const { from, to } = monthRange(month);
+    const hotelSide = !isStandalone(scopeId); // a unit with no hotel (VTDC) has only the Ăn sáng, cafe, mini mart sheet: nothing is asked of Blue Jay or the hotel's sheet
+    const none = () => Promise.reject(new Error("không có khách sạn"));
     const [daily, hotel, fnb, debt, hotelStock, fnbStock, channels] = await Promise.allSettled([
-      getJson(`/api/bluejay/daily?basis=checkout&from=${from}&to=${to}`),
-      getJson(`/api/bluejay/ledger-sheet?hotel=${scopeId}&month=${month}`),
+      hotelSide ? getJson(`/api/bluejay/daily?basis=checkout&from=${from}&to=${to}`) : none(),
+      hotelSide ? getJson(`/api/bluejay/ledger-sheet?hotel=${scopeId}&month=${month}`) : none(),
       getJson(`/api/bluejay/ledger-sheet?hotel=${scopeId}&month=${month}&kind=fnb`),
-      getJson("/api/bluejay/debt"),
-      getJson(`/api/bluejay/stock?hotel=${scopeId}&month=${month}`),
+      hotelSide ? getJson("/api/bluejay/debt") : none(),
+      hotelSide ? getJson(`/api/bluejay/stock?hotel=${scopeId}&month=${month}`) : none(),
       getJson(`/api/bluejay/stock?hotel=${scopeId}&month=${month}&kind=fnb`),
-      getJson(`/api/bluejay/channels?hotel=${scopeId}&month=${month}`),
+      hotelSide ? getJson(`/api/bluejay/channels?hotel=${scopeId}&month=${month}`) : none(),
     ]);
     const out: Loaded = { month, notes: [] };
     const why = (r: PromiseRejectedResult) => (r.reason instanceof Error ? r.reason.message : String(r.reason));
@@ -55,7 +57,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
       out.days = data.hotels.find((h) => h.id === scopeId)?.days ?? [];
       if (data.missingWeeks.length) out.notes.push(`Blue Jay chưa lưu tuần bắt đầu ${data.missingWeeks.map(dm).join(", ")}: doanh thu các tuần đó thiếu.`);
       if (data.reliableThrough && to > data.reliableThrough) out.notes.push(`Từ ${dm(addDays(data.reliableThrough, 1))} là tạm tính: khách chưa trả phòng thì chưa có trong dữ liệu đã lưu.`);
-    } else out.notes.push(`Doanh thu Blue Jay: ${why(daily)}`);
+    } else if (hotelSide) out.notes.push(`Doanh thu Blue Jay: ${why(daily)}`);
     if (hotel.status === "fulfilled") {
       try {
         const sheets = hotel.value.sheets as Sheets;
@@ -67,14 +69,14 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
         out.outside = sheets.flatMap((x) => { try { return [parseOutsideServices(x.rows)]; } catch { return []; } })[0] ?? null;
         out.hotel = { summary: summarizeFinance(ledger.entries, expenses, { from, to }), entries: ledger.entries, expenses, balances: ledgerBalances(sheets) };
       } catch (e) { out.notes.push(`Bảng kê khách sạn: ${e instanceof Error ? e.message : String(e)}`); }
-    } else out.notes.push(`Bảng kê khách sạn: ${why(hotel)}`);
+    } else if (hotelSide) out.notes.push(`Bảng kê khách sạn: ${why(hotel)}`);
     if (fnb.status === "fulfilled") {
       try { out.fnb = fnbReport(fnb.value.sheets as Sheets, month); out.notes.push(...out.fnb.warnings); } catch (e) { out.notes.push(`Ăn sáng, cafe, mini mart: ${e instanceof Error ? e.message : String(e)}`); }
     } else out.notes.push(`Ăn sáng, cafe, mini mart: ${why(fnb)}`);
     if (debt.status === "fulfilled") {
       const mine = ((debt.value.rows ?? []) as DebtRow[]).filter((r) => r.hotelId === scopeId);
       out.debt = { bookings: mine.length, balance: mine.reduce((t, r) => t + r.balance, 0) };
-    } else out.notes.push(`Công nợ OTA: ${why(debt)}`);
+    } else if (hotelSide) out.notes.push(`Công nợ OTA: ${why(debt)}`);
     const stocksOf = (sheets: StockSheets, fnb: boolean) => sheets.flatMap((x) => {
       const inv = parseInventorySheet(x.rows, new Set((x.red ?? []).map(([r, c]) => `${r},${c}`)));
       if (inv.month && inv.month !== month) { out.notes.push(`Kho ${x.name} là của tháng ${inv.month.slice(5)}/${inv.month.slice(0, 4)}, không phải ${month.slice(5)}/${month.slice(0, 4)}: bỏ qua.`); return []; }
@@ -82,9 +84,9 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
       return report.lines.length > 0 ? [{ name: x.name, fnb, report }] : [];
     });
     out.stocks = [];
-    if (hotelStock.status === "fulfilled") out.stocks.push(...stocksOf(hotelStock.value.sheets as StockSheets, false)); else out.notes.push(`Kho khách sạn: ${why(hotelStock)}`);
+    if (hotelStock.status === "fulfilled") out.stocks.push(...stocksOf(hotelStock.value.sheets as StockSheets, false)); else if (hotelSide) out.notes.push(`Kho khách sạn: ${why(hotelStock)}`);
     if (fnbStock.status === "fulfilled") out.stocks.push(...stocksOf(fnbStock.value.sheets as StockSheets, true)); else out.notes.push(`Kho Ăn sáng, cafe, mini mart: ${why(fnbStock)}`);
-    if (channels.status === "fulfilled") out.channels = channels.value as ChannelCounts; else out.notes.push(`OTA-OTP: ${why(channels)}`);
+    if (channels.status === "fulfilled") out.channels = channels.value as ChannelCounts; else if (hotelSide) out.notes.push(`OTA-OTP: ${why(channels)}`);
     setLoaded(out); setBusy(false);
   }
 

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BRANCHES, isStandalone } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
 import { SheetKindSwitch } from "@/components/sheet-kind-switch";
 import { SHEET_KINDS, type SheetKind } from "@/lib/ledger-sheets";
@@ -25,8 +25,9 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
   const [khoName, setKhoName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [kind, setKind] = useState<SheetKind>("hotel");
-  const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
+  const [kindPick, setKind] = useState<SheetKind>("hotel");
+  const kind: SheetKind = isStandalone(scopeId) ? "fnb" : kindPick; // a unit with no hotel has only the F&B sheet
+  const hotelName = BRANCHES.find((h) => h.id === scopeId)?.name ?? "";
   const sheetUrl = useSheetUrl(scopeId, month, kind);
   const changeKind = (k: SheetKind) => { setKind(k); setLoaded(null); setError(""); }; // the other sheet has other tabs: what is on screen is of the old one
   const from = `${month}-01`, to = monthEnd(month);
@@ -79,7 +80,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
 
   return (
     <section className="summary-report">
-      <SheetKindSwitch value={kind} onChange={changeKind} />
+      {!isStandalone(scopeId) && <SheetKindSwitch value={kind} onChange={changeKind} />}
       <div className="summary-hero">
         <div>
           <h1>Kho{kind === "fnb" ? ` ${SHEET_KINDS[1].label}` : ""} · {hotelName || "chưa chọn khách sạn"}</h1>

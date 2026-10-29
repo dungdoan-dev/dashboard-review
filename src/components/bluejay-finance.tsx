@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BRANCHES, isStandalone } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
 import { BluejayFnbFinance } from "@/components/bluejay-fnb";
 import { SheetKindSwitch } from "@/components/sheet-kind-switch";
@@ -38,15 +38,16 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [kind, setKind] = useState<SheetKind>("hotel");
+  const [kindPick, setKind] = useState<SheetKind>("hotel");
+  const kind: SheetKind = isStandalone(scopeId) ? "fnb" : kindPick; // a unit with no hotel has only the F&B sheet
   const [sheetLink, setSheetLink] = useState<{ url: string; gid: number } | null>(null);
-  const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
+  const hotelName = BRANCHES.find((h) => h.id === scopeId)?.name ?? "";
   const sheetUrl = useSheetUrl(scopeId, month);
 
   const report = useMemo(() => (income ? financeReport(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
   const summary = useMemo(() => (income ? summarizeFinance(income.entries, expense?.lines ?? [], { from: income.from, to: income.to }) : null), [income, expense]);
 
-  if (kind === "fnb") return <><SheetKindSwitch value={kind} onChange={setKind} /><BluejayFnbFinance scopeId={scopeId} /></>;
+  if (kind === "fnb") return <>{!isStandalone(scopeId) && <SheetKindSwitch value={kind} onChange={setKind} />}<BluejayFnbFinance scopeId={scopeId} /></>;
 
   async function onSheet() {
     if (!scopeId) return;

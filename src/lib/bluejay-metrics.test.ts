@@ -159,3 +159,10 @@ test("revenue sheets: checkout-week title, M-Standard rows marked and kept out o
   assert.equal(XLSX.read(workbookFor(weekly, null, revenue), { type: "buffer" }).SheetNames.includes("Tổng hợp doanh thu"), false); // and none of these in the operations file
   assert.equal(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Chi tiết dịch vụ"], { header: 1 })[2][3], "Nước");
 });
+
+test("units with no hotel are branches but never Blue Jay hotels", async () => {
+  const { BLUEJAY_HOTELS, BRANCHES, STANDALONE_UNITS, isStandalone } = await import("./bluejay-metrics.ts");
+  assert.equal(BRANCHES.length, BLUEJAY_HOTELS.length + STANDALONE_UNITS.length);
+  assert.equal(new Set(BRANCHES.map((b) => b.id)).size, BRANCHES.length);
+  assert.ok(isStandalone(9001) && !isStandalone(5381) && !BLUEJAY_HOTELS.some((h) => isStandalone(h.id)));
+});

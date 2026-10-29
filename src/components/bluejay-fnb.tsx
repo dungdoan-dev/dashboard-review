@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
+import { BRANCHES } from "@/lib/bluejay-metrics";
 import { useSheetUrl } from "@/components/use-sheet-url";
 import { fnbReport } from "@/lib/fnb-ledger";
 import { ReachTable, type Col } from "@/components/reach-table";
@@ -58,7 +58,7 @@ const Kpi = ({ label, value, hint }: { label: string; value: string; hint?: stri
 export function BluejayFnbFinance({ scopeId }: { scopeId: number | null }) {
   const book = useFnbBook(scopeId);
   const r = book.report;
-  const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
+  const hotelName = BRANCHES.find((h) => h.id === scopeId)?.name ?? "";
   type KindRow = { group: string; name: string; total: number };
   type DayRow = Unit["days"][number];
   const kindCols: Col<KindRow>[] = [{ label: "Hạng mục", text: (k) => k.name }, { label: "Tổng chi", value: (k) => k.total, text: (k) => num(k.total), total: true }];
@@ -90,7 +90,7 @@ export function BluejayFnbFinance({ scopeId }: { scopeId: number | null }) {
             <Kpi label="Thu − chi" value={signed(u.sales.total - u.spent.total)} />
             <Kpi label="Biến động tiền mặt" value={signed(u.funds.cash)} hint={u.other.cash ? `Gồm ${num(u.other.cash)} nguồn khác` : undefined} />
             <Kpi label="Biến động ngân hàng" value={signed(u.funds.bank)} hint={u.other.bank ? `Gồm ${num(u.other.bank)} nguồn khác` : undefined} />
-            <Kpi label="Công nợ ứng dụng" value={signed(u.apps.shopee + u.apps.grab)} hint={`Shopee ${signed(u.apps.shopee)} · Grab ${signed(u.apps.grab)} (+ ứng dụng còn nợ)`} />
+            <Kpi label="Công nợ ứng dụng" value={signed(u.apps.shopee + u.apps.grab + u.apps.be)} hint={`Shopee ${signed(u.apps.shopee)} · Grab ${signed(u.apps.grab)}${u.hasBe ? ` · Be Food ${signed(u.apps.be)}` : ""} (+ ứng dụng còn nợ)`} />
             {u.unit === "mart" && <Kpi label="Hàng hủy · thuê phao" value={`${num(u.voided)} · ${num(u.rental)}`} />}
           </div>
           <details className="summary-chart wide revenue-fold" open>
@@ -111,7 +111,8 @@ export function BluejayFnbFinance({ scopeId }: { scopeId: number | null }) {
 export function BluejayFnbReconcile({ scopeId }: { scopeId: number | null }) {
   const book = useFnbBook(scopeId);
   const r = book.report;
-  const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "";
+  const hotelName = BRANCHES.find((h) => h.id === scopeId)?.name ?? "";
+  const beCol: Col<Unit> = { label: "Công nợ Be Food", value: (u) => u.apps.be, text: (u) => (u.hasBe ? signed(u.apps.be) : "–"), total: true };
   const cols: Col<Unit>[] = [
     { label: "Đơn vị", text: (u) => u.label },
     { label: "Thu bán hàng", value: (u) => u.sales.total, text: (u) => num(u.sales.total), total: true },
@@ -134,7 +135,7 @@ export function BluejayFnbReconcile({ scopeId }: { scopeId: number | null }) {
       {r && <>
         <p className="summary-note">Nguồn: <strong>{r.name}</strong>.</p>
         {r.warnings.length === 0 ? <p className="summary-note">Không thấy gì bất thường trong bảng kê tháng này.</p> : r.warnings.map((w) => <p className="summary-note bad" role="alert" key={w}>{w}</p>)}
-        <ReachTable rows={r.units} rowKey={(u) => u.unit} columns={cols} />
+        <ReachTable rows={r.units} rowKey={(u) => u.unit} columns={r.units.some((u) => u.hasBe) ? [...cols, beCol] : cols} />
       </>}
     </section>
   );
