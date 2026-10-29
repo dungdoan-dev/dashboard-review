@@ -86,6 +86,7 @@ import { IsoDatePicker } from "@/components/date-picker";
 import { customValid, rangeWindow, type CustomRange, type ReportRange } from "@/lib/report-range";
 import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
 import { BranchSheetsSettings } from "@/components/branch-sheets-settings";
+import { RoleSettings } from "@/components/role-settings";
 import { BLUEJAY_HOTELS, BRANCHES } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
@@ -264,7 +265,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isTripadvisorRankPage = pathname === "/tripadvisor-rank";
   const isReportDataPage = isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage;
   const isSettingsPage = pathname === "/settings";
-  const [settingsTab, setSettingsTab] = useState<"locations" | "sync" | "import" | "sheets">("locations");
+  const [settingsTab, setSettingsTab] = useState<"locations" | "sync" | "import" | "sheets" | "roles">("locations");
   const isDetailPage = pathname === "/detail";
   const isSummaryPage = pathname === "/summary";
   const isBluejayRevenuePage = pathname === "/bluejay-revenue";
@@ -1860,7 +1861,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isSettingsPage && <section className="settings-page-heading"><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT</div><h1>Cấu hình workspace</h1><p>Quản lý cách tính báo cáo và thông tin liên kết của từng cơ sở.</p></section>}
 
           {isSettingsPage && <div className="settings-tabs range-presets reconcile-filter" role="group" aria-label="Mục cài đặt">
-            {([["locations", "Cơ sở"], ["sync", "Đồng bộ tự động"], ["import", "Nhập số liệu"], ["sheets", "Bluejay & Google Sheet"]] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={settingsTab === key} onClick={() => setSettingsTab(key)}>{label}</button>)}
+            {([["locations", "Cơ sở"], ["sync", "Đồng bộ tự động"], ["import", "Nhập số liệu"], ["sheets", "Bluejay & Google Sheet"], ["roles", "Phân quyền"]] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={settingsTab === key} onClick={() => setSettingsTab(key)}>{label}</button>)}
           </div>}
 
           {isSettingsPage && settingsTab === "import" && <section className="manual-import" aria-label="Nhập thủ công ShopeeFood"><div><h3>Nhập thủ công ShopeeFood</h3><p>ShopeeFood chưa có cách lấy tự động. Mở cửa sổ nhập để điền điểm và số đánh giá cho tất cả chi nhánh cùng lúc, chọn được ngày.</p></div><div className="manual-import-actions">{shopeefoodButtons}</div></section>}
@@ -2156,6 +2157,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <BluejaySyncSettings />
             <BranchSheetsSettings />
           </>}
+          {isSettingsPage && settingsTab === "roles" && <RoleSettings />}
           {isSettingsPage && settingsTab === "locations" && <details className="location-settings-section settings-panel" id="settings-locations" aria-labelledby="location-settings-title" open>
             <summary className="location-settings-heading">
               <div><div className="section-kicker"><Settings2 size={14} /> CÀI ĐẶT · CƠ SỞ</div><h2 id="location-settings-title">Cấu hình cơ sở</h2><p>Quản lý thông tin và liên kết nền tảng cho từng cơ sở.</p></div>

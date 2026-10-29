@@ -1399,3 +1399,14 @@ select { cursor: pointer; }
 
 /* A read-only account (role mkt, class on .app-shell): the buttons that write are hidden; the server and the database refuse them anyway. */
 .read-only [data-write], .read-only .dashboard-add-location, .read-only .report-dashboard-actions, .read-only .platform-table-actions, .read-only .report-import-trigger, .read-only .manual-import-bar { display: none; }
+
+/* Cài đặt → Phân quyền */
+.role-legend { display: grid; gap: 4px; margin: 0 0 16px; padding: 0; list-style: none; color: #5f6f86; font-size: 13px; }
+.role-legend strong { color: #233a5a; }
+.role-table { width: 100%; min-width: 560px; border-collapse: collapse; }
+.role-table th, .role-table td { padding: 10px 12px; border-top: 1px solid #edf0f4; text-align: left; font-size: 13px; vertical-align: middle; }
+.role-table thead th { border-top: 0; color: #6d7f9a; font-size: 11px; font-weight: 700; }
+.role-table td:nth-child(2) { display: flex; align-items: center; gap: 8px; }
+.role-table .field { min-width: 180px; }
+.role-self { color: #6d7f9a; }
+.role-message { margin: 12px 0 0; color: #46586f; font-size: 13px; }
