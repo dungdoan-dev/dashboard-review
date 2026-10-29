@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useReactToPrint } from "react-to-print";
+import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, Printer, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BluejayRevenue, RevenueView } from "@/components/bluejay-revenue";
 import { MAX_RANGE_DAYS, rangeSummary, type RangeData } from "@/lib/bluejay-range";
@@ -78,6 +79,25 @@ function Card({ title, note, wide, children }: { title: string; note?: string; w
   return <article className={`summary-chart ${wide ? "wide" : ""}`}><h4>{title}</h4>{note && <p className="summary-note">{note}</p>}{children}</article>;
 }
 
+/** "Xuất PDF": the browser print dialog on the report section (choose Save as PDF); the sidebar and buttons are hidden by the print rules in globals.css. */
+function usePdf(title: string) {
+  const ref = useRef<HTMLElement>(null);
+  const closed = useRef<HTMLDetailsElement[]>([]);
+  const print = useReactToPrint({
+    contentRef: ref,
+    documentTitle: title,
+    pageStyle: "@page { size: A4; margin: 12mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+    onBeforePrint: async () => { // collapsed "Bảng số liệu" panels are opened for the PDF, then put back
+      closed.current = [...(ref.current?.querySelectorAll("details:not([open])") ?? [])] as HTMLDetailsElement[];
+      closed.current.forEach((d) => { d.open = true; });
+    },
+    onAfterPrint: () => { closed.current.forEach((d) => { d.open = false; }); closed.current = []; },
+  });
+  return [ref, () => void print()] as const;
+}
+
+const PdfButton = ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick}><Printer size={15} />Xuất PDF</button>;
+
 type Cell = string | number | null;
 
 /** Table view of a chart, reachable without hovering. A number is sortable and added up in the total row, except in pctCols (shown as a percentage, not added). */
@@ -133,6 +153,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   const [weeks, setWeeks] = useState<string[]>([]); // every stored week up to this one, for the compare picker (history keeps only the last 12 for the charts)
   const [extra, setExtra] = useState<{ monday: string; report: WeeklyReport | null } | null>(null); // a compared week older than history
   const [compareWith, setCompareWith] = useState<string | "none" | null>(null); // a Monday, "none", or null = the week before
+  const [pdfRef, printPdf] = usePdf(`bao-cao-${view === "revenue" ? "doanh-thu" : "van-hanh"}${monday ? `-tuan-${isoWeek(monday)}` : ""}`);
 
   const apply = useCallback((r: WeekResponse) => {
     if (r.monday) setMonday(r.monday);
@@ -202,7 +223,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   if (mode === "month") return <BluejayMonthView scopeId={scopeId} view={view} onWeek={() => setMode("week")} />;
 
   return (
-    <section className="summary-report">
+    <section className="summary-report" ref={pdfRef}>
       <div className="summary-hero">
         <div>
           <h1>{monday ? `Báo cáo ${view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} tuần ${isoWeek(monday)} (${fmtDate(monday)}–${fmtDate(addDays(monday, 6))})` : view === "revenue" ? "Báo cáo doanh thu và thanh toán" : "Báo cáo vận hành"} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
@@ -215,6 +236,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, -7))}><ChevronLeft size={15} />Tuần trước</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, 7))}>Tuần sau<ChevronRight size={15} /></button>
           <button type="button" disabled={!monday || busy} onClick={() => void refresh()}><RefreshCw size={15} className={status === "refreshing" ? "spin" : undefined} />{status === "refreshing" ? "Đang lấy dữ liệu…" : report ? "Cập nhật từ Blue Jay" : "Lấy dữ liệu từ Blue Jay"}</button>
+          {report && monday && <PdfButton onClick={printPdf} />}
           {report && monday && [["operations", "Xuất báo cáo vận hành"], ["revenue", "Xuất báo cáo doanh thu"]].map(([type, label]) => <a key={type} className="button button-outline" href={`/api/bluejay/export?week=${monday}&type=${type}${scopeId ? `&hotel=${scopeId}` : ""}`}><ArrowDownToLine size={15} />{label}</a>)}
         </div>
       </div>
@@ -315,6 +337,7 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
   const [fromText, setFromText] = useState(fmtDate(lastMonday));
   const [toText, setToText] = useState(fmtDate(addDays(lastMonday, 6)));
   const [state, setState] = useState<RangeState>({ status: "loading", data: null, error: "" });
+  const [pdfRef, printPdf] = usePdf(`bao-cao-${view === "revenue" ? "doanh-thu" : "van-hanh"}-khoang-ngay`);
 
   const load = useCallback((from: string, to: string) => {
     setState({ status: "loading", data: null, error: "" });
@@ -361,7 +384,7 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
   const busy = state.status === "loading";
 
   return (
-    <section className="summary-report">
+    <section className="summary-report" ref={pdfRef}>
       <div className="summary-hero">
         <div>
           <h1>Báo cáo {view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} theo khoảng ngày · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
@@ -369,6 +392,7 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
         </div>
         <div className="summary-controls">
           <button type="button" onClick={onWeek}><ChevronLeft size={15} />Theo tuần</button>
+          <PdfButton onClick={printPdf} />
         </div>
       </div>
       <div className="bluejay-range-picker">
@@ -417,6 +441,7 @@ function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; v
   const today = todayVN(), yesterday = addDays(today, -1);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [state, setState] = useState<{ month: string; cur: RangeState; prev: RangeState } | null>(null);
+  const [pdfRef, printPdf] = usePdf(`bao-cao-${view === "revenue" ? "doanh-thu" : "van-hanh"}-thang-${month.slice(5, 7)}-${month.slice(0, 4)}`);
   const from = `${month}-01`, to = monthEnd(month) < yesterday ? monthEnd(month) : yesterday;
   const prevMonth = shiftMonth(month, -1), prevFrom = `${prevMonth}-01`;
   const length = to >= from ? Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1 : 0;
@@ -464,7 +489,7 @@ function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; v
   const error = ready?.cur.error ?? "";
 
   return (
-    <section className="summary-report">
+    <section className="summary-report" ref={pdfRef}>
       <div className="summary-hero">
         <div>
           <h1>Báo cáo {view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} tháng {month.slice(5, 7)}/{month.slice(0, 4)} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
@@ -472,6 +497,7 @@ function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; v
         </div>
         <div className="summary-controls">
           <button type="button" onClick={onWeek}><ChevronLeft size={15} />Theo tuần</button>
+          <PdfButton onClick={printPdf} />
           <button type="button" disabled={busy} onClick={() => setMonth(prevMonth)}><ChevronLeft size={15} />Tháng trước</button>
           <input type="month" aria-label="Tháng" value={month} max={today.slice(0, 7)} onChange={(event) => event.target.value && setMonth(event.target.value)} />
           <button type="button" disabled={busy || month >= today.slice(0, 7)} onClick={() => setMonth(shiftMonth(month, 1))}>Tháng sau<ChevronRight size={15} /></button>

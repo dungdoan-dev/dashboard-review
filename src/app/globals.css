@@ -1410,3 +1410,9 @@ select { cursor: pointer; }
 .role-table .field { min-width: 180px; }
 .role-self { color: #6d7f9a; }
 .role-message { margin: 12px 0 0; color: #46586f; font-size: 13px; }
+/* Xuất PDF của báo cáo Blue Jay: bỏ nút, thu biểu đồ vừa trang A4 */
+@media print {
+  .summary-controls, .compare-bar select, .bluejay-range-picker { display: none !important; }
+  .summary-report .recharts-wrapper, .summary-report .recharts-surface { width: 100% !important; height: auto !important; max-width: 100%; }
+  .summary-report .summary-kpis { break-inside: avoid; }
+}
