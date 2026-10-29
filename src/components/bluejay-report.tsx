@@ -67,11 +67,11 @@ function Kpi({ label, value, vs }: { label: string; value: string; vs?: Vs }) {
 
 const sign = (d: number) => (d > 0 ? "+" : d < 0 ? "−" : "");
 const toneOf = (d: number): Vs["tone"] => (d > 0 ? "up" : d < 0 ? "down" : "flat");
-/** cur against prev: percentage points for a rate, otherwise the difference and its percent. */
-function change(cur: number, prev: number, percent?: boolean): Pick<Vs, "text" | "tone"> {
-  if (percent) { const d = Math.round((cur - prev) * 1e4) / 100; return { text: `${sign(d)}${Math.abs(d).toFixed(2).replace(".", ",")} điểm %`, tone: toneOf(d) }; }
-  const d = Math.round(cur - prev), r = prev ? (cur - prev) / prev : null;
-  return { text: `${sign(d)}${num(Math.abs(d))}${r === null ? "" : ` (${sign(r)}${Math.abs(r * 100).toFixed(1).replace(".", ",")}%)`}`, tone: toneOf(d) };
+/** cur against prev as a percent of prev (also for a rate: 40% after 35% is +14,3%); a month that starts from nothing has no percent. */
+function change(cur: number, prev: number): Pick<Vs, "text" | "tone"> {
+  if (!prev) return { text: cur ? "mới" : "0%", tone: toneOf(cur) };
+  const p = Math.round(((cur - prev) / prev) * 1000) / 10; // one decimal
+  return { text: `${sign(p)}${Math.abs(p).toFixed(1).replace(".", ",")}%`, tone: toneOf(p) };
 }
 
 function Card({ title, note, wide, children }: { title: string; note?: string; wide?: boolean; children: React.ReactNode }) {
@@ -129,7 +129,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   const [history, setHistory] = useState<WeeklyReport[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "refreshing">("loading");
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"week" | "range">("week");
+  const [mode, setMode] = useState<"week" | "range" | "month">("week");
   const [weeks, setWeeks] = useState<string[]>([]); // every stored week up to this one, for the compare picker (history keeps only the last 12 for the charts)
   const [extra, setExtra] = useState<{ monday: string; report: WeeklyReport | null } | null>(null); // a compared week older than history
   const [compareWith, setCompareWith] = useState<string | "none" | null>(null); // a Monday, "none", or null = the week before
@@ -187,7 +187,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   const ps = prevRecs.length ? summarize(prevRecs) : null;
   const weekOptions = monday ? [...new Set([...weeks.filter((w) => w < monday), ...(compareMonday ? [compareMonday] : [])])].sort().reverse() : [];
   const kpi = (label: string, value: number, get: (x: SummaryRow) => number, percent?: boolean) => (
-    <Kpi label={label} value={percent ? pct(value) : num(value)} vs={ps && compareMonday ? { ...change(value, get(ps), percent), prev: percent ? pct(get(ps)) : num(get(ps)), label: `Tuần ${isoWeek(compareMonday)}` } : undefined} />
+    <Kpi label={label} value={percent ? pct(value) : num(value)} vs={ps && compareMonday ? { ...change(value, get(ps)), prev: percent ? pct(get(ps)) : num(get(ps)), label: `Tuần ${isoWeek(compareMonday)}` } : undefined} />
   );
 
   const needFetch = status === "ready" && compareMonday && !inHistory && extra?.monday !== compareMonday ? compareMonday : null;
@@ -199,6 +199,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   }, [needFetch]);
 
   if (mode === "range") return <BluejayRangeView scopeId={scopeId} view={view} onWeek={() => setMode("week")} />;
+  if (mode === "month") return <BluejayMonthView scopeId={scopeId} view={view} onWeek={() => setMode("week")} />;
 
   return (
     <section className="summary-report">
@@ -209,6 +210,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
           <p>Dữ liệu Blue Jay PMS. Blue Jay chỉ trả lời trong 08:00–08:30, 16:00–16:59 và 00:00–00:59 (giờ VN).</p>
         </div>
         <div className="summary-controls">
+          <button type="button" onClick={() => setMode("month")}><CalendarDays size={15} />Theo tháng</button>
           <button type="button" onClick={() => setMode("range")}><CalendarDays size={15} />Khoảng ngày</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, -7))}><ChevronLeft size={15} />Tuần trước</button>
           <button type="button" disabled={!monday || busy} onClick={() => monday && load(addDays(monday, 7))}>Tuần sau<ChevronRight size={15} /></button>
@@ -402,6 +404,129 @@ function BluejayRangeView({ scopeId, view, onWeek }: { scopeId: number | null; v
 
         </>}
         {view === "revenue" && <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services, excludedRoom: h.excludedRoom, excludedService: h.excludedService }))} showHotel={!scopeId} period="kỳ" />}
+      </>}
+    </section>
+  );
+}
+
+const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+const shiftMonth = (month: string, by: number) => { const [y, m] = month.split("-").map(Number); return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7); };
+
+/** The monthly report: what the weekly one shows, for a calendar month (to yesterday for the running month), with the change against the month before (the same number of days), from the weeks already stored. */
+function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; view: BluejayView; onWeek: () => void }) {
+  const today = todayVN(), yesterday = addDays(today, -1);
+  const [month, setMonth] = useState(today.slice(0, 7));
+  const [state, setState] = useState<{ month: string; cur: RangeState; prev: RangeState } | null>(null);
+  const from = `${month}-01`, to = monthEnd(month) < yesterday ? monthEnd(month) : yesterday;
+  const prevMonth = shiftMonth(month, -1), prevFrom = `${prevMonth}-01`;
+  const length = to >= from ? Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1 : 0;
+  const prevTo = addDays(prevFrom, length - 1) < monthEnd(prevMonth) ? addDays(prevFrom, length - 1) : monthEnd(prevMonth);
+
+  useEffect(() => {
+    if (!length) return;
+    let active = true;
+    void Promise.all([fetchRange(from, to), fetchRange(prevFrom, prevTo)]).then(([cur, prev]) => { if (active) setState({ month, cur, prev }); });
+    return () => { active = false; };
+  }, [month, from, to, prevFrom, prevTo, length]);
+
+  const ready = state?.month === month ? state : null;
+  const data = ready?.cur.data ?? null;
+  const hotels = data ? data.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
+  const sum = data ? rangeSummary(hotels, data.dates.length) : null;
+  const prevData = ready?.prev.data ?? null;
+  const prevHotels = prevData ? prevData.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
+  const prevSum = prevData && prevHotels.length ? rangeSummary(prevHotels, prevData.dates.length) : null;
+  const prevLabel = `Tháng ${Number(prevMonth.slice(5, 7))}`;
+  const kpi = (label: string, value: number, get: (x: NonNullable<typeof sum>) => number, percent?: boolean) => (
+    <Kpi label={label} value={percent ? pct(value) : num(value)} vs={prevSum ? { ...change(value, get(prevSum)), prev: percent ? pct(get(prevSum)) : num(get(prevSum)), label: prevLabel } : undefined} />
+  );
+  const series = hotels.map((h) => ({ key: `h${h.id}`, name: h.name, color: hotelColor(h.id) }));
+  const occ = (h: (typeof hotels)[number], pick: (date: string) => boolean) => { let o = 0, t = 0; data?.dates.forEach((d, i) => { const day = h.days[i]; if (day && pick(d)) { o += day.occupied; t += day.total; } }); return t ? o / t : null; };
+  const daily: Row[] = data ? data.dates.map((date) => ({ x: fmtDate(date), ...Object.fromEntries(hotels.map((h) => [`h${h.id}`, occ(h, (d) => d === date)])) })) : [];
+  const weekly: Row[] = data ? [...new Set(data.dates.map(mondayOf))].map((monday) => ({ x: `T${isoWeek(monday)}`, ...Object.fromEntries(hotels.map((h) => [`h${h.id}`, occ(h, (d) => mondayOf(d) === monday)])) })) : [];
+
+  const stays = hotels.flatMap((h) => h.bookings).filter((b) => b.stay && b.nightsInWeek > 0);
+  const byKey = (key: (b: (typeof stays)[number]) => string) => {
+    const groups = new Map<string, { name: string; bookings: number; nights: number; value: number }>();
+    for (const b of stays) { const name = key(b) || "Khác", g = groups.get(name) ?? { name, bookings: 0, nights: 0, value: 0 }; g.bookings += 1; g.nights += b.nightsInWeek; g.value += b.roomInWeek; groups.set(name, g); }
+    return [...groups.values()].sort((a, b) => b.value - a.value);
+  };
+  const statuses = new Map<string, number>();
+  for (const b of hotels.flatMap((h) => h.bookings)) statuses.set(b.status || "Khác", (statuses.get(b.status || "Khác") ?? 0) + 1);
+  const services = new Map<string, { name: string; quantity: number; total: number }>();
+  for (const g of hotels.flatMap((h) => h.services).flatMap((d) => d.groups)) { const s = services.get(g.name) ?? { name: g.name, quantity: 0, total: 0 }; s.quantity += g.quantity; s.total += g.total; services.set(g.name, s); }
+  const bySource = byKey((b) => b.channel), byRoomType = byKey((b) => b.roomType);
+  const serviceList = [...services.values()].sort((a, b) => b.total - a.total), statusList = [...statuses].sort((a, b) => b[1] - a[1]);
+  const roomMoney = stays.reduce((s, b) => s + b.roomInWeek, 0), serviceMoney = serviceList.reduce((s, g) => s + g.total, 0);
+  const barColor = scopeId ? hotelColor(scopeId) : "#6b7280";
+  const missingReport = data?.weeks.filter((w) => !w.report) ?? [];
+  const busy = length > 0 && !ready;
+  const error = ready?.cur.error ?? "";
+
+  return (
+    <section className="summary-report">
+      <div className="summary-hero">
+        <div>
+          <h1>Báo cáo {view === "revenue" ? "doanh thu và thanh toán" : "vận hành"} tháng {month.slice(5, 7)}/{month.slice(0, 4)} · {BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi"}</h1>
+          <p>Từ {fmtDate(from)}{length ? ` đến ${fmtDate(to)}` : ""}{to < monthEnd(month) && length ? " (tháng đang chạy, đến hôm qua)" : ""}. Tính từ các tuần đã lưu, không gọi Blue Jay.</p>
+        </div>
+        <div className="summary-controls">
+          <button type="button" onClick={onWeek}><ChevronLeft size={15} />Theo tuần</button>
+          <button type="button" disabled={busy} onClick={() => setMonth(prevMonth)}><ChevronLeft size={15} />Tháng trước</button>
+          <input type="month" aria-label="Tháng" value={month} max={today.slice(0, 7)} onChange={(event) => event.target.value && setMonth(event.target.value)} />
+          <button type="button" disabled={busy || month >= today.slice(0, 7)} onClick={() => setMonth(shiftMonth(month, 1))}>Tháng sau<ChevronRight size={15} /></button>
+        </div>
+      </div>
+      {!length && <p className="summary-note">Tháng này chưa có ngày nào đã qua.</p>}
+      {busy && <p className="summary-note">Đang tính báo cáo tháng…</p>}
+      {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}
+
+      {data && sum && <>
+        {(missingReport.length > 0 || sum.missingDays > 0) && <p className="summary-note bad">Thiếu dữ liệu công suất {sum.missingDays} ngày{missingReport.length > 0 && `: chưa lấy tuần ${missingReport.map((w) => fmtDate(w.monday)).join(", ")}`}. Số liệu của những ngày đó chưa có, trang Vận hành khách sạn theo tuần có nút “Cập nhật từ Blue Jay” để lấy lại.</p>}
+        {view === "operations" && <>
+          {prevSum && <p className="summary-note">Mức thay đổi so với {prevLabel.toLowerCase()} ({fmtDate(prevFrom)}–{fmtDate(prevTo)}, cùng số ngày): <span className="kpi-delta up">xanh là tăng</span>, <span className="kpi-delta down">đỏ là giảm</span>.</p>}
+          <div className="summary-kpis">
+            {kpi("Công suất", sum.rate, (x) => x.rate, true)}
+            {kpi("Tổng số đêm lưu trú", sum.nights, (x) => x.nights)}
+            {kpi("Giá phòng TB (ADR)", sum.adr, (x) => x.adr)}
+            {kpi("RevPAR", sum.revpar, (x) => x.revpar)}
+            {kpi("Tiền phòng", sum.room, (x) => x.room)}
+            <Kpi label="Số ngày" value={String(data.dates.length)} />
+          </div>
+          <Card title="Công suất theo ngày" note="Mỗi điểm là công suất của một ngày; ngày thiếu dữ liệu để trống.">
+            <LineTrend data={daily} series={series} label="Công suất theo ngày" />
+            <Rows head={["Ngày", ...hotels.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...hotels.map((h) => (d[`h${h.id}`] == null ? "–" : pct(Number(d[`h${h.id}`]))))])} />
+          </Card>
+          {weekly.length > 1 && <Card title="Công suất theo tuần" note="Tuần đầu và tuần cuối chỉ tính các ngày nằm trong tháng."><LineTrend data={weekly} series={series} label="Công suất theo tuần" /></Card>}
+          <Card title="Giá trị đặt phòng" note="Tiền phòng chỉ tính các đêm nằm trong tháng (giá chia đều theo đêm, bỏ đặt phòng hủy, no-show và hạng M-Standard). Tiền dịch vụ là doanh thu dịch vụ theo ngày bán.">
+            <div className="summary-kpis">
+              <Kpi label="Số đặt phòng" value={num(stays.length)} />
+              <Kpi label="Tiền phòng" value={num(roomMoney)} />
+              <Kpi label="Tiền dịch vụ" value={num(serviceMoney)} />
+              <Kpi label="Tiền phòng + dịch vụ" value={num(roomMoney + serviceMoney)} />
+            </div>
+          </Card>
+          <div className="summary-grid">
+            <Card title="Tiền phòng theo nguồn">
+              <HBars data={bySource.slice(0, 8).map((g) => ({ name: g.name, value: g.value }))} name="Tiền phòng" color={barColor} label="Tiền phòng theo nguồn" />
+              <Rows head={["Nguồn", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={bySource.map((g) => [g.name, g.bookings, g.nights, g.value])} />
+            </Card>
+            <Card title="Tiền phòng theo hạng phòng">
+              <HBars data={byRoomType.slice(0, 8).map((g) => ({ name: g.name, value: g.value }))} name="Tiền phòng" color={barColor} label="Tiền phòng theo hạng phòng" />
+              <Rows head={["Hạng phòng", "Đặt phòng", "Đêm", "Tiền phòng"]} rows={byRoomType.map((g) => [g.name, g.bookings, g.nights, g.value])} />
+            </Card>
+            <Card title="Đặt phòng theo trạng thái" note="Gồm cả hủy và no-show.">
+              <HBars data={statusList.slice(0, 8).map(([name, value]) => ({ name, value }))} name="Đặt phòng" color={barColor} money={false} label="Đặt phòng theo trạng thái" />
+              <Rows head={["Trạng thái", "Đặt phòng"]} rows={statusList.map(([name, n]) => [name, n])} />
+            </Card>
+            <Card title="Dịch vụ theo nhóm">
+              <HBars data={serviceList.slice(0, 8).map((g) => ({ name: g.name, value: g.total }))} name="Doanh thu dịch vụ" color={barColor} label="Doanh thu dịch vụ theo nhóm" />
+              <Rows head={["Nhóm", "Số lượng", "Doanh thu"]} rows={serviceList.map((g) => [g.name, g.quantity, g.total])} />
+            </Card>
+          </div>
+          {!scopeId && hotels.length > 1 && <Card title="Theo khách sạn"><ReachTable rows={hotels.map((h) => ({ name: h.name, x: rangeSummary([h], data.dates.length) }))} columns={RANGE_COLS} rowKey={(r) => r.name} /></Card>}
+        </>}
+        {view === "revenue" && <RevenueView hotels={hotels.map((h) => ({ name: h.name, bookings: h.bookings, services: h.services, excludedRoom: h.excludedRoom, excludedService: h.excludedService }))} showHotel={!scopeId} period="tháng" />}
       </>}
     </section>
   );

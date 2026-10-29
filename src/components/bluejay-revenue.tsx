@@ -34,7 +34,7 @@ export function BluejayRevenue({ monday, scopeId }: { monday: string; scopeId: n
 }
 
 /** The tables and filters, for one week or for any range: hotels carry the bookings (nights and room money already cut to the period) and daily services. */
-export function RevenueView({ hotels, showHotel, period }: { hotels: { name: string; bookings: RevenueBooking[]; services: ServiceDay[]; excludedRoom?: number; excludedService?: number }[]; showHotel: boolean; period: "tuần" | "kỳ" }) {
+export function RevenueView({ hotels, showHotel, period }: { hotels: { name: string; bookings: RevenueBooking[]; services: ServiceDay[]; excludedRoom?: number; excludedService?: number }[]; showHotel: boolean; period: "tuần" | "kỳ" | "tháng" }) {
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState("");
   const [status, setStatus] = useState("");
