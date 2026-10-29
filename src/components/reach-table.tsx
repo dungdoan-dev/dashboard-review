@@ -16,7 +16,7 @@ const sumText = (x: number) => (Number.isInteger(x) ? x : Math.round(x * 100) / 
  * Sortable table (click a header; the first click sorts high to low) with a sticky first column, a light bar behind each number,
  * group heading rows while the table is in its own order, and a total row for the additive columns.
  */
-export function ReachTable<R>({ rows, columns, rowKey, groupOf, rowClass, compact, sortable = true }: { rows: R[]; columns: Col<R>[]; rowKey: (row: R) => string; groupOf?: (row: R) => string; rowClass?: (row: R) => string | undefined; compact?: boolean; sortable?: boolean }) {
+export function ReachTable<R>({ rows, columns, rowKey, groupOf, rowClass, compact, ruled, sortable = true }: { rows: R[]; columns: Col<R>[]; rowKey: (row: R) => string; groupOf?: (row: R) => string; rowClass?: (row: R) => string | undefined; compact?: boolean; ruled?: boolean; sortable?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const max = useMemo(() => columns.map((c) => (c.value ? Math.max(0, ...rows.map((r) => c.value!(r) ?? 0)) : 0)), [rows, columns]);
   const defs = useMemo<ColumnDef<R>[]>(() => columns.map((c, i) => ({
@@ -32,7 +32,7 @@ export function ReachTable<R>({ rows, columns, rowKey, groupOf, rowClass, compac
   const totals = columns.map((c) => (c.value && c.total ? rows.reduce((s, r) => s + (c.value!(r) ?? 0), 0) : null));
   let lastGroup = "";
   return (
-    <div className={`summary-table summary-table-scroll reach-table${compact ? " compact" : ""}`}>
+    <div className={`summary-table summary-table-scroll reach-table${compact ? " compact" : ""}${ruled ? " ruled" : ""}`}>
       <table>
         <thead>{table.getHeaderGroups().map((hg) => <tr key={hg.id}>{hg.headers.map((h, i) => {
           const sorted = h.column.getIsSorted();

@@ -1391,3 +1391,8 @@ select { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .nav-group-body, .nav-group-toggle svg { transition: none; } }
 
 
+
+/* Ruled reach table (ruled prop): a border round every cell and a blue header, like the accountant's sheets */
+.reach-table.ruled table { border-top: 1px solid #b8c4d6; border-left: 1px solid #b8c4d6; }
+.reach-table.ruled th, .reach-table.ruled td { height: auto; border-right: 1px solid #b8c4d6; border-bottom: 1px solid #b8c4d6; } /* the global td is 67px high */
+.reach-table.ruled thead th { padding: 9px 10px; background: #dbe6f5; color: #1f3a5f; text-align: center; vertical-align: middle; }

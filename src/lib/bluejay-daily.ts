@@ -4,11 +4,13 @@
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
 import type { HotelRevenue, RevenueBooking, RevenueWeek } from "./bluejay-revenue.ts";
+import { commissionRate } from "./ota-commission.ts";
 
 export type DailyDay = {
   date: string;
   rooms: number;                      // room-nights slept this day
   room: number;                       // room money of those nights
+  commission: number;                 // what the OTAs keep of that room money (ota-commission.ts)
   services: Record<string, number>;   // service money by Blue Jay group
   service: number;
   total: number;                      // room + service
@@ -26,21 +28,21 @@ export type DailyRevenue = {
 const datesBetween = (from: string, to: string) => { const dates: string[] = []; for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d); return dates; };
 
 /** One record per booking over all stored weeks (the latest snapshot wins), its room money split over its nights, for the nights inside from..to. */
-function roomByDay(weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string) {
+function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string) {
   const latest = new Map<string, { b: RevenueBooking; at: string }>();
   for (const { week, hotel } of weeks) for (const b of pick(hotel)) {
     const key = `${b.code}|${b.room}|${b.roomType}`, at = week.paymentsAt ?? week.fetchedAt;
     if (!latest.has(key) || at > latest.get(key)!.at) latest.set(key, { b, at });
   }
-  const byDay = new Map<string, { nights: number; money: number }>();
+  const byDay = new Map<string, { nights: number; money: number; commission: number }>();
   for (const { b } of latest.values()) {
     if (!b.stay || b.nights <= 0 || !b.checkIn) continue;
-    const perNight = b.roomPrice / b.nights;
+    const perNight = b.roomPrice / b.nights, rate = commissionRate(b.channel, hotelId);
     for (let i = 0; i < b.nights; i++) {
       const date = addDays(b.checkIn, i);
       if (date < from || date > to) continue;
-      const day = byDay.get(date) ?? { nights: 0, money: 0 };
-      day.nights += 1; day.money += perNight; byDay.set(date, day);
+      const day = byDay.get(date) ?? { nights: 0, money: 0, commission: 0 };
+      day.nights += 1; day.money += perNight; day.commission += perNight * rate; byDay.set(date, day);
     }
   }
   return byDay;
@@ -59,7 +61,7 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string):
   const groupTotal = new Map<string, number>();
   const hotels = [...names].map(([id, name]): DailyHotel => {
     const weeks = revenues.flatMap((week) => { const hotel = week.hotels.find((h) => h.id === id); return hotel ? [{ week, hotel }] : []; });
-    const rooms = roomByDay(weeks, (h) => h.bookings, from, to), excluded = roomByDay(weeks, (h) => h.excluded ?? [], from, to);
+    const rooms = roomByDay(id, weeks, (h) => h.bookings, from, to), excluded = roomByDay(id, weeks, (h) => h.excluded ?? [], from, to);
     const serviceOf = new Map<string, { at: string; groups: Record<string, number> }>(); // a day is stored once per week; if two weeks hold it, the latest pull wins
     for (const { week, hotel } of weeks) for (const d of hotel.services) {
       if (d.date < from || d.date > to) continue;
@@ -68,11 +70,11 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string):
       serviceOf.set(d.date, { at, groups: Object.fromEntries(d.groups.map((g) => [g.name, g.total])) });
     }
     const days = dates.map((date): DailyDay => {
-      const r = rooms.get(date) ?? { nights: 0, money: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0 };
+      const r = rooms.get(date) ?? { nights: 0, money: 0, commission: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, commission: 0 };
       const services = serviceOf.get(date)?.groups ?? {};
       const service = Object.values(services).reduce((s, v) => s + v, 0);
       for (const [g, v] of Object.entries(services)) groupTotal.set(g, (groupTotal.get(g) ?? 0) + v);
-      return { date, rooms: r.nights, room: r.money, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money };
+      return { date, rooms: r.nights, room: r.money, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money };
     });
     return { id, name, days };
   });
