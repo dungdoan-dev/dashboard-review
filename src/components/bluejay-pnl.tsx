@@ -88,7 +88,7 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
   const loaded = Object.values(ledgers).filter(Boolean).length;
   const missing = list.filter((m) => daily[m] && !ledgers[m]).map((m) => m.slice(5));
 
-  const hasCost = [...list.map((m) => !!ledgers[m]), true]; // a month without its expense tab shows no costs and no profit, not a false 0 and a profit equal to the revenue
+  const hasCost = [...list.map((m) => !!ledgers[m]), missing.length === 0]; // a month without its expense tab shows no costs and no profit, not a false 0 and a profit equal to the revenue; the year shows them only when every month with revenue has its costs
   const pnlCols: Col<PnlRow>[] = [
     { label: "Chỉ tiêu", text: (r) => r.label },
     ...[...list.map((m) => `Tháng ${Number(m.slice(5))}`), "Cả năm"].map((label, i): Col<PnlRow> => ({ label, value: (r) => (r.cost && !hasCost[i] ? null : r.values[i]), text: (r) => (r.cost && !hasCost[i] ? "–" : signed(r.values[i])), total: false })),
@@ -120,12 +120,12 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
       {!scopeId && <div className="alert alert-error" role="alert"><span>Chọn một khách sạn ở ô “Khách sạn đang xem” trên thanh trên. Mỗi Google Sheet chỉ thuộc một khách sạn.</span></div>}
       {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}
       {scopeId && !loaded && !error && <p className="summary-note">Chưa có chi phí. Bấm “Lấy từ Google Sheet” để đọc BK THU, BK CHI của 12 tháng; doanh thu đã có từ Blue Jay.</p>}
-      {loaded > 0 && missing.length > 0 && <p className="summary-note bad" role="alert">Tháng {missing.join(", ")} có doanh thu nhưng chưa có tab BK THU, BK CHI nên chi phí tính 0.</p>}
+      {loaded > 0 && missing.length > 0 && <p className="summary-note bad" role="alert">Tháng {missing.join(", ")} có doanh thu nhưng chưa có link Google Sheet (Cài đặt → Link Google Sheet) hoặc tab BK THU, BK CHI nên chưa có chi phí; cột Cả năm chỉ hiện chi phí và lợi nhuận khi đủ các tháng.</p>}
       {moved > 0 && <p className="summary-note">{moved} dòng chi được tính vào tháng khác với tháng chi theo nội dung ghi trong dòng. Chi phí của một tháng chỉ đủ khi đã có tab của chính tháng đó và của các tháng sau (tiền lương tháng 8 thường trả vào tháng 9).</p>}
       {scopeId && monthRows.length > 0 && <>
         <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Kết quả hoạt động kinh doanh {year}</h4></summary>
-          <ReachTable rows={rows} rowKey={(r) => r.label} columns={pnlCols} sortable={false} compact rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />
+          <ReachTable rows={rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} columns={pnlCols} sortable={false} compact rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />
         </details>
         <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Công suất và doanh thu theo tháng</h4></summary>
