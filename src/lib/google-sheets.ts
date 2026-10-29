@@ -1,6 +1,7 @@
 import { createSign } from "node:crypto";
 
 import type { SheetKind } from "./ledger-sheets.ts";
+import { isKiotvietTab } from "./kiotviet.ts";
 
 type ServiceKey = { client_email: string; private_key: string; token_uri: string };
 let cached: { token: string; expires: number } | null = null;
@@ -68,6 +69,11 @@ export function ledgerTabs(titles: string[], month: string, kind: SheetKind = "h
 /** The ledger tab(s) of one sheet for a month (rows as for an uploaded file); [] when no tab fits. */
 export async function readLedgerTabs(sheetId: string, month: string, kind: SheetKind = "hotel") {
   return readTabs(sheetId, (titles) => ledgerTabs(titles, month, kind));
+}
+
+/** The KiotViet export tabs of an F&B sheet (KIOTVIET CAFE, KIOTVIET MINIMART); [] when the staff has pasted none. */
+export async function readKiotvietTabs(sheetId: string) {
+  return readTabs(sheetId, (titles) => titles.filter(isKiotvietTab));
 }
 
 /** The kinds of kho of a sheet (tab names without the month, plain). */

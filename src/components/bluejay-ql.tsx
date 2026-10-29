@@ -8,6 +8,7 @@ import { parseLedgerWorkbook, type LedgerEntry } from "@/lib/bluejay-reconcile";
 import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { financeReport, ledgerBalances, parseExpenses, summarizeFinance, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary } from "@/lib/finance-summary";
 import { fnbReport, type FnbReport } from "@/lib/fnb-ledger";
+import { isMartTab, kiotvietSummary, parseKiotviet, type KiotvietExport, type KiotvietPeriod } from "@/lib/kiotviet";
 import { parseOutsideServices, type OutsideLine, type OutsideService } from "@/lib/outside-services";
 import { parseInventorySheet, stockReport, type StockReport } from "@/lib/inventory";
 import type { ChannelCounts, ChannelWeek } from "@/lib/ql-channels";
@@ -18,7 +19,7 @@ import { ReachTable, type Col } from "@/components/reach-table";
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => fmtDate(date).slice(0, 5); // dd/mm
 type Sheets = { name: string; rows: unknown[][] }[];
-type Loaded = { month: string; days?: CheckoutDay[]; finance?: FinanceReport; hotel?: { summary: FinanceSummary; entries: LedgerEntry[]; expenses: ExpenseLine[]; balances: Balances }; fnb?: FnbReport; debt?: { bookings: number; balance: number }; outside?: ReturnType<typeof parseOutsideServices> | null; stocks?: { name: string; fnb: boolean; report: StockReport }[]; channels?: ChannelCounts; notes: string[] };
+type Loaded = { month: string; days?: CheckoutDay[]; finance?: FinanceReport; hotel?: { summary: FinanceSummary; entries: LedgerEntry[]; expenses: ExpenseLine[]; balances: Balances }; fnb?: FnbReport; debt?: { bookings: number; balance: number }; outside?: ReturnType<typeof parseOutsideServices> | null; stocks?: { name: string; fnb: boolean; report: StockReport }[]; channels?: ChannelCounts; kiotviet?: { label: string; kv: KiotvietExport }[]; notes: string[] };
 type StockSheets = { name: string; rows: unknown[][]; red?: [number, number][] }[];
 
 async function getJson(url: string) {
@@ -73,6 +74,15 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
     if (fnb.status === "fulfilled") {
       try { out.fnb = fnbReport(fnb.value.sheets as Sheets, month); out.notes.push(...out.fnb.warnings); } catch (e) { out.notes.push(`Ăn sáng, cafe, mini mart: ${e instanceof Error ? e.message : String(e)}`); }
     } else out.notes.push(`Ăn sáng, cafe, mini mart: ${why(fnb)}`);
+    if (fnb.status === "fulfilled") { // the weekly KiotViet export pasted into the F&B sheet
+      const tabs = ((fnb.value.kiotviet ?? []) as Sheets);
+      out.kiotviet = [false, true].flatMap((mart) => {
+        const own = tabs.filter((t) => isMartTab(t.name) === mart);
+        if (!own.length) return [];
+        const label = mart ? "Mini mart" : "Ăn sáng, cafe";
+        try { return [{ label, kv: parseKiotviet(own) }]; } catch (e) { out.notes.push(`KiotViet ${label}: ${e instanceof Error ? e.message : String(e)}`); return []; }
+      });
+    }
     if (debt.status === "fulfilled") {
       const mine = ((debt.value.rows ?? []) as DebtRow[]).filter((r) => r.hotelId === scopeId);
       out.debt = { bookings: mine.length, balance: mine.reduce((t, r) => t + r.balance, 0) };
@@ -104,7 +114,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
   function exportExcel() {
     if (!loaded || !table || !result) return;
     const title = `BÁO CÁO QUẢN LÝ · ${hotelName.toUpperCase()} · THÁNG ${loaded.month.slice(5)}/${loaded.month.slice(0, 4)}`;
-    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-quan-ly-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels, parties })));
+    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-quan-ly-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels, parties, kiotviet: loaded.kiotviet })));
   }
 
   const fundCols: Col<FundLine>[] = [
@@ -130,6 +140,10 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
     ...([["Thu tiền mặt", "thu", "cash"], ["Thu ngân hàng", "thu", "bank"], ["Thu thẻ visa", "thu", "card"], ["Tổng thu", "thu", "all"], ["Chi tiền mặt", "chi", "cash"], ["Chi ngân hàng", "chi", "bank"], ["Chi visa", "chi", "card"], ["Tổng chi", "chi", "all"]] as const).map(([label, side, k]): Col<Party> => money(label, (p) => partyTotals(p[side])[k])),
     money("Thu − chi", (p) => partyTotals(p.thu).all - partyTotals(p.chi).all),
     money("Dòng thu", (p) => p.thu.length), money("Dòng chi", (p) => p.chi.length),
+  ];
+  const kiotWeekCols = (unit: string): Col<KiotvietPeriod>[] => [
+    { label: unit, text: (w) => (table && w.to === table.columns[table.columns.length - 1].to && w.from === table.columns[table.columns.length - 1].from ? "Cả tháng" : `${w.label} (${dm(w.from)}–${dm(w.to)})`) },
+    money("Hóa đơn", (w) => w.invoices), money("Giá niêm yết", (w) => w.listed), money("Giảm giá", (w) => w.discount), money("Doanh thu thuần", (w) => w.revenue),
   ];
   type StockRow = NonNullable<Loaded["stocks"]>[number];
   const stockCols: Col<StockRow>[] = [{ label: "Kho", text: (k) => `${k.fnb ? "Ăn sáng, cafe, mini mart · " : ""}${k.name}` }, money("Số mặt hàng", (k) => k.report.lines.length), money("Tồn đầu", (k) => k.report.totals.openValue), money("Mua vào", (k) => k.report.totals.receiptValue), money("Xuất", (k) => k.report.totals.issueValue), money("Tồn cuối", (k) => k.report.totals.closingValue), money("Chênh kiểm kê", (k) => k.report.totals.countDiffValue)];
@@ -200,6 +214,11 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
           <p className="summary-note">Mỗi tuần tính theo <strong>ngày đặt</strong>. Book là đặt phòng còn hiệu lực, hủy là đặt phòng của tuần đó nay đã hủy hoặc no-show (Blue Jay không có ngày hủy). Các tuần gần đây có thể thiếu vì Blue Jay chỉ lưu đặt phòng theo tuần trả phòng. Chưa có “liên lạc” (khách nhắn Zalo, Facebook, gọi điện) vì Blue Jay không ghi.</p>
           <ReachTable rows={loaded.channels.weeks} rowKey={(w) => w.label + w.from} columns={channelCols(loaded.channels.ota, "I - OTA")} sortable={false} compact rowClass={(w) => (w.label === "Cả kỳ" ? "report-total" : undefined)} />
           <ReachTable rows={loaded.channels.weeks} rowKey={(w) => w.label + w.from} columns={channelCols(loaded.channels.otp, "II - OTP")} sortable={false} compact rowClass={(w) => (w.label === "Cả kỳ" ? "report-total" : undefined)} />
+        </details>}
+        {loaded.kiotviet && loaded.kiotviet.length > 0 && table && <details className="summary-chart wide revenue-fold" open>
+          <summary><h4>Bán hàng KiotViet <small>theo tuần</small></h4></summary>
+          <p className="summary-note">Từ tab KIOTVIET của sheet Ăn sáng, cafe, mini mart (báo cáo bán hàng theo hàng hóa dán mỗi tuần). Giá niêm yết trừ giảm giá ra doanh thu thuần; chi tiết theo nhóm hàng và từng mặt hàng có trong file Excel (sheet “Bán hàng KiotViet”). Đối chiếu từng ngày với sổ nhân viên ở trang Đối soát Ăn sáng, cafe, mini mart.</p>
+          {loaded.kiotviet.map((k) => { const weeks = kiotvietSummary(k.kv, table.columns).weeks; return <ReachTable key={k.label} rows={weeks} rowKey={(w) => w.label + w.from} columns={kiotWeekCols(k.label)} sortable={false} compact ruled rowClass={(w) => (w === weeks[weeks.length - 1] ? "report-total" : undefined)} />; })}
         </details>}
         {loaded.stocks && loaded.stocks.length > 0 && <details className="summary-chart wide revenue-fold">
           <summary><h4>Kho <small>{loaded.stocks.length} kho</small></h4></summary>

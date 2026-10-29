@@ -1,5 +1,6 @@
 // The Excel file of the management report (the finance team's "QL HĐKD" layout): one sheet per table of the page, ruled with borders, real numbers (not text) so Excel can sum and chart them.
 // Built with exceljs (borders, colours); the page loads this file only when the file is downloaded. Tests run it with plain Node, so imports use ".ts".
+import { kiotvietSummary, type KiotvietExport } from "./kiotviet.ts";
 import ExcelJS from "exceljs";
 import { partyTotals, type Book, type FundLine, type Party, type PartyLine, type qlResult, type qlWeekly } from "./ql-report.ts";
 import type { parseOutsideServices } from "./outside-services.ts";
@@ -60,12 +61,27 @@ function bookRows(b: Book): { head: string[]; rows: TRow[] } {
 }
 
 export type QlExtra = {
+  kiotviet?: { label: string; kv: KiotvietExport }[];             // the weekly KiotViet export of each unit that has the tab
   books?: { cash: Book; bank: Book };
   outside?: ReturnType<typeof parseOutsideServices> | null;      // the "DV Ngoài" tab of the hotel's sheet
   stocks?: { name: string; fnb: boolean; report: StockReport }[]; // one per kho tab
   channels?: ChannelCounts;                                       // bookings and cancellations per channel per week
   parties?: Party[];                                              // thu and chi of the hotel and each F&B unit, line by line
 };
+
+/** The finance team's "DT bán hàng": the month, then by week, by group of goods and by item: quantity, list price, discount (negative) and net revenue. */
+function kiotvietRows(kv: KiotvietExport, columns: { label: string; from: string; to: string }[]): TRow[] {
+  const s = kiotvietSummary(kv, columns.slice(0, -1)); // the last column is the whole month
+  const sum = (f: (k: { qty: number; listed: number; revenue: number }) => number) => kv.items.reduce((t, k) => t + f(k), 0);
+  const rows: TRow[] = [{ kind: "total", cells: ["CẢ THÁNG", sum((k) => k.qty), kv.days.reduce((t, d) => t + d.invoices, 0), sum((k) => k.listed), sum((k) => k.revenue - k.listed), sum((k) => k.revenue)] }];
+  rows.push({ kind: "section", cells: ["THEO TUẦN"] });
+  for (const w of s.weeks) rows.push({ kind: "line", cells: [`${w.label} (${dm(w.from)}-${dm(w.to)})`, null, w.invoices, w.listed, w.discount, w.revenue] });
+  rows.push({ kind: "section", cells: ["THEO NHÓM HÀNG"] });
+  for (const g of s.groups) rows.push({ kind: "line", cells: [g.group || "(không có nhóm)", g.qty, null, g.listed, g.revenue - g.listed, g.revenue] });
+  rows.push({ kind: "section", cells: ["THEO HÀNG HÓA"] });
+  for (const k of s.items) rows.push({ kind: "line", cells: [k.group ? `${k.name} · ${k.group}` : k.name, k.qty, null, k.listed, k.revenue - k.listed, k.revenue] });
+  return rows;
+}
 
 const sheetName = (name: string, fnb: boolean, taken: Set<string>) => {
   const base = `${fnb ? "F&B " : ""}${name.replace(/\s*\d{1,2}[/-]\d{4}$/, "").replace(/[\\/?*[\]:]/g, "-").trim()}`.slice(0, 31);
@@ -146,6 +162,7 @@ export function qlWorkbook(title: string, weekly: ReturnType<typeof qlWeekly>, f
     const { head, rows } = channelTable(extra.channels);
     table(book, "OTA-OTP", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG TỔNG HỢP OTA, OTP"), head, rows, { widths: [30, ...head.slice(1).map((h) => (h ? 10 : 3))] });
   }
+  for (const k of extra.kiotviet ?? []) table(book, k.label === "Mini mart" ? "Bán hàng KiotViet MM" : "Bán hàng KiotViet", title.replace(/^BÁO CÁO QUẢN LÝ/, `BÁN HÀNG KIOTVIET ${k.label.toUpperCase()}`), ["Chỉ tiêu", "Số lượng", "Hóa đơn", "Giá niêm yết", "Giảm giá", "Doanh thu thuần"], kiotvietRows(k.kv, weekly.columns), { widths: [58, 12, 12, 17, 17, 19] });
   const taken = new Set(book.worksheets.map((w) => w.name));
   for (const s of extra.stocks ?? []) {
     if (!s.report.lines.length) continue;

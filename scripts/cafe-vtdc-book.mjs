@@ -102,8 +102,8 @@ const desc = (k) => guide[k]?.desc ?? "";
 // ---------- kho: two summary tabs, receipts and issues by day in the tabs they read ----------
 const mua = rows("BK hàng hóa mua vào"), xuat = rows("Bảng kê xuất kho");
 const GROUPS = [
-  { sheet: `NGUYÊN LIỆU CAFE ${TAG}`, title: "NGUYÊN LIỆU CAFE", kind: "Nguyên liệu cafe", tab: "BK hàng hóa TH", count: "Bảng kiểm kê NL" },
-  { sheet: `VẬT TƯ ${TAG}`, title: "VẬT TƯ", kind: "Vật tư", tab: "BK vật tư", count: "Bảng kiểm kê VT" },
+  { sheet: "NGUYÊN LIỆU CAFE", title: "NGUYÊN LIỆU CAFE", kind: "Nguyên liệu cafe", tab: "BK hàng hóa TH", count: "Bảng kiểm kê NL" },
+  { sheet: "VẬT TƯ", title: "VẬT TƯ", kind: "Vật tư", tab: "BK vật tư", count: "Bảng kiểm kê VT" },
 ];
 const plain = (s) => text(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/\s+/g, " ");
 const same = (a, b) => plain(a).slice(0, 5) === plain(b).slice(0, 5);
@@ -183,15 +183,15 @@ book.calcProperties.fullCalcOnLoad = true;
   const ws = book.addWorksheet("Hướng dẫn");
   ws.getColumn(1).width = 30; ws.getColumn(2).width = 120;
   title(ws.getCell("A1")); ws.getCell("A1").value = `HƯỚNG DẪN NHẬP SỔ THU CHI VÀ KHO — ${UNIT.toUpperCase()}`;
-  ws.getCell("A2").value = "Mỗi tháng một bộ tab: BK THU mm-yyyy, BK CHI mm-yyyy và các tab kho. Ô vàng nhập tay, các ô còn lại tự tính. Danh sách chọn nằm ở sheet “Danh mục”.";
+  ws.getCell("A2").value = "Mỗi tháng một file, các tab đặt tên cố định, không ghi tháng: BK THU, BK CHI, NGUYÊN LIỆU CAFE, VẬT TƯ, KIOTVIET CAFE. Ô vàng nhập tay, các ô còn lại tự tính. Danh sách chọn nằm ở sheet “Danh mục”.";
   put(ws.getCell("A2"), { f: font({ italic: true, color: { argb: "FF586B84" } }) });
   const section = (r, t) => { ws.mergeCells(r, 1, r, 2); ws.getCell(r, 1).value = t; head(ws.getCell(r, 1), NAVY); ws.getCell(r, 1).alignment = { horizontal: "left", vertical: "middle" }; ws.getRow(r).height = 20; };
   const line = (r, a, b) => { ws.getCell(r, 1).value = a; ws.getCell(r, 2).value = b; put(ws.getCell(r, 1), { f: font({ bold: true }), al: { vertical: "top", wrapText: true }, bd: BORDER }); put(ws.getCell(r, 2), { al: { vertical: "top", wrapText: true }, bd: BORDER }); ws.getRow(r).height = Math.max(20, Math.ceil(b.length / 125) * 15 + 5); };
   let r = 4;
   const block = (t, lines) => { section(r++, t); for (const [a, b] of lines) line(r++, a, b); r++; };
-  block("1. BK THU (tab BK THU mm-yyyy)", [
+  block("1. BK THU (tab BK THU)", [
     ["Cách nhập", "Mỗi dòng là một ca bán của một người bán trong một ngày. Nhập ngày (dạng ngày của Excel), chọn người bán, ghi nội dung nếu cần, rồi tiền vào đúng cột."],
-    ["Ô vàng hàng 1", "Đơn vị và kỳ báo cáo (mm/yyyy). Kỳ báo cáo quyết định bảng theo ngày bên phải và tab BK CHI cùng tháng."],
+    ["Ô vàng hàng 1", "Đơn vị và kỳ báo cáo (mm/yyyy). Kỳ báo cáo quyết định bảng theo ngày bên phải; chi lấy từ tab BK CHI của cùng file."],
     ["Nguồn khác (cột D, E)", "Tiền mặt, chuyển khoản không phải doanh thu bán hàng (ví dụ vốn góp, luân chuyển vào quỹ)."],
     ["Khách trực tiếp (cột F, G, H)", "Tiền mặt, chuyển khoản (banking), thẻ POS của khách mua tại quầy."],
     ["Shopee Food (cột I, J), Grab Food (cột K, L), Be Food (cột O)", "Mã đơn và số công nợ với ứng dụng (Be Food chỉ có cột công nợ): dương là đơn phát sinh, âm là ứng dụng đã chuyển tiền. Dòng “tồn shopee tháng trước” là công nợ đầu tháng, không phải doanh thu. Tổng của từng cột là công nợ còn lại (xem “Tổng hợp tháng” bên phải)."],
@@ -199,23 +199,27 @@ book.calcProperties.fullCalcOnLoad = true;
     ["Bảng theo ngày (cột P đến W)", "Tự cộng thu chi tiền mặt và ngân hàng theo ngày, chi lấy từ tab BK CHI cùng tháng. Nhập số dư đầu kỳ tiền mặt và ngân hàng ở ô vàng hàng 1. Thẻ POS không vào hai quỹ này (tiền về sau); cột W chỉ để xem."],
     ["Thưởng theo người bán", "Bảng dưới bảng theo ngày: tiền mặt, chuyển khoản, POS của từng người bán, thưởng 5% và phần còn lại cho khách sạn, theo cách tính của kế toán."],
   ]);
-  block("2. BK CHI (tab BK CHI mm-yyyy)", [
+  block("2. BK CHI (tab BK CHI)", [
     ["Cách nhập", "Mỗi khoản chi một dòng: ngày chi thực tế, hạng mục (chọn trong danh sách), nội dung chi, rồi tiền vào đúng một cột theo quỹ đã chi."],
     ["Chi tiền mặt, chi tiền CK, chi tiền CK thẻ visa", "Tiền thực chi từ quỹ tiền mặt, tài khoản ngân hàng, thẻ visa. Cột Tổng chi tự cộng ba cột này."],
     ["Nội dung chi", "Ghi chi cho việc gì và tháng nào. Chi cho tháng khác thì ghi “tháng N” (ví dụ “Phí QL vận hành cafe tháng 9”): trang Kết quả HĐKD của dashboard tính chi phí vào tháng ghi trong nội dung."],
     ["Hạng mục", "Chọn đúng tên trong sheet “Danh mục” (có mô tả từng mục). Gõ sai tên thì khoản chi không được xếp đúng nhóm."],
   ]);
-  block("3. Kho (tab NGUYÊN LIỆU CAFE, NGUYÊN LIỆU ĂN SÁNG, VẬT TƯ mm-yyyy)", [
+  block("3. Kho (tab NGUYÊN LIỆU CAFE, VẬT TƯ)", [
     ["Ba bảng bên trái (cột A đến P)", "NHẬP KHO (ngày, mặt hàng, số lượng, thành tiền), XUẤT KHO (ngày, mặt hàng, số lượng; cột Phòng để trống) và KIỂM KÊ (ngày kiểm, mặt hàng, số lượng đếm). Thêm dòng ở cuối bảng."],
     ["Bảng TỒN KHO (từ cột R)", "Danh sách mặt hàng cho tháng ở ô S2. Nhập tay tồn đầu tháng (số lượng và giá trị) ở ô vàng; nhập, xuất, đơn giá bình quân, tồn cuối và chênh kiểm kê tự tính. Mặt hàng mới thì thêm vào cuối danh sách."],
     ["Kiểm kê hằng tuần", "Mỗi lần đếm kho nhập một dòng ở bảng KIỂM KÊ, ghi ngày đếm và số lượng thực tế."],
   ]);
   block("4. Sang tháng mới", [
-    ["Các bước", "Sao chép các tab BK THU, BK CHI và ba tab kho, đổi đuôi tên tab thành tháng mới (ví dụ 11-2026), xóa dữ liệu cũ, đổi kỳ báo cáo ở ô I1 của BK THU và tháng ở ô S2 của từng tab kho. Tồn đầu tháng mới lấy từ tồn cuối của tháng trước."],
+    ["Các bước", "Tạo file mới cho tháng mới (sao chép file tháng trước), xóa dữ liệu cũ, đổi kỳ báo cáo ở ô I1 của BK THU, ô G1 của BK CHI và tháng ở ô S2 của từng tab kho, rồi dán link file mới ở Cài đặt → Link Google Sheet. Tên tab giữ nguyên. Tồn đầu tháng mới lấy từ tồn cuối của tháng trước."],
   ]);
-  block("5. Lỗi thường gặp", [
+  block("5. KiotViet (tab KIOTVIET CAFE)", [
+    ["Mỗi tuần một lần", "Xuất báo cáo “Bán hàng theo hàng hóa” của KiotViet (có chi tiết hóa đơn, từ đầu tháng đến hôm nay) và dán vào tab KIOTVIET CAFE, dán đè bản tuần trước. Giữ nguyên hàng tiêu đề. Trang Đối soát của dashboard so doanh thu từng ngày với BK THU."],
+    ["Tên tab", "Đúng KIOTVIET CAFE (ăn sáng, cafe). Không thêm tháng, năm hay chữ khác."],
+  ]);
+  block("6. Lỗi thường gặp", [
     ["Ngày gõ dạng chữ", "Dòng không vào bảng theo ngày. Ô ngày phải căn phải."],
-    ["Tên tab BK CHI không đúng", "Bảng theo ngày báo đỏ “Không thấy tab BK CHI” và chi tính 0. Tên đúng là BK CHI mm-yyyy hoặc BK CHI mm/yyyy cùng tháng với ô I1."],
+    ["Tên tab không đúng", "Tên tab phải đúng như trên (BK THU, BK CHI, NGUYÊN LIỆU CAFE, VẬT TƯ, KIOTVIET CAFE). Đổi tên thì bảng theo ngày không thấy BK CHI và chi tính 0, trang đối soát không thấy tab."],
     ["Tên mặt hàng không có trong danh sách TỒN KHO", "Dòng nhập, xuất, kiểm kê đó không được tính vào tồn kho."],
   ]);
 }
@@ -235,7 +239,7 @@ book.calcProperties.fullCalcOnLoad = true;
 
 // BK THU
 {
-  const ws = book.addWorksheet(`BK THU ${TAG}`, { views: [{ state: "frozen", xSplit: 3, ySplit: 3 }] });
+  const ws = book.addWorksheet("BK THU", { views: [{ state: "frozen", xSplit: 3, ySplit: 3 }] });
   title(ws.getCell("A1")); ws.getCell("A1").value = "BẢNG KÊ THU ĂN SÁNG, CAFE";
   label(ws.getCell("D1")); ws.getCell("D1").value = "ĐƠN VỊ"; ws.mergeCells("E1:F1"); input(ws.getCell("E1")); input(ws.getCell("F1")); ws.getCell("E1").value = UNIT;
   label(ws.getCell("H1"), true); ws.getCell("H1").value = "KỲ BÁO CÁO (tháng/năm)"; input(ws.getCell("I1"), "mm/yyyy"); ws.getCell("I1").value = day(1);
@@ -245,7 +249,7 @@ book.calcProperties.fullCalcOnLoad = true;
   ws.getCell("Z1").value = { formula: 'IFERROR(DATE(YEAR($I$1),MONTH($I$1),1),DATE(VALUE(RIGHT($I$1,4)),VALUE(LEFT($I$1,2)),1))' }; ws.getCell("Z1").numFmt = "dd/mm/yyyy";
   ws.getCell("AA1").value = { formula: 'IF(IFERROR(ROWS(INDIRECT("\'BK CHI "&TEXT($Z$1,"mm/yyyy")&"\'!A1")),0)>0,"mm/yyyy","mm-yyyy")' };
   ws.getCell("AB1").value = { formula: 'IFERROR(ROWS(INDIRECT("\'BK CHI "&TEXT($Z$1,$AA$1)&"\'!A1")),0)=0' };
-  for (const c of [26, 27, 28]) { ws.getColumn(c).hidden = true; }
+  ws.getColumn(26).hidden = true;
 
   const cols = [
     ["Ngày", "NGÀY", NAVY, 12], ["Người bán", "NGƯỜI BÁN", NAVY, 11], ["Nội dung", "NỘI DUNG", NAVY, 26],
@@ -290,7 +294,7 @@ book.calcProperties.fullCalcOnLoad = true;
   // panel by day: cash and bank, spending from the BK CHI tab of the same month
   const pw = [12, 14, 14, 16, 14, 14, 16, 14];
   pw.forEach((w, i) => { ws.getColumn(16 + i).width = w; });
-  const chiRef = (col) => `INDIRECT("'BK CHI "&TEXT($Z$1,$AA$1)&"'!$${col}$4:$${col}$503")`;
+  const chiRef = (col) => `'BK CHI'!${col}$4:${col}$503`;
   const gh = [["NGÀY", NAVY], ["TIỀN MẶT", GREEN], ["", GREEN], ["", GREEN], ["NGÂN HÀNG", BLUE], ["", BLUE], ["", BLUE], ["THẺ POS", GREY]];
   gh.forEach(([t, color], i) => { head(ws.getCell(2, 16 + i), color); head(ws.getCell(3, 16 + i), color); ws.getCell(2, 16 + i).value = t || null; });
   ["Ngày", "Thu tiền mặt", "Chi tiền mặt", "Dư theo ngày", "Thu ngân hàng", "Chi ngân hàng", "Số dư theo ngày", "Thu thẻ POS"].forEach((t, i) => { ws.getCell(3, 16 + i).value = t; });
@@ -302,10 +306,10 @@ book.calcProperties.fullCalcOnLoad = true;
     const r = FIRST + i;
     ws.getCell(r, 16).value = { formula: `IF($Z$1+${i}>EOMONTH($Z$1,0),"",$Z$1+${i})` };
     ws.getCell(r, 17).value = { formula: `IF($P${r}="","",SUMIFS($D$4:$D$503,$A$4:$A$503,$P${r})+SUMIFS($F$4:$F$503,$A$4:$A$503,$P${r}))` };
-    ws.getCell(r, 18).value = { formula: `IF($P${r}="","",IFERROR(SUMIFS(${chiRef("D")},${chiRef("A")},$P${r}),0))` };
+    ws.getCell(r, 18).value = { formula: `IF($P${r}="","",SUMIFS(${chiRef("D")},${chiRef("A")},$P${r}))` };
     ws.getCell(r, 19).value = { formula: i === 0 ? `IF($P${r}="","",$Q$1+Q${r}-R${r})` : `IF($P${r}="","",S${r - 1}+Q${r}-R${r})` };
     ws.getCell(r, 20).value = { formula: `IF($P${r}="","",SUMIFS($E$4:$E$503,$A$4:$A$503,$P${r})+SUMIFS($G$4:$G$503,$A$4:$A$503,$P${r}))` };
-    ws.getCell(r, 21).value = { formula: `IF($P${r}="","",IFERROR(SUMIFS(${chiRef("E")},${chiRef("A")},$P${r}),0))` };
+    ws.getCell(r, 21).value = { formula: `IF($P${r}="","",SUMIFS(${chiRef("E")},${chiRef("A")},$P${r}))` };
     ws.getCell(r, 22).value = { formula: i === 0 ? `IF($P${r}="","",$U$1+T${r}-U${r})` : `IF($P${r}="","",V${r - 1}+T${r}-U${r})` };
     ws.getCell(r, 23).value = { formula: `IF($P${r}="","",SUMIFS($H$4:$H$503,$A$4:$A$503,$P${r}))` };
     for (let c = 16; c <= 23; c++) put(ws.getCell(r, c), c === 16 ? { al: { horizontal: "center", vertical: "middle" }, fmt: "dd/mm/yyyy", bd: BORDER } : { f: font({ bold: c === 19 || c === 22 }), fmt: MONEY, bd: BORDER });
@@ -351,7 +355,7 @@ book.calcProperties.fullCalcOnLoad = true;
 
 // BK CHI
 {
-  const ws = book.addWorksheet(`BK CHI ${TAG}`, { views: [{ state: "frozen", xSplit: 2, ySplit: 3 }] });
+  const ws = book.addWorksheet("BK CHI", { views: [{ state: "frozen", xSplit: 2, ySplit: 3 }] });
   title(ws.getCell("A1")); ws.getCell("A1").value = "BẢNG KÊ CHI ĂN SÁNG, CAFE";
   label(ws.getCell("C1")); ws.getCell("C1").value = "ĐƠN VỊ"; ws.mergeCells("D1:E1"); input(ws.getCell("D1")); input(ws.getCell("E1")); ws.getCell("D1").value = UNIT;
   label(ws.getCell("F1"), true); ws.getCell("F1").value = "KỲ BÁO CÁO (tháng/năm)"; input(ws.getCell("G1"), "mm/yyyy"); ws.getCell("G1").value = day(1);
