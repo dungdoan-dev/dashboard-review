@@ -7,3 +7,14 @@ const TRAVELOKA_OTHER = 0.20; // a hotel not listed above: shortcut, the top of 
 export function commissionRate(channel: string, hotelId: number) {
   return channel === "Traveloka" ? TRAVELOKA[hotelId] ?? TRAVELOKA_OTHER : FLAT[channel] ?? 0;
 }
+
+// "Giá đổ về Blujay" of the policy: Expedia, Trip and Agoda send the price already net of their commission, Booking and Traveloka send the displayed price (commission not deducted).
+const NET_IN_BLUEJAY = new Set(["Expedia", "Trip", "Agoda"]);
+
+/** The room money Blue Jay holds for a stay, split the way the revenue sheet shows it: gross (the displayed price) and the commission. A net price is grossed up (net / (1 - rate)), so the commission is not taken twice. */
+export function otaSplit(channel: string, hotelId: number, money: number) {
+  const rate = commissionRate(channel, hotelId);
+  if (!rate) return { gross: money, commission: 0 };
+  if (NET_IN_BLUEJAY.has(channel)) { const gross = money / (1 - rate); return { gross, commission: gross - money }; }
+  return { gross: money, commission: money * rate };
+}

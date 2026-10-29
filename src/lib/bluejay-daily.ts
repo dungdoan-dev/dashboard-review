@@ -4,13 +4,14 @@
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
 import type { HotelRevenue, RevenueBooking, RevenueWeek } from "./bluejay-revenue.ts";
-import { commissionRate } from "./ota-commission.ts";
+import { otaSplit } from "./ota-commission.ts";
 
 export type DailyDay = {
   date: string;
   rooms: number;                      // room-nights slept this day
   room: number;                       // room money of those nights
-  commission: number;                 // what the OTAs keep of that room money (ota-commission.ts)
+  roomGross: number;                  // the room money at the displayed price: the OTAs that send a net price (Expedia, Trip, Agoda) grossed up
+  commission: number;                 // what the OTAs keep of it (ota-commission.ts)
   services: Record<string, number>;   // service money by Blue Jay group
   service: number;
   total: number;                      // room + service
@@ -34,15 +35,15 @@ function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelReve
     const key = `${b.code}|${b.room}|${b.roomType}`, at = week.paymentsAt ?? week.fetchedAt;
     if (!latest.has(key) || at > latest.get(key)!.at) latest.set(key, { b, at });
   }
-  const byDay = new Map<string, { nights: number; money: number; commission: number }>();
+  const byDay = new Map<string, { nights: number; money: number; gross: number; commission: number }>();
   for (const { b } of latest.values()) {
     if (!b.stay || b.nights <= 0 || !b.checkIn) continue;
-    const perNight = b.roomPrice / b.nights, rate = commissionRate(b.channel, hotelId);
+    const perNight = b.roomPrice / b.nights, split = otaSplit(b.channel, hotelId, perNight);
     for (let i = 0; i < b.nights; i++) {
       const date = addDays(b.checkIn, i);
       if (date < from || date > to) continue;
-      const day = byDay.get(date) ?? { nights: 0, money: 0, commission: 0 };
-      day.nights += 1; day.money += perNight; day.commission += perNight * rate; byDay.set(date, day);
+      const day = byDay.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 };
+      day.nights += 1; day.money += perNight; day.gross += split.gross; day.commission += split.commission; byDay.set(date, day);
     }
   }
   return byDay;
@@ -70,11 +71,11 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string):
       serviceOf.set(d.date, { at, groups: Object.fromEntries(d.groups.map((g) => [g.name, g.total])) });
     }
     const days = dates.map((date): DailyDay => {
-      const r = rooms.get(date) ?? { nights: 0, money: 0, commission: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, commission: 0 };
+      const r = rooms.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 };
       const services = serviceOf.get(date)?.groups ?? {};
       const service = Object.values(services).reduce((s, v) => s + v, 0);
       for (const [g, v] of Object.entries(services)) groupTotal.set(g, (groupTotal.get(g) ?? 0) + v);
-      return { date, rooms: r.nights, room: r.money, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money };
+      return { date, rooms: r.nights, room: r.money, roomGross: r.gross, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money };
     });
     return { id, name, days };
   });

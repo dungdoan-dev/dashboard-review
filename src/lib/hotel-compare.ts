@@ -1,6 +1,6 @@
 // The accountant's "BÁO CÁO TỔNG HỢP <khách sạn>" (one row per week: nights, rooms for sale, occupancy, revenue by line, deductions, total) for every hotel side by side, then the same for the whole chain.
 // Nights and rooms for sale come from the occupancy report (the day of the stored week), room money and services from the daily revenue (room money split over the nights slept, services by the day sold).
-// The deduction is the OTA commission by the finance team's policy (ota-commission.ts) on the room money of the period.
+// Room revenue is at the displayed price and the deduction is the OTA commission, by the finance team's policy (ota-commission.ts): Blue Jay holds a net price for Expedia, Trip and Agoda, so their room money is grossed up here.
 // Pure function: tested by hotel-compare.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { DailyRevenue } from "./bluejay-daily.ts";
 import type { RangeData } from "./bluejay-range.ts";
@@ -27,7 +27,7 @@ export function compareRows(month: string, daily: DailyRevenue, range: RangeData
       const days = h.days.filter((d) => d.date >= c.from && d.date <= c.to);
       const services: Record<string, number> = {};
       for (const d of days) for (const [g, v] of Object.entries(d.services)) services[g] = (services[g] ?? 0) + v;
-      const lines = revenueLines({ room: days.reduce((s, d) => s + d.room, 0), services });
+      const lines = revenueLines({ room: days.reduce((s, d) => s + d.roomGross, 0), services });
       const stored = (range.hotels.find((x) => x.id === h.id)?.days ?? []).filter((d, i) => d && range.dates[i] >= c.from && range.dates[i] <= c.to);
       const occupied = stored.reduce((s, d) => s + d!.occupied, 0), available = stored.reduce((s, d) => s + d!.total, 0);
       const commission = days.reduce((s, d) => s + d.commission, 0), dayCount = Math.round((Date.parse(c.to) - Date.parse(c.from)) / 864e5) + 1;

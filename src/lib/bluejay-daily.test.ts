@@ -44,10 +44,11 @@ test("services are added by day and group, the groups come biggest first, the we
   assert.equal(d.reliableThrough, "2026-08-02"); // the day before the latest stored week starts: later nights may belong to stays that have not checked out
 });
 
-test("the OTA commission of a day is the room money of its nights times the channel's rate (Traveloka per hotel), nothing for walk-ins and excluded rooms", () => {
+test("the OTA commission of a day follows the policy: Booking and Traveloka send the displayed price, Expedia, Trip and Agoda a net one that is grossed up; nothing for walk-ins", () => {
   const stays = [booking({}), booking({ code: "004", channel: "Agoda", roomPrice: 300_000, nights: 3 }), booking({ code: "005", channel: "Khách lẻ", roomPrice: 300_000, nights: 3 }), booking({ code: "006", channel: "Traveloka", roomPrice: 300_000, nights: 3 })];
   const day = (id: number) => dailyRevenue([{ ...week("2026-08-03", stays), hotels: [{ id, name: "H", bookings: stays, services: [] }] }], "2026-08-02", "2026-08-02").hotels[0].days[0];
-  // one night of: Booking 300.000 x 15%, Agoda 100.000 x 20%, walk-in 100.000 x 0, Traveloka 100.000 x 20% (Sontra) or 19% (Quy Nhơn)
-  assert.equal(Math.round(day(5381).commission), 45_000 + 20_000 + 20_000);
-  assert.equal(Math.round(day(6495).commission), 45_000 + 20_000 + 19_000);
+  // one night of: Booking 300.000 x 15%; Agoda 100.000 net = 125.000 displayed, 25.000 commission; walk-in 100.000; Traveloka 100.000 x 20% (Sontra) or 19% (Quy Nhơn)
+  assert.equal(Math.round(day(5381).commission), 45_000 + 25_000 + 20_000);
+  assert.equal(Math.round(day(6495).commission), 45_000 + 25_000 + 19_000);
+  assert.equal(Math.round(day(5381).roomGross), 300_000 + 125_000 + 100_000 + 100_000); // the room money Blue Jay holds is 600.000, the displayed one 625.000
 });

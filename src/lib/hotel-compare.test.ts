@@ -4,7 +4,7 @@ import { compareRows } from "./hotel-compare.ts";
 import type { DailyRevenue } from "./bluejay-daily.ts";
 import type { RangeData } from "./bluejay-range.ts";
 
-const day = (date: string, room: number, services: Record<string, number> = {}, commission = 0) => ({ date, rooms: 0, room, commission, services, service: 0, total: 0, excludedRooms: 0, excludedRoom: 0 });
+const day = (date: string, room: number, services: Record<string, number> = {}, commission = 0) => ({ date, rooms: 0, room, roomGross: room, commission, services, service: 0, total: 0, excludedRooms: 0, excludedRoom: 0 });
 const daily = { hotels: [
   { id: 1, name: "A", days: [day("2026-10-01", 1000, { Minibar: 50, "Giặt ủi": 20, "Dịch vụ ngoài": 30, "Ăn Sáng": 5 }, 100), day("2026-10-06", 400)] },
   { id: 2, name: "B", days: [day("2026-10-02", 600, { Minibar: 10 })] },
