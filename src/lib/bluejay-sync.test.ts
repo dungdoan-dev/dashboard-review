@@ -140,6 +140,22 @@ test("plannedWeeks: the last full week first when missing, then missing backfill
   } finally { teardown(); }
 });
 
+test("plannedWeeks: a last week pulled during the week is pulled again from Monday 08:00, once", async () => {
+  const week43 = (fetchedAt: string) => fakeDb({
+    bluejay_sync_settings: [{ id: 1, enabled: true, backfill_from: null, backfill_to: null }],
+    bluejay_weekly_reports: [{ week_start: "2026-10-19", fetched_at: fetchedAt, report: { v: 3 } }],
+    bluejay_revenue_weeks: [{ week_start: "2026-10-19", revenue: { v: REVENUE_VERSION } }],
+  }).db;
+  const sundayPull = "2026-10-25T09:55:00Z"; // 16:55 Sunday in Vietnam
+  setup(new Date("2026-10-25T17:05:00Z")); // 00:05 Monday 26/10: before 08:00
+  try { assert.deepEqual(await plannedWeeks(week43(sundayPull)), []); } finally { teardown(); }
+  setup(new Date("2026-10-26T01:05:00Z")); // 08:05 Monday
+  try {
+    assert.deepEqual(await plannedWeeks(week43(sundayPull)), ["2026-10-19"]);
+    assert.deepEqual(await plannedWeeks(week43("2026-10-26T01:10:00Z")), []); // pulled after 08:00: final
+  } finally { teardown(); }
+});
+
 test("refreshPayments: pulls a week with an open OTA debt, leaves a running row while it works, and a recent week is skipped by the cron", async () => {
   setup();
   try {

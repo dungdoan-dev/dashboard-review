@@ -59,8 +59,19 @@ function HBars({ data, name, color, label, money = true }: { data: { name: strin
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
-  return <div className="summary-kpi"><span>{label}</span><strong>{value}</strong></div>;
+type Vs = { text: string; tone: "up" | "down" | "flat"; prev: string; label: string }; // the change against the compared week
+
+function Kpi({ label, value, vs }: { label: string; value: string; vs?: Vs }) {
+  return <div className="summary-kpi"><span>{label}</span><div className="kpi-main"><strong>{value}</strong>{vs && <small className={`kpi-delta ${vs.tone}`}>{vs.text}</small>}</div>{vs && <small className="kpi-prev">{vs.label}: <b>{vs.prev}</b></small>}</div>;
+}
+
+const sign = (d: number) => (d > 0 ? "+" : d < 0 ? "−" : "");
+const toneOf = (d: number): Vs["tone"] => (d > 0 ? "up" : d < 0 ? "down" : "flat");
+/** cur against prev: percentage points for a rate, otherwise the difference and its percent. */
+function change(cur: number, prev: number, percent?: boolean): Pick<Vs, "text" | "tone"> {
+  if (percent) { const d = Math.round((cur - prev) * 1e4) / 100; return { text: `${sign(d)}${Math.abs(d).toFixed(2).replace(".", ",")} điểm %`, tone: toneOf(d) }; }
+  const d = Math.round(cur - prev), r = prev ? (cur - prev) / prev : null;
+  return { text: `${sign(d)}${num(Math.abs(d))}${r === null ? "" : ` (${sign(r)}${Math.abs(r * 100).toFixed(1).replace(".", ",")}%)`}`, tone: toneOf(d) };
 }
 
 function Card({ title, note, wide, children }: { title: string; note?: string; wide?: boolean; children: React.ReactNode }) {
@@ -100,7 +111,7 @@ const RANGE_COLS: Col<RangeRow>[] = [
   { label: "Tiền phòng", value: (r) => r.x.room, text: (r) => num(r.x.room), total: true },
 ];
 
-type WeekResponse = { monday?: string; report?: WeeklyReport | null; history?: WeeklyReport[]; message?: string };
+type WeekResponse = { monday?: string; report?: WeeklyReport | null; history?: WeeklyReport[]; weeks?: string[]; message?: string };
 
 async function fetchWeek(week: string | null): Promise<WeekResponse> {
   const res = await fetch(`/api/bluejay${week ? `?week=${week}` : ""}`, { cache: "no-store" }).catch(() => null);
@@ -119,12 +130,16 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   const [status, setStatus] = useState<"loading" | "ready" | "refreshing">("loading");
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"week" | "range">("week");
+  const [weeks, setWeeks] = useState<string[]>([]); // every stored week up to this one, for the compare picker (history keeps only the last 12 for the charts)
+  const [extra, setExtra] = useState<{ monday: string; report: WeeklyReport | null } | null>(null); // a compared week older than history
+  const [compareWith, setCompareWith] = useState<string | "none" | null>(null); // a Monday, "none", or null = the week before
 
   const apply = useCallback((r: WeekResponse) => {
     if (r.monday) setMonday(r.monday);
     setError(r.message ?? "");
     setReport(r.report ?? null);
     setHistory(r.history ?? []);
+    setWeeks(r.weeks ?? []);
     setStatus("ready");
   }, []);
 
@@ -135,7 +150,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   }, [apply]);
 
   function load(week: string) {
-    setStatus("loading"); setReport(null); setHistory([]);
+    setStatus("loading"); setReport(null); setHistory([]); setCompareWith(null);
     void fetchWeek(week).then(apply);
   }
 
@@ -164,6 +179,24 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   }));
   const bars = (list: { name: string; value: number }[]) => list.slice(0, 8).map((g) => ({ name: g.name, value: g.value }));
   const busy = status !== "ready";
+  // The compared week comes from the stored weeks that load with the report (no call to Blue Jay).
+  const compareMonday = !monday || compareWith === "none" ? null : compareWith ?? addDays(monday, -7);
+  const inHistory = compareMonday ? history.find((r) => r.monday === compareMonday) : undefined;
+  const prevReport = inHistory ?? (extra && extra.monday === compareMonday ? extra.report ?? undefined : undefined);
+  const prevRecs = prevReport ? prevReport.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
+  const ps = prevRecs.length ? summarize(prevRecs) : null;
+  const weekOptions = monday ? [...new Set([...weeks.filter((w) => w < monday), ...(compareMonday ? [compareMonday] : [])])].sort().reverse() : [];
+  const kpi = (label: string, value: number, get: (x: SummaryRow) => number, percent?: boolean) => (
+    <Kpi label={label} value={percent ? pct(value) : num(value)} vs={ps && compareMonday ? { ...change(value, get(ps), percent), prev: percent ? pct(get(ps)) : num(get(ps)), label: `Tuần ${isoWeek(compareMonday)}` } : undefined} />
+  );
+
+  const needFetch = status === "ready" && compareMonday && !inHistory && extra?.monday !== compareMonday ? compareMonday : null;
+  useEffect(() => {
+    if (!needFetch) return;
+    let active = true;
+    void fetchWeek(needFetch).then((r) => { if (active) setExtra({ monday: needFetch, report: r.report ?? null }); });
+    return () => { active = false; };
+  }, [needFetch]);
 
   if (mode === "range") return <BluejayRangeView scopeId={scopeId} view={view} onWeek={() => setMode("week")} />;
 
@@ -189,14 +222,22 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
 
       {report && s && c && monday && <>
         {view === "operations" && <>
-        <div className="summary-kpis">
-          <Kpi label="Công suất" value={pct(s.rate)} />
-          <Kpi label="Tổng số đêm lưu trú" value={num(s.nights)} />
-          <Kpi label="Giá phòng TB (ADR)" value={num(s.adr)} />
-          <Kpi label="RevPAR" value={num(s.revpar)} />
-          <Kpi label={`Pickup ${fmtDate(addDays(monday, 7))}–${fmtDate(addDays(monday, 13))}`} value={pct(s.pickup1)} />
-          <Kpi label={`Pickup ${fmtDate(addDays(monday, 14))}–${fmtDate(addDays(monday, 20))}`} value={pct(s.pickup2)} />
+        <div className="compare-bar">
+          <label><span>So sánh với</span><select aria-label="Chọn tuần để so sánh" value={compareMonday ?? "none"} disabled={busy} onChange={(event) => setCompareWith(event.target.value)}>
+            <option value="none">Không so sánh</option>
+            {weekOptions.map((w) => <option key={w} value={w}>Tuần {isoWeek(w)} ({fmtDate(w).slice(0, 5)}–{fmtDate(addDays(w, 6)).slice(0, 5)}){w === addDays(monday, -7) ? " · tuần trước" : ""}</option>)}
+          </select></label>
+          {compareMonday && <p>Mức thay đổi so với tuần {isoWeek(compareMonday)}: <span className="kpi-delta up">xanh là tăng</span>, <span className="kpi-delta down">đỏ là giảm</span>.</p>}
         </div>
+        <div className="summary-kpis">
+          {kpi("Công suất", s.rate, (x) => x.rate, true)}
+          {kpi("Tổng số đêm lưu trú", s.nights, (x) => x.nights)}
+          {kpi("Giá phòng TB (ADR)", s.adr, (x) => x.adr)}
+          {kpi("RevPAR", s.revpar, (x) => x.revpar)}
+          {kpi(`Pickup ${fmtDate(addDays(monday, 7))}–${fmtDate(addDays(monday, 13))}`, s.pickup1, (x) => x.pickup1, true)}
+          {kpi(`Pickup ${fmtDate(addDays(monday, 14))}–${fmtDate(addDays(monday, 20))}`, s.pickup2, (x) => x.pickup2, true)}
+        </div>
+        {compareMonday && !ps && <p className="summary-note">Chưa có dữ liệu tuần {isoWeek(compareMonday)} ({fmtDate(compareMonday)}–{fmtDate(addDays(compareMonday, 6))}) để so sánh. Chọn tuần khác hoặc mở tuần đó rồi bấm “Cập nhật từ Blue Jay”.</p>}
 
         <Card title="Công suất theo ngày" note="Tuần báo cáo và hai tuần tiếp theo (phần sau đường nét đứt là công suất đã đặt trước).">
           <LineTrend data={daily} series={series} split={fmtDate(addDays(monday, 6))} label="Công suất theo ngày" />

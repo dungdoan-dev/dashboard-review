@@ -1,4 +1,4 @@
-import { SyncStop, listReports, readReport, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
+import { SyncStop, listReports, listWeekStarts, readReport, serviceDb, syncBusy, syncWeeks } from "@/lib/bluejay";
 import { bluejayViewer } from "@/lib/bluejay-auth";
 import { inApiWindow, isDate, lastFullWeek, mondayOf } from "@/lib/bluejay-metrics";
 
@@ -16,8 +16,8 @@ export async function GET(request: Request) {
   const monday = weekOf(request);
   try {
     const db = serviceDb();
-    const [report, history] = await Promise.all([readReport(db, monday), listReports(db, monday)]);
-    return Response.json({ monday, report, history });
+    const [report, history, weeks] = await Promise.all([readReport(db, monday), listReports(db, monday), listWeekStarts(db, monday)]);
+    return Response.json({ monday, report, history, weeks });
   } catch (e) {
     return Response.json({ monday, message: `Không đọc được dữ liệu đã lưu: ${e instanceof Error ? e.message : e}` }, { status: 500 });
   }

@@ -909,6 +909,22 @@ tbody tr:hover { background: #fbfcfe; }
 .summary-kpi span { color: #6d7f9a; font-size: 13px; font-weight: 600; }
 .summary-kpi strong { font: 800 28px 'Inter',sans-serif; }
 .summary-kpi small { color: #5f6f86; font-size: 12px; }
+.compare-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
+.compare-bar label { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border: 1px solid #e0e7f0; border-radius: 8px; background: #fff; color: #5f6f86; font-size: 12px; }
+.compare-bar select { border: 0; outline: 0; background: transparent; color: #233a5a; font: 600 13px 'Inter',sans-serif; }
+.compare-bar select:focus-visible { outline: 2px solid #285ca9; outline-offset: 2px; border-radius: 4px; }
+.compare-bar p { margin: 0; color: #5f6f86; font-size: 12px; }
+.kpi-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; }
+.summary-kpi .kpi-delta, .compare-bar .kpi-delta { font-weight: 700; font-variant-numeric: tabular-nums; }
+.summary-kpi .kpi-delta { padding: 3px 9px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+.summary-kpi .kpi-delta.up, .compare-bar .kpi-delta.up { color: #247b5b; }
+.summary-kpi .kpi-delta.down, .compare-bar .kpi-delta.down { color: #c0392b; }
+.summary-kpi .kpi-delta.flat { color: #8a6a00; }
+.summary-kpi .kpi-delta.up { background: #e8f6f0; }
+.summary-kpi .kpi-delta.down { background: #fdecea; }
+.summary-kpi .kpi-delta.flat { background: #fdf3e1; }
+.summary-kpi .kpi-prev { margin-top: 6px; padding-top: 8px; border-top: 1px solid #e8edf4; color: #5f6f86; font-size: 12px; }
+.summary-kpi .kpi-prev b { color: #354a67; font-weight: 700; font-variant-numeric: tabular-nums; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; }
 .summary-chart { min-width: 0; padding: 16px; border: 1px solid #e8edf4; border-radius: 12px; }
 .summary-chart h4 { margin: 0 0 4px; font: 700 16px 'Inter',sans-serif; }

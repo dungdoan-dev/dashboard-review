@@ -3,7 +3,7 @@ import { inApiWindow } from "@/lib/bluejay-metrics";
 
 export const maxDuration = 300;
 
-// Runs at the start of each API window (00:05, 08:05, 16:05 VN): the last full week if missing, then missing backfill weeks, then the week in progress
+// Runs at the start of each API window (00:05, 08:05, 16:05 VN): the last full week if missing or only pulled while in progress (again from Monday 08:00), then missing backfill weeks, then the week in progress
 // (once a day: with ~20 h between pulls it lands in the 16:xx window), then the payment refresh.
 // One path per window (/api/cron/bluejay/0, /8, /16) because Vercel Hobby allows each cron job to run only once a day;
 // the slot itself is not used, the API window check below decides.

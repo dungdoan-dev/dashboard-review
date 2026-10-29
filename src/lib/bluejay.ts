@@ -224,6 +224,13 @@ export async function listReports(db: SupabaseClient, monday: string, limit = 12
   return (data ?? []).map((r) => r.report).filter((r) => r?.v === VERSION).reverse();
 }
 
+/** Mondays (newest first) up to `monday` that have a current-version operations report: the weeks the compare picker offers. */
+export async function listWeekStarts(db: SupabaseClient, monday: string, limit = 104): Promise<string[]> {
+  const { data, error } = await db.from("bluejay_weekly_reports").select("week_start, v:report->v").lte("week_start", monday).order("week_start", { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((r) => Number(r.v) === VERSION).map((r) => String(r.week_start));
+}
+
 /** Mondays in [from, to] that already have a current-version operations report and revenue report. */
 export async function storedWeeks(db: SupabaseClient, from: string, to: string) {
   const [reports, revenue] = await Promise.all([
@@ -357,7 +364,19 @@ export async function currentWeekDue(db: SupabaseClient, minAgeMs: number) {
   return !data || Date.parse(data.fetched_at as string) < Date.now() - minAgeMs ? monday : null;
 }
 
-/** Weeks the scheduled sync should pull now: the last full week if missing, then missing backfill weeks, newest first. */
+/** Monday 08:00 in Vietnam after the week: from then the week is final. A copy taken earlier (the Sunday pull of the week in progress) misses the last evening and later changes. */
+const weekFinalAt = (monday: string) => Date.parse(`${addDays(monday, 7)}T08:00:00+07:00`);
+
+/** The last full week is pulled again once, at the first window from Monday 08:00, when its stored copy is older than that. */
+async function finalPullDue(db: SupabaseClient, monday: string) {
+  const final = weekFinalAt(monday);
+  if (Date.now() < final) return false; // the 00:xx window of Monday waits for 08:00
+  const { data, error } = await db.from("bluejay_weekly_reports").select("fetched_at").eq("week_start", monday).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !data || Date.parse(data.fetched_at as string) < final;
+}
+
+/** Weeks the scheduled sync should pull now: the last full week if missing or still the in-progress copy (from Monday 08:00), then missing backfill weeks, newest first. */
 export async function plannedWeeks(db: SupabaseClient) {
   const { data: settings, error } = await db.from("bluejay_sync_settings").select("enabled, backfill_from, backfill_to").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
@@ -366,7 +385,7 @@ export async function plannedWeeks(db: SupabaseClient) {
   const from = settings.backfill_from && settings.backfill_from < last ? settings.backfill_from : last;
   const to = settings.backfill_to && settings.backfill_to < last ? settings.backfill_to : last;
   const have = await storedWeeks(db, from, last);
-  const weeks = have.has(last) ? [] : [last];
+  const weeks = !have.has(last) || (await finalPullDue(db, last)) ? [last] : [];
   if (settings.backfill_from && settings.backfill_to) {
     for (let monday = to; monday >= from; monday = addDays(monday, -7)) if (monday !== last && !have.has(monday)) weeks.push(monday);
   }
