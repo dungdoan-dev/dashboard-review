@@ -9,6 +9,7 @@ import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { financeReport, ledgerBalances, parseExpenses, summarizeFinance, type Balances, type ExpenseLine, type FinanceReport, type FinanceSummary } from "@/lib/finance-summary";
 import { fnbReport, type FnbReport } from "@/lib/fnb-ledger";
 import { isMartTab, kiotvietSummary, parseKiotviet, type KiotvietExport, type KiotvietPeriod } from "@/lib/kiotviet";
+import { fnbResult } from "@/lib/ql-fnb-result";
 import { parseOutsideServices, type OutsideLine, type OutsideService } from "@/lib/outside-services";
 import { parseInventorySheet, stockReport, type StockReport } from "@/lib/inventory";
 import type { ChannelCounts, ChannelWeek } from "@/lib/ql-channels";
@@ -114,7 +115,7 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
   function exportExcel() {
     if (!loaded || !table || !result) return;
     const title = `BÁO CÁO QUẢN LÝ · ${hotelName.toUpperCase()} · THÁNG ${loaded.month.slice(5)}/${loaded.month.slice(0, 4)}`;
-    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-quan-ly-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels, parties, kiotviet: loaded.kiotviet })));
+    void import("@/lib/ql-excel").then((m) => m.downloadQlWorkbook(`bao-cao-quan-ly-${hotelName.replace(/\s+/g, "-")}-${loaded.month}.xlsx`, m.qlWorkbook(title, table, funds, result, loaded.debt, loaded.notes, { books: books ?? undefined, outside: loaded.outside, stocks: loaded.stocks, channels: loaded.channels, parties, kiotviet: loaded.kiotviet, fnbResults: unitResults, omitHotelResult: isStandalone(scopeId) })));
   }
 
   const fundCols: Col<FundLine>[] = [
@@ -160,6 +161,17 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
     <p className="summary-note">{openNote}{book.sheetClose !== null && <> Số dư cuối kỳ ghi trong sheet: <strong>{num(book.sheetClose)}</strong>, chênh {num(book.total.close - book.sheetClose)}.</>}</p>
     <ReachTable rows={bookLines(book)} rowKey={(l) => l.key} columns={bookCols(book)} sortable={false} compact rowClass={(l) => (l.total ? "report-total" : undefined)} />
   </details>;
+  // KQ HĐKD of each F&B unit in the finance team's template (Ăn sáng, cafe / Mini mart): KiotViet for revenue and discount, the kho for the cost of goods
+  const unitResults = useMemo(() => (loaded?.fnb?.units ?? []).map((u) => ({
+    label: u.label,
+    result: fnbResult(u.unit, { month: loaded!.month, expenses: u.ledger.expense, ledgerSales: u.sales.total + u.sales.hotel, kiotviet: loaded!.kiotviet?.find((k) => k.label === u.label)?.kv ?? null, stocks: u.unit === "cafe" ? (loaded!.stocks ?? []).filter((s) => s.fnb) : [] }),
+  })), [loaded]);
+  type UnitRow = ReturnType<typeof fnbResult>["rows"][number] & { i: number };
+  const unitCols = (columns: string[]): Col<UnitRow>[] => [
+    { label: "STT", text: (r) => r.stt ?? "" }, { label: "Chỉ tiêu", text: (r) => r.label }, { label: "Mã số", text: (r) => r.code ?? "" },
+    ...columns.map((label, i): Col<UnitRow> => ({ label, value: (r) => r.values[i], text: (r) => (r.values[i] < 0 ? "−" : "") + num(Math.abs(r.values[i])) })),
+    { label: "Ghi chú", text: (r) => r.note ?? "" },
+  ];
   type ResultRow = NonNullable<typeof result>["rows"][number] & { i: number };
   const resultCols: Col<ResultRow>[] = result ? [
     { label: "STT", text: (r) => r.stt ?? "" },
@@ -225,7 +237,13 @@ export function BluejayQl({ scopeId }: { scopeId: number | null }) {
           <p className="summary-note">Giá trị tồn đầu + mua vào − xuất = tồn cuối theo giá bình quân của kế toán, từng mặt hàng có trong file Excel (mỗi kho một sheet). Chi tiết kiểm kê và đối chiếu Blue Jay xem ở trang Kho.</p>
           <ReachTable rows={loaded.stocks} rowKey={(k) => `${k.fnb}-${k.name}`} columns={stockCols} sortable={false} compact />
         </details>}
-        {result && <details className="summary-chart wide revenue-fold" open>
+        {unitResults.map((u) => <details key={u.label} className="summary-chart wide revenue-fold" open>
+          <summary><h4>Kết quả hoạt động kinh doanh {u.label} tháng {loaded.month.slice(5)}/{loaded.month.slice(0, 4)}</h4></summary>
+          <p className="summary-note">Theo mẫu của kế toán: doanh thu và giảm giá lấy từ báo cáo KiotViet, giá vốn là giá trị xuất kho (chi mua nguyên liệu, hàng hóa, bao bì, vật tư không tính thêm), các khoản chi còn lại xếp theo hạng mục. Điều chuyển tiền giữa các quỹ không phải chi phí.</p>
+          {u.result.notes.map((n) => <p className="summary-note bad" role="alert" key={n}>{n}</p>)}
+          <ReachTable rows={u.result.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} columns={unitCols(u.result.columns)} sortable={false} compact ruled rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />
+        </details>)}
+        {result && !isStandalone(scopeId) && <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Bảng kết quả hoạt động kinh doanh tháng {loaded.month.slice(5)}/{loaded.month.slice(0, 4)}</h4></summary>
           <p className="summary-note">Doanh thu khách sạn theo ngày trả phòng, gồm M-Standard / Unassigned; Ăn sáng, cafe, mini mart là thu bán hàng. Combo, cafe của khách ở khách sạn (cột “Thu qua khách sạn” của BK THU) được trừ khỏi doanh thu khách sạn và tính vào Ăn sáng, cafe. Chi phí theo ngày chi trong tháng (khác trang Kết quả HĐKD, nơi dòng ghi “lương tháng 7” được tính vào tháng 7), xếp nhóm như báo cáo tuần của kế toán.{!loaded.hotel && " Chưa đọc được bảng kê khách sạn nên chi phí và giảm trừ của khách sạn tính 0."}</p>
           <ReachTable rows={result.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} columns={resultCols} sortable={false} compact rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />

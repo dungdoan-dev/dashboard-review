@@ -1,6 +1,7 @@
 // The Excel file of the management report (the finance team's "QL HĐKD" layout): one sheet per table of the page, ruled with borders, real numbers (not text) so Excel can sum and chart them.
 // Built with exceljs (borders, colours); the page loads this file only when the file is downloaded. Tests run it with plain Node, so imports use ".ts".
 import { kiotvietSummary, type KiotvietExport } from "./kiotviet.ts";
+import type { fnbResult } from "./ql-fnb-result.ts";
 import ExcelJS from "exceljs";
 import { partyTotals, type Book, type FundLine, type Party, type PartyLine, type qlResult, type qlWeekly } from "./ql-report.ts";
 import type { parseOutsideServices } from "./outside-services.ts";
@@ -61,6 +62,8 @@ function bookRows(b: Book): { head: string[]; rows: TRow[] } {
 }
 
 export type QlExtra = {
+  fnbResults?: { label: string; result: ReturnType<typeof fnbResult> }[]; // KQ HĐKD of each F&B unit in its own template
+  omitHotelResult?: boolean;                                      // a branch with no hotel: the hotel-style KQ HĐKD would be empty
   kiotviet?: { label: string; kv: KiotvietExport }[];             // the weekly KiotViet export of each unit that has the tab
   books?: { cash: Book; bank: Book };
   outside?: ReturnType<typeof parseOutsideServices> | null;      // the "DV Ngoài" tab of the hotel's sheet
@@ -149,7 +152,12 @@ export function qlWorkbook(title: string, weekly: ReturnType<typeof qlWeekly>, f
   table(book, "Dòng tiền", title, ["Quỹ", "Dư đầu kỳ", "Thu vào", "Chi ra", "Biến động", "Dư cuối kỳ"], fundRows);
   // the finance team's sheet: STT, Chỉ tiêu, Mã số, the values, Ghi chú
   const kq: TRow[] = result.rows.map((r) => ({ kind: r.kind, cells: [r.stt ?? "", r.label, r.code ?? "", ...r.values, r.note ?? ""] }));
-  table(book, "KQ HĐKD", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH"), ["STT", "Chỉ tiêu", "Mã số", ...result.columns, "Ghi chú"], kq, { widths: [7, 52, 9, ...result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
+  if (!extra.omitHotelResult) table(book, "KQ HĐKD", title.replace(/^BÁO CÁO QUẢN LÝ/, "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH"), ["STT", "Chỉ tiêu", "Mã số", ...result.columns, "Ghi chú"], kq, { widths: [7, 52, 9, ...result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
+  for (const u of extra.fnbResults ?? []) {
+    const rows: TRow[] = u.result.rows.map((r) => ({ kind: r.kind, cells: [r.stt ?? "", r.label, r.code ?? "", ...r.values, r.note ?? ""] }));
+    for (const n of u.result.notes) rows.push({ kind: "line", cells: ["", n, "", ...u.result.columns.map(() => null), ""] });
+    table(book, u.label === "Mini mart" ? "KQ HĐKD Mini mart" : "KQ HĐKD AS, CF", title.replace(/^BÁO CÁO QUẢN LÝ/, `BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH ${u.label.toUpperCase()}`), ["STT", "Chỉ tiêu", "Mã số", ...u.result.columns, "Ghi chú"], rows, { widths: [7, 52, 9, ...u.result.columns.map(() => 18), 52], labelCol: 1, frozenCols: 2 });
+  }
   const named = new Set(book.worksheets.map((w) => w.name));
   for (const p of extra.parties ?? []) partySheet(book, sheetName(`Thu chi ${p.label}`, false, named), title.replace(/^BÁO CÁO QUẢN LÝ/, `THU CHI ${p.label.toUpperCase()}`), p);
   for (const [name, heading, b] of [["TK TM", "SỔ QUỸ TIỀN MẶT (TK TM)", extra.books?.cash], ["TK TG NH", "SỔ TIỀN GỬI NGÂN HÀNG (TK TG NH)", extra.books?.bank]] as const) {
