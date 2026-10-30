@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, Printer, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -19,13 +20,21 @@ const pct = (x: number) => `${(x * 100).toFixed(2).replace(".", ",")}%`;
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const compact = (v: number) => (v >= 1e9 ? `${+(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${+(v / 1e6).toFixed(1)} tr` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v));
 
+// While the PDF is made the charts are drawn at a fixed width: the print copy of a responsive chart keeps the screen width and its legend drifts.
+let printing = false;
+const printListeners = new Set<() => void>();
+const setPrinting = (on: boolean) => flushSync(() => { printing = on; printListeners.forEach((l) => l()); });
+const usePrinting = () => useSyncExternalStore((l) => { printListeners.add(l); return () => void printListeners.delete(l); }, () => printing, () => false);
+const chartWidth = (on: boolean) => (on ? 640 : "100%");
+
 type Series = { key: string; name: string; color: string };
 type Row = Record<string, string | number | null>;
 
 function LineTrend({ data, series, label, split, percent = true }: { data: Row[]; series: Series[]; label: string; split?: string; percent?: boolean }) {
+  const printing = usePrinting();
   return (
     <div role="img" aria-label={label} style={{ height: 300 }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width={chartWidth(printing)} height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#edf1f6" vertical={false} />
           <XAxis dataKey="x" tick={AXIS} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
@@ -43,9 +52,10 @@ function LineTrend({ data, series, label, split, percent = true }: { data: Row[]
 // Horizontal single-measure bars; one colour because identity is already the axis label.
 function HBars({ data, name, color, label, money = true }: { data: { name: string; value: number }[]; name: string; color: string; label: string; money?: boolean }) {
   const fmt = money ? num : (v: number) => v.toLocaleString("vi-VN");
+  const printing = usePrinting();
   return (
     <div role="img" aria-label={label} style={{ height: Math.max(120, data.length * 38 + 24) }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width={chartWidth(printing)} height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#edf1f6" horizontal={false} />
           <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} tickFormatter={money ? compact : undefined} />
@@ -88,10 +98,13 @@ function usePdf(title: string) {
     documentTitle: title,
     pageStyle: "@page { size: A4; margin: 12mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
     onBeforePrint: async () => { // collapsed "Bảng số liệu" panels are opened for the PDF, then put back
+      setPrinting(true);
+      await new Promise((resolve) => setTimeout(resolve, 300)); // let the charts redraw at the print width
       closed.current = [...(ref.current?.querySelectorAll("details:not([open])") ?? [])] as HTMLDetailsElement[];
       closed.current.forEach((d) => { d.open = true; });
     },
-    onAfterPrint: () => { closed.current.forEach((d) => { d.open = false; }); closed.current = []; },
+    onAfterPrint: () => { setPrinting(false); closed.current.forEach((d) => { d.open = false; }); closed.current = []; },
+    onPrintError: () => setPrinting(false),
   });
   return [ref, () => void print()] as const;
 }

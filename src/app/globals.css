@@ -1410,9 +1410,10 @@ select { cursor: pointer; }
 .role-table .field { min-width: 180px; }
 .role-self { color: #6d7f9a; }
 .role-message { margin: 12px 0 0; color: #46586f; font-size: 13px; }
-/* Xuất PDF của báo cáo Blue Jay: bỏ nút, thu biểu đồ vừa trang A4 */
+/* Xuất PDF của báo cáo Blue Jay: bỏ nút (biểu đồ được vẽ lại ở bề rộng cố định, xem usePdf) */
 @media print {
   .summary-controls, .compare-bar select, .bluejay-range-picker { display: none !important; }
-  .summary-report .recharts-wrapper, .summary-report .recharts-surface { width: 100% !important; height: auto !important; max-width: 100%; }
   .summary-report .summary-kpis { break-inside: avoid; }
+  .summary-report .summary-chart { break-inside: auto; } /* a card with a long table may start on the page of the one before */
+  .summary-report .summary-chart [role="img"] { break-inside: avoid; }
 }
