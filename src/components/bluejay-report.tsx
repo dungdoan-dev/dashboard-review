@@ -11,6 +11,7 @@ import { fmtDate, fmtDateTime, parseDmy } from "@/lib/format-date";
 import { DatePicker } from "@/components/date-picker";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, type WeeklyReport } from "@/lib/bluejay-metrics";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
 const AXIS = { fill: "#586b84", fontSize: 12 };
@@ -254,7 +255,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
         </div>
       </div>
       {error && <div className="alert alert-error" role="alert"><span>{error}</span></div>}
-      {status === "loading" && <p className="summary-note">Đang tải báo cáo…</p>}
+      {status === "loading" && <PageSkeleton label="Đang tải báo cáo…" />}
       {status !== "loading" && !report && !error && <p className="summary-note">Chưa có dữ liệu cho tuần này. Bấm “Lấy dữ liệu từ Blue Jay” trong khung giờ API.</p>}
 
       {report && s && c && monday && <>

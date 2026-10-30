@@ -10,6 +10,7 @@ import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
 import { ReachChart } from "@/components/reach-chart";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const COLUMNS: [string, (t: Omit<LocationTotals, "days">) => number][] = [["Lượt tương tác", (t) => t.engagement], ["Cuộc gọi", (t) => t.calls], ["Tìm đường", (t) => t.directions], ["Nhấp vào web", (t) => t.website], ["Nhấp đặt phòng/thực đơn", (t) => t.bookingMenu], ["Số post bài", (t) => t.posts]];
@@ -79,7 +80,7 @@ export function GoogleProfile() {
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang tải…</p>}
+      {!data && !invalid && <PageSkeleton />}
       {data && !data.message && !invalid && data.locations.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo cơ sở">
         <button type="button" aria-pressed={!location} onClick={() => setLocation("")}>Tất cả ({data.locations.length})</button>
         {data.locations.map((t) => <button type="button" key={t.id} aria-pressed={location === t.id} onClick={() => setLocation(t.id)}>{t.name}</button>)}

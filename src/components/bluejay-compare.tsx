@@ -7,6 +7,7 @@ import { compareRows, type CompareRow } from "@/lib/hotel-compare";
 import type { DailyRevenue } from "@/lib/bluejay-daily";
 import type { RangeData } from "@/lib/bluejay-range";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (x: number | null) => (x === null ? "–" : `${(x * 100).toFixed(2).replace(".", ",")}%`);
@@ -75,7 +76,7 @@ export function BluejayCompare() {
         </div>
       </div>
 
-      {!loaded ? <p className="summary-note">Đang tải…</p> : loaded.message ? <div className="alert alert-error" role="alert"><span>{loaded.message}</span></div> : loaded.daily && <>
+      {!loaded ? <PageSkeleton /> : loaded.message ? <div className="alert alert-error" role="alert"><span>{loaded.message}</span></div> : loaded.daily && <>
         {loaded.daily.missingWeeks.length > 0 && <p className="summary-note bad" role="alert">Blue Jay chưa lưu doanh thu tuần bắt đầu {loaded.daily.missingWeeks.map((d) => fmtDate(d)).join(", ")}: các ngày trong tuần đó thiếu tiền phòng và dịch vụ. Bấm “Cập nhật từ Blue Jay” ở trang Vận hành khách sạn để lấy lại.</p>}
         {monthRows.length > 0 && <p className="summary-note bad" role="alert">Thiếu công suất đã lưu: {monthRows.map((r) => `${r.hotel} ${r.missingDays} ngày`).join(", ")}. Số phòng, phòng bán và công suất của những ngày đó chưa có.</p>}
         <details className="summary-chart wide revenue-fold" open>

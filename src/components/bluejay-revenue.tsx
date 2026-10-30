@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fmtDate } from "@/lib/format-date";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { FLAG_LABELS, revenueTotals, serviceMatrix, upgradeTotal, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => (date ? fmtDate(date) : "–"); // dd/mm/yyyy
@@ -27,7 +28,7 @@ export function BluejayRevenue({ monday, scopeId }: { monday: string; scopeId: n
   }, [monday]);
 
   const hotels = useMemo(() => state?.revenue?.hotels.filter((h) => !scopeId || h.id === scopeId) ?? [], [state, scopeId]);
-  if (!state || state.week !== monday) return <p className="summary-note">Đang tải doanh thu…</p>;
+  if (!state || state.week !== monday) return <PageSkeleton label="Đang tải doanh thu…" />;
   if (state.message) return <div className="alert alert-error" role="alert"><span>{state.message}</span></div>;
   if (!state.revenue) return <p className="summary-note">Chưa có báo cáo doanh thu cho tuần này. Bấm “Cập nhật từ Blue Jay” trong khung giờ API để lấy.</p>;
   return <RevenueView hotels={hotels.map((h) => ({ ...h, excludedRoom: h.excluded && h.excluded.reduce((s, b) => s + (b.stay ? b.roomInWeek : 0), 0), excludedService: h.excluded && h.excluded.reduce((s, b) => s + (b.stay ? b.servicePrice : 0), 0) }))} showHotel={!scopeId} period="tuần" />;

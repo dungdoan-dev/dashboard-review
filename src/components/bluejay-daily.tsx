@@ -5,6 +5,7 @@ import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS, addDays, isoWeek, mondayOf } from "@/lib/bluejay-metrics";
 import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => fmtDate(date);
@@ -69,7 +70,7 @@ export function BluejayDaily({ scopeId }: { scopeId: number | null }) {
         </div>
       </div>
 
-      {!state || state.month !== month ? <p className="summary-note">Đang tải…</p> : state.message ? <div className="alert alert-error" role="alert"><span>{state.message}</span></div> : data && <>
+      {!state || state.month !== month ? <PageSkeleton /> : state.message ? <div className="alert alert-error" role="alert"><span>{state.message}</span></div> : data && <>
         {data.missingWeeks.length > 0 && <p className="summary-note bad" role="alert">Blue Jay chưa lưu tuần bắt đầu {data.missingWeeks.map(dm).join(", ")}: các ngày trong tuần đó thiếu tiền phòng và dịch vụ. Bấm “Cập nhật từ Blue Jay” ở trang Vận hành trong khung giờ API để lấy.</p>}
         {data.reliableThrough && to > data.reliableThrough && <p className="summary-note">Ngày đánh dấu * (từ {dm(addDays(data.reliableThrough, 1))}) là tạm tính: tuần chưa lấy xong từ Blue Jay nên đặt phòng trả phòng sau lần lấy gần nhất chưa có.</p>}
         <div className="summary-kpis">

@@ -43,6 +43,10 @@ import {
   Users,
   Utensils,
   X,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
 } from "lucide-react";
 import { AreaTrend, Donut, TrackBars } from "@/components/dashboard-charts";
 import { ReachTable, type Col } from "@/components/reach-table";
@@ -100,6 +104,7 @@ import type {
 } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
+import { BootSkeleton } from "@/components/page-skeleton";
 
 const typeLabels: Record<LocationType, string> = {
   hotel: "Khách sạn",
@@ -1782,7 +1787,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const snapshotFormValues = formDraft?.modal === "snapshot" ? formDraft.values : {};
 
   if (supabaseConfigured && (loading || (!user && loading))) {
-    return <div className="center-state"><LoaderCircle className="spin" size={22} /><span>Đang kết nối không gian làm việc…</span></div>;
+    return <BootSkeleton />;
   }
 
   if (supabaseConfigured && !canUse(user)) {
@@ -2241,18 +2246,29 @@ function ReviewCountCell({ metric }: { metric: Metric | null }) {
   return <span className="review-count">{metric?.reviewCount == null ? "Chưa có số lượng" : `${moneyless(metric.reviewCount)} ${metric.countLabel}`}</span>;
 }
 
+const AUTH_AREAS = [
+  { icon: BedDouble, title: "Vận hành", note: "Công suất, doanh thu, thu chi và kho từ Blue Jay" },
+  { icon: Star, title: "Đánh giá", note: "Điểm và số đánh giá trên Google, Agoda, Booking, Tripadvisor…" },
+  { icon: BarChart3, title: "Tiếp cận", note: "Facebook, Instagram, TikTok, Google Ads và Analytics" },
+  { icon: Users, title: "Nhân sự", note: "Nhân sự và tuyển dụng của từng cơ sở" },
+] as const;
+
 function AuthScreen({ error, onClearError }: { error: string; onClearError: () => void }) {
   const [email, setEmail] = useState("");
+  const [remember, setRemember] = useState(false); // only the email is kept on this device; the password is left to the browser or password manager
+  const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
     try {
+      const kept = window.localStorage.getItem("reviewdesk-remembered-email");
+      if (kept) { setEmail(kept); setRemember(true); return; }
       const saved = window.sessionStorage.getItem("reviewdesk-auth-form-draft");
       if (!saved) return;
       const draft = JSON.parse(saved) as { email?: string };
       if (typeof draft.email === "string") setEmail(draft.email);
     } catch {
-      // Ignore unavailable or malformed session storage.
+      // Ignore unavailable or malformed storage.
     }
   }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -2268,12 +2284,20 @@ function AuthScreen({ error, onClearError }: { error: string; onClearError: () =
     if (!result.error) {
       try {
         window.sessionStorage.removeItem("reviewdesk-auth-form-draft");
+        if (remember) window.localStorage.setItem("reviewdesk-remembered-email", email);
+        else window.localStorage.removeItem("reviewdesk-remembered-email");
       } catch {
-        // Authentication should not depend on session storage.
+        // Authentication should not depend on storage.
       }
     }
     if (result.error) setMessage(result.error.message);
     setPending(false);
   }
-  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#"><span className="brand-mark"><Activity size={19} /></span><span>VJH Dashboard<span className="brand-period">.</span></span></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN TRỊ VẬN HÀNH AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi đánh giá, vận hành, doanh thu và chỉ số tiếp cận của khách sạn, cafe, mart và giải trí trong cùng một không gian.</p><div className="auth-proof"><span><Check size={14} /> Chỉ tài khoản admin được truy cập</span><span><Check size={14} /> Blue Jay, OTA và mạng xã hội trong một nơi</span><span><Check size={14} /> Lưu lịch sử theo từng ngày</span></div></div><div className="auth-visual"><div className="auth-chart"><span style={{ height: "39%" }} /><span style={{ height: "55%" }} /><span style={{ height: "48%" }} /><span style={{ height: "72%" }} /><span style={{ height: "63%" }} /><span style={{ height: "86%" }} /><span style={{ height: "76%" }} /><span style={{ height: "100%" }} /></div><div className="auth-float-card"><span className="float-star"><Star size={14} fill="currentColor" /></span><strong>4,8 <small>/ 5</small></strong><span className="float-label">ĐIỂM TRUNG BÌNH</span></div></div><div className="auth-copyright">© 2026 VJH Dashboard · Dữ liệu của bạn, quyền kiểm soát của bạn.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><span className="brand-mark"><Activity size={18} /></span>VJH Dashboard<span className="brand-period">.</span></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>Chào mừng trở lại</h2><p className="auth-subtitle">Chỉ tài khoản admin được đăng nhập.</p><form className="auth-form" onSubmit={submit}><label className="field">Email<input type="email" name="email" required autoComplete="email" placeholder="ban@congty.com" value={email} onChange={(event) => { const nextEmail = event.target.value; setEmail(nextEmail); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ email: nextEmail })); } catch { /* Keep the field usable without storage. */ } }} /></label><label className="field">Mật khẩu<input type="password" name="password" required minLength={8} autoComplete="current-password" placeholder="Tối thiểu 8 ký tự" /></label>{(error || message) && <div className="auth-error" role="alert">{message || error}</div>}<button className="button button-primary auth-submit" disabled={pending}>{pending && <LoaderCircle className="spin" size={16} />}Đăng nhập<ArrowUpRight size={16} /></button></form><div className="auth-security"><ShieldCheck size={16} /><span>Kết nối được bảo vệ bởi Supabase Auth và chính sách Row Level Security.</span></div></section></div></main>;
+  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#"><span className="brand-mark"><Activity size={19} /></span><span>VJH Dashboard<span className="brand-period">.</span></span></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN TRỊ VẬN HÀNH AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi đánh giá, vận hành, doanh thu và chỉ số tiếp cận của khách sạn, cafe, mart và giải trí trong cùng một không gian.</p><ul className="auth-areas" aria-label="Các phần của hệ thống">{AUTH_AREAS.map(({ icon: Icon, title, note }) => <li key={title}><span className="auth-area-icon"><Icon size={18} aria-hidden="true" /></span><div><strong>{title}</strong><small>{note}</small></div></li>)}</ul></div><div className="auth-copyright">© 2026 VJH Dashboard · Mỗi tài khoản chỉ thấy phần được cấp quyền.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><span className="brand-mark"><Activity size={18} /></span>VJH Dashboard<span className="brand-period">.</span></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>Chào mừng trở lại</h2><p className="auth-subtitle">Đăng nhập bằng tài khoản được cấp. Trình duyệt sẽ hỏi lưu mật khẩu cho lần sau.</p><form className="auth-form" onSubmit={submit}>
+        <div className="auth-field"><label htmlFor="auth-email">Email</label><div className="auth-input"><Mail size={17} aria-hidden="true" /><input id="auth-email" type="email" name="email" required autoComplete="username" placeholder="ban@congty.com" value={email} onChange={(event) => { const nextEmail = event.target.value; setEmail(nextEmail); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ email: nextEmail })); } catch { /* Keep the field usable without storage. */ } }} /></div></div>
+        <div className="auth-field"><label htmlFor="auth-password">Mật khẩu</label><div className="auth-input"><Lock size={17} aria-hidden="true" /><input id="auth-password" type={showPassword ? "text" : "password"} name="password" required minLength={8} autoComplete="current-password" placeholder="Tối thiểu 8 ký tự" /><button type="button" className="auth-eye" aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-pressed={showPassword} onClick={() => setShowPassword((on) => !on)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></div>
+        <label className="auth-remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span>Nhớ email trên máy này</span></label>
+        {(error || message) && <div className="auth-error" role="alert">{message || error}</div>}
+        <button className="button button-primary auth-submit" disabled={pending}>{pending && <LoaderCircle className="spin" size={16} />}Đăng nhập<ArrowUpRight size={16} /></button>
+      </form><div className="auth-security"><ShieldCheck size={16} /><span>Kết nối được bảo vệ bởi Supabase Auth và chính sách Row Level Security. Mật khẩu không được lưu trên hệ thống này.</span></div></section></div></main>;
 }

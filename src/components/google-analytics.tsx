@@ -9,6 +9,7 @@ import { GA4_MAX_DAYS, type Ga4Totals } from "@/lib/google-analytics";
 import { IsoDatePicker } from "@/components/date-picker";
 import { ReachChart } from "@/components/reach-chart";
 import { ReachTable, additive, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (x: number) => `${(x * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`;
@@ -89,7 +90,7 @@ export function GoogleAnalytics() {
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {GA4_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
+      {!data && !invalid && <PageSkeleton label="Đang lấy số liệu…" />}
       {data && !data.message && !invalid && data.sites.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo website">
         <button type="button" aria-pressed={!site} onClick={() => setSite("")}>Tất cả ({data.sites.length})</button>
         {data.sites.map((t) => <button type="button" key={t.id} aria-pressed={site === t.id} onClick={() => setSite(t.id)}>{t.site}</button>)}

@@ -9,6 +9,7 @@ import { MAX_RANGE_DAYS } from "@/lib/bluejay-range";
 import { summarizeRows, type DebtRow } from "@/lib/bluejay-debt";
 import { FLAG_LABELS, OTA_CHANNELS } from "@/lib/bluejay-revenue";
 import { IsoDatePicker } from "@/components/date-picker";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (paid: number, total: number) => (total > 0 ? `${Math.round((paid / total) * 100)}%` : "–");
@@ -108,7 +109,7 @@ export function BluejayPaid({ scopeId }: { scopeId: number | null }) {
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {rangeError && <div className="alert alert-error" role="alert"><span>{rangeError}</span></div>}
       {data?.key === key && data.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {loading && <p className="summary-note">Đang tải…</p>}
+      {loading && <PageSkeleton />}
 
       {ready && data && <>
         {data.missingWeeks.length > 0 && <p className="summary-note bad" role="alert">Blue Jay chưa lưu tuần bắt đầu {data.missingWeeks.map(fmtDate).join(", ")}; các đặt phòng trả phòng trong tuần đó chưa có trong danh sách.</p>}

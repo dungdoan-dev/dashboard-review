@@ -10,6 +10,7 @@ import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
 import { ReachChart } from "@/components/reach-chart";
 import { ReachTable, additive, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const NA = "—"; // Windsor has no figure for it: enter by hand
@@ -81,7 +82,7 @@ export function TiktokPage() {
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {TT_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
+      {!data && !invalid && <PageSkeleton label="Đang lấy số liệu…" />}
       {data && !data.message && !invalid && data.accounts.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo tài khoản">
         <button type="button" aria-pressed={!account} onClick={() => setAccount("")}>Tất cả ({data.accounts.length})</button>
         {data.accounts.map((t) => <button type="button" key={t.id} aria-pressed={account === t.id} onClick={() => setAccount(t.id)}>{t.name}</button>)}

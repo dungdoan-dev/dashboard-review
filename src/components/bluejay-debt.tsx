@@ -6,6 +6,7 @@ import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
 import type { DebtRow } from "@/lib/bluejay-debt";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const AGING: [string, (days: number) => boolean][] = [["Dưới 30 ngày", (d) => d < 30], ["30–59 ngày", (d) => d >= 30 && d < 60], ["Từ 60 ngày", (d) => d >= 60]];
@@ -71,7 +72,7 @@ export function BluejayDebt({ scopeId }: { scopeId: number | null }) {
       </div>
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && <p className="summary-note">Đang tải công nợ…</p>}
+      {!data && <PageSkeleton label="Đang tải công nợ…" />}
 
       {data && !data.message && <>
         {all.length === 0 ? <p className="summary-note">Không có đặt phòng OTA nào còn nợ{scopeId ? " ở khách sạn này" : ""}.</p> : <>

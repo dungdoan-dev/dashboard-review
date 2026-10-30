@@ -10,6 +10,7 @@ import { reachGroup } from "@/lib/reach-order";
 import { IsoDatePicker } from "@/components/date-picker";
 import { ReachChart } from "@/components/reach-chart";
 import { ReachTable, additive, type Col } from "@/components/reach-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => x.toLocaleString("vi-VN");
 const NA = "—"; // Windsor has no figure for it: enter by hand
@@ -81,7 +82,7 @@ export function FacebookPage() {
       {notice && <p className="summary-note" role="status">{notice}</p>}
       {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {FB_MAX_DAYS} ngày.</p>}
       {data?.message && <div className="alert alert-error" role="alert"><span>{data.message}</span></div>}
-      {!data && !invalid && <p className="summary-note">Đang lấy số liệu…</p>}
+      {!data && !invalid && <PageSkeleton label="Đang lấy số liệu…" />}
       {data && !data.message && !invalid && data.pages.length > 1 && <div className="range-presets reconcile-filter" role="group" aria-label="Lọc theo trang">
         <button type="button" aria-pressed={!page} onClick={() => setPage("")}>Tất cả ({data.pages.length})</button>
         {data.pages.map((t) => <button type="button" key={t.id} aria-pressed={page === t.id} onClick={() => setPage(t.id)}>{t.name}</button>)}
