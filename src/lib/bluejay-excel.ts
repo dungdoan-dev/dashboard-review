@@ -1,8 +1,10 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { FLAG_LABELS, upgradeTotal, type RevenueWeek } from "./bluejay-revenue.ts";
 import { addDays, combine, isoWeek, summarize, vnDay, type HotelRecord, type WeeklyReport } from "./bluejay-metrics.ts";
 
 const PCT = "0.00%", INT = "#,##0";
+const thin = { style: "thin" as const, color: { argb: "FF7F8FA6" } };
+const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
 type Cell = string | number | null;
 type Sheet = { name: string; title?: string; all?: boolean; head: string[]; fmt?: string[]; rowFmt?: string[]; rows: Cell[][] };
 
@@ -64,19 +66,21 @@ function revenueSheets(revenue: RevenueWeek, scopeId: number | null): Sheet[] {
 }
 
 // Two separate workbooks: the operations report counts nights in the week, the revenue report counts stays by check-out week, so they never share a file.
-export function workbookFor(report: WeeklyReport, scopeId: number | null = null, revenue: RevenueWeek | null = null, kind: "operations" | "revenue" = "operations"): Buffer {
+// Built with exceljs so every table is ruled with borders; the cells still hold real numbers.
+export async function workbookFor(report: WeeklyReport, scopeId: number | null = null, revenue: RevenueWeek | null = null, kind: "operations" | "revenue" = "operations"): Promise<Buffer> {
   const records = report.hotels.filter((h) => !scopeId || h.id === scopeId);
-  const wb = XLSX.utils.book_new();
+  const book = new ExcelJS.Workbook();
   for (const s of kind === "revenue" ? (revenue ? revenueSheets(revenue, scopeId) : []) : sheets(report, records)) {
     const title = s.title ?? `BÁO CÁO VẬN HÀNH TUẦN ${isoWeek(report.monday)} (TỪ NGÀY ${vnDay(report.monday)}-${vnDay(report.end)})${scopeId && !s.all ? ` - ${records[0].name}` : ""}`;
-    const ws = XLSX.utils.aoa_to_sheet([[title], s.head, ...s.rows]);
-    s.rows.forEach((r, i) => r.forEach((v, j) => {
-      const f = s.rowFmt ? (j ? s.rowFmt[i] : "") : s.fmt?.[j];
-      const cell = ws[XLSX.utils.encode_cell({ r: i + 2, c: j })];
-      if (f && typeof v === "number" && cell) cell.z = f;
+    const ws = book.addWorksheet(s.name);
+    Object.assign(ws.addRow([title]), { font: { bold: true, size: 13, color: { argb: "FF1F3A5F" } } });
+    ws.addRow(s.head).eachCell((c) => Object.assign(c, { border: BORDER, font: { bold: true, color: { argb: "FF1F3A5F" } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } }, alignment: { horizontal: "center", vertical: "middle", wrapText: true } }));
+    s.rows.forEach((r, i) => ws.addRow(r).eachCell({ includeEmpty: true }, (cell, col) => {
+      const j = col - 1, f = s.rowFmt ? (j ? s.rowFmt[i] : "") : s.fmt?.[j];
+      cell.border = BORDER;
+      if (f && typeof cell.value === "number") cell.numFmt = f;
     }));
-    ws["!cols"] = s.head.map((_, j) => ({ wch: j ? 18 : 44 }));
-    XLSX.utils.book_append_sheet(wb, ws, s.name);
+    ws.columns = s.head.map((_, j) => ({ width: j ? 18 : 44 }));
   }
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  return Buffer.from(await book.xlsx.writeBuffer());
 }

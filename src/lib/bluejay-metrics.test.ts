@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { addDays, apiDate, averageRate, combine, hotelRecord, inApiWindow, isExcludedRoom, isoWeek, lastFullWeek, mondayOf, nightsIn, occupancyDaily, occupancyTotals, rate, reservationStats, serviceStats, statusCounts, summarize, type HotelRecord, type Reservation, type WeeklyReport } from "./bluejay-metrics.ts";
 import { workbookFor } from "./bluejay-excel.ts";
 
@@ -111,8 +112,8 @@ const hotel = (id: number, name: string, occ: number): HotelRecord => hotelRecor
 });
 const weekly: WeeklyReport = { v: 3, monday: "2026-10-05", end: "2026-10-11", weekNo: 41, fetchedAt: "2026-10-15T09:00:00Z", hotels: [hotel(1, "A", 40), hotel(2, "B", 60)] };
 
-test("workbook has one sheet per table, numbers stay numbers", () => {
-  const wb = XLSX.read(workbookFor(weekly), { type: "buffer", cellNF: true });
+test("workbook has one sheet per table, numbers stay numbers", async () => {
+  const wb = XLSX.read(await workbookFor(weekly), { type: "buffer", cellNF: true });
   assert.deepEqual(wb.SheetNames, ["Tổng hợp", "Công suất theo ngày", "Tiền phòng theo nguồn", "Tiền phòng theo hạng phòng", "Đặt phòng theo trạng thái", "Dịch vụ theo nhóm"]);
   const s = wb.Sheets["Tổng hợp"];
   assert.deepEqual(["A2", "B2", "C2", "D2"].map((a) => s[a].v), ["Đơn vị", "A", "B", "Toàn chuỗi"]);
@@ -121,10 +122,13 @@ test("workbook has one sheet per table, numbers stay numbers", () => {
   assert.equal(s.D3.v, 0.5); // chain is weighted: (40 + 60) / 200
   assert.equal(s.B5.v, 1000000); // ADR
   assert.equal(wb.Sheets["Dịch vụ theo nhóm"].B3.v, 3); // 1.5 per hotel, fractions kept
+  const ruled = new ExcelJS.Workbook(); await ruled.xlsx.load((await workbookFor(weekly)) as unknown as ArrayBuffer); // every table cell, head and body, has a border
+  const sheet = ruled.getWorksheet("Tổng hợp")!;
+  assert.deepEqual([sheet.getCell("A2").border?.top?.style, sheet.getCell("D3").border?.bottom?.style, sheet.getCell("B8").border?.left?.style], ["thin", "thin", "thin"]);
 });
 
-test("single-hotel scope limits the daily sheet; the summary title carries no hotel name", () => {
-  const wb = XLSX.read(workbookFor(weekly, 2), { type: "buffer" });
+test("single-hotel scope limits the daily sheet; the summary title carries no hotel name", async () => {
+  const wb = XLSX.read(await workbookFor(weekly, 2), { type: "buffer" });
   const daily = wb.Sheets["Công suất theo ngày"];
   assert.deepEqual([daily.A2.v, daily.B2.v, daily.C2], ["Ngày", "B", undefined]);
   assert.match(String(daily.A1.v), /- B$/);
@@ -149,14 +153,14 @@ test("revenue sheets: checkout-week title, M-Standard rows marked and kept out o
   ];
   const services = [{ date: "2026-10-06", total: 100000, groups: [{ name: "Minibar", quantity: 1, total: 100000, items: [{ name: "Nước", unit: "Chai", quantity: 1, total: 100000 }] }] }];
   const revenue = { v: 1, monday: "2026-10-05", end: "2026-10-11", fetchedAt: "x", hotels: [{ id: 1, name: "A", bookings: revenueBookings(rows, "2026-10-05", "2026-10-11"), excluded: revenueBookings(rows, "2026-10-05", "2026-10-11", true), services, basis: "checkout" as const }] };
-  const wb = XLSX.read(workbookFor(weekly, null, revenue, "revenue"), { type: "buffer" });
+  const wb = XLSX.read(await workbookFor(weekly, null, revenue, "revenue"), { type: "buffer" });
   const sum = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Tổng hợp doanh thu"], { header: 1 });
   assert.match(String(sum[0][0]), /TRẢ PHÒNG/);
   assert.deepEqual(sum[2], ["A", 1, 2000000, 100000, 2100000, 700000, 0, 2800000]);
   const list = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Doanh thu theo đặt phòng"], { header: 1 });
   assert.deepEqual(list.slice(2).map((r) => [r[2], r[1]]), [["001", "Tính doanh thu"], ["002", "M-Standard / Unassigned"]]);
   assert.deepEqual(wb.SheetNames, ["Tổng hợp doanh thu", "Doanh thu theo đặt phòng", "Dịch vụ theo ngày", "Chi tiết dịch vụ"]); // no operations sheets in the revenue file
-  assert.equal(XLSX.read(workbookFor(weekly, null, revenue), { type: "buffer" }).SheetNames.includes("Tổng hợp doanh thu"), false); // and none of these in the operations file
+  assert.equal(XLSX.read(await workbookFor(weekly, null, revenue), { type: "buffer" }).SheetNames.includes("Tổng hợp doanh thu"), false); // and none of these in the operations file
   assert.equal(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["Chi tiết dịch vụ"], { header: 1 })[2][3], "Nước");
 });
 
