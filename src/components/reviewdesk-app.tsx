@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   BarChart3,
   BedDouble,
   Banknote,
@@ -48,49 +47,24 @@ import {
   Lock,
   Mail,
 } from "lucide-react";
-import { AreaTrend, Donut, TrackBars } from "@/components/dashboard-charts";
 import { ReachTable, type Col } from "@/components/reach-table";
+import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { canUse, isHr, isMkt } from "@/lib/admin";
 import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
-import TripadvisorRankReportPage, { type TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
+import type { TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
 import { PlatformBrandLogo } from "@/components/platform-brand-logo";
-import { AutomaticSyncSettings } from "@/components/automatic-sync-settings";
 import { ShopeefoodImportButton, type ShopeefoodRow } from "@/components/shopeefood-import";
 import { NotificationBell } from "@/components/notification-bell";
 import { MissingReportsBell } from "@/components/missing-reports-bell";
 import { OverviewScoreboard } from "@/components/overview-scoreboard";
-import { SummaryReport } from "@/components/summary-report";
-import { BluejayReport } from "@/components/bluejay-report";
-import { BluejayReconcile } from "@/components/bluejay-reconcile";
-import { BluejayFinance } from "@/components/bluejay-finance";
-import { BluejayDaily } from "@/components/bluejay-daily";
-import { BluejayCompare } from "@/components/bluejay-compare";
-import { BluejayPnl } from "@/components/bluejay-pnl";
-import { BluejayQl } from "@/components/bluejay-ql";
-import { BluejayStock } from "@/components/bluejay-stock";
-import { BluejayDebt } from "@/components/bluejay-debt";
-import { BluejayPaid } from "@/components/bluejay-paid";
-import { GoogleProfile } from "@/components/google-profile";
-import { FacebookPage } from "@/components/facebook-page";
-import { InstagramPage } from "@/components/instagram-page";
-import { FacebookAds } from "@/components/facebook-ads";
-import { GoogleAds } from "@/components/google-ads";
-import { GoogleAnalytics } from "@/components/google-analytics";
 import { SocialIcon } from "@/components/social-icon";
-import { TiktokPage } from "@/components/tiktok-page";
-import { HrPage } from "@/components/hr-page";
-import { NhanSuPage } from "@/components/nhan-su-page";
-import { IsoDatePicker } from "@/components/date-picker";
 import { customValid, rangeWindow, type CustomRange, type ReportRange } from "@/lib/report-range";
-import { BluejaySyncSettings } from "@/components/bluejay-sync-settings";
-import { BranchSheetsSettings } from "@/components/branch-sheets-settings";
-import { RoleSettings } from "@/components/role-settings";
 import { BLUEJAY_HOTELS, BRANCHES } from "@/lib/bluejay-metrics";
 import { DailyComparisonChanges } from "@/components/daily-comparison-changes";
 import type {
@@ -104,7 +78,45 @@ import type {
 } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
-import { BootSkeleton } from "@/components/page-skeleton";
+import { BootSkeleton, PageSkeleton } from "@/components/page-skeleton";
+
+// Each page is its own chunk, fetched when its route opens (the app used to ship every page, with recharts and the rest, on the first visit).
+const pageLoading = () => <PageSkeleton />;
+const chartLoading = () => <div className="skel skel-fill" aria-hidden="true" />;
+const AreaTrend = dynamic(() => import("@/components/dashboard-charts").then((m) => m.AreaTrend), { loading: chartLoading });
+const Donut = dynamic(() => import("@/components/dashboard-charts").then((m) => m.Donut), { loading: chartLoading });
+const TrackBars = dynamic(() => import("@/components/dashboard-charts").then((m) => m.TrackBars), { loading: chartLoading });
+const HotelScoreBars = dynamic(() => import("@/components/analytics-charts").then((m) => m.HotelScoreBars), { loading: chartLoading });
+const HotelReviewBars = dynamic(() => import("@/components/analytics-charts").then((m) => m.HotelReviewBars), { loading: chartLoading });
+const CompareScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.CompareScoreLines), { loading: chartLoading });
+const CompareReviewLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.CompareReviewLines), { loading: chartLoading });
+const PlatformScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlatformScoreLines), { loading: chartLoading });
+const IsoDatePicker = dynamic(() => import("@/components/date-picker").then((m) => m.IsoDatePicker), { loading: () => null }); // brings react-day-picker and its css
+const SummaryReport = dynamic(() => import("@/components/summary-report").then((m) => m.SummaryReport), { loading: pageLoading });
+const BluejayReport = dynamic(() => import("@/components/bluejay-report").then((m) => m.BluejayReport), { loading: pageLoading });
+const BluejayReconcile = dynamic(() => import("@/components/bluejay-reconcile").then((m) => m.BluejayReconcile), { loading: pageLoading });
+const BluejayFinance = dynamic(() => import("@/components/bluejay-finance").then((m) => m.BluejayFinance), { loading: pageLoading });
+const BluejayDaily = dynamic(() => import("@/components/bluejay-daily").then((m) => m.BluejayDaily), { loading: pageLoading });
+const BluejayCompare = dynamic(() => import("@/components/bluejay-compare").then((m) => m.BluejayCompare), { loading: pageLoading });
+const BluejayPnl = dynamic(() => import("@/components/bluejay-pnl").then((m) => m.BluejayPnl), { loading: pageLoading });
+const BluejayQl = dynamic(() => import("@/components/bluejay-ql").then((m) => m.BluejayQl), { loading: pageLoading });
+const BluejayStock = dynamic(() => import("@/components/bluejay-stock").then((m) => m.BluejayStock), { loading: pageLoading });
+const BluejayDebt = dynamic(() => import("@/components/bluejay-debt").then((m) => m.BluejayDebt), { loading: pageLoading });
+const BluejayPaid = dynamic(() => import("@/components/bluejay-paid").then((m) => m.BluejayPaid), { loading: pageLoading });
+const GoogleProfile = dynamic(() => import("@/components/google-profile").then((m) => m.GoogleProfile), { loading: pageLoading });
+const FacebookPage = dynamic(() => import("@/components/facebook-page").then((m) => m.FacebookPage), { loading: pageLoading });
+const InstagramPage = dynamic(() => import("@/components/instagram-page").then((m) => m.InstagramPage), { loading: pageLoading });
+const FacebookAds = dynamic(() => import("@/components/facebook-ads").then((m) => m.FacebookAds), { loading: pageLoading });
+const GoogleAds = dynamic(() => import("@/components/google-ads").then((m) => m.GoogleAds), { loading: pageLoading });
+const GoogleAnalytics = dynamic(() => import("@/components/google-analytics").then((m) => m.GoogleAnalytics), { loading: pageLoading });
+const TiktokPage = dynamic(() => import("@/components/tiktok-page").then((m) => m.TiktokPage), { loading: pageLoading });
+const HrPage = dynamic(() => import("@/components/hr-page").then((m) => m.HrPage), { loading: pageLoading });
+const NhanSuPage = dynamic(() => import("@/components/nhan-su-page").then((m) => m.NhanSuPage), { loading: pageLoading });
+const AutomaticSyncSettings = dynamic(() => import("@/components/automatic-sync-settings").then((m) => m.AutomaticSyncSettings), { loading: pageLoading });
+const BluejaySyncSettings = dynamic(() => import("@/components/bluejay-sync-settings").then((m) => m.BluejaySyncSettings), { loading: pageLoading });
+const BranchSheetsSettings = dynamic(() => import("@/components/branch-sheets-settings").then((m) => m.BranchSheetsSettings), { loading: pageLoading });
+const RoleSettings = dynamic(() => import("@/components/role-settings").then((m) => m.RoleSettings), { loading: pageLoading });
+const TripadvisorRankReportPage = dynamic(() => import("@/components/tripadvisor-rank-report-page"), { loading: pageLoading });
 
 const typeLabels: Record<LocationType, string> = {
   hotel: "Khách sạn",
@@ -527,8 +539,15 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     setError("");
     try {
       const supabase = createClient();
-      const { data: rows, error: locationError } = await withTimeout(
-        supabase.from("locations").select("id,name,area,type").order("name"),
+      // The three reads do not depend on each other (RLS already limits them to the rows of this account), so they run together: one round trip instead of two.
+      const [{ data: rows, error: locationError }, { data: snapshotData, error: snapshotError }, { data: linkData, error: linksError }] = await withTimeout(
+        Promise.all([
+          supabase.from("locations").select("id,name,area,type").order("name"),
+          needsLiveMetrics ? supabase
+            .from("latest_metric_snapshots")
+            .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,tripadvisor_notice,captured_at") : Promise.resolve({ data: [], error: null }),
+          needsPlatformLinks ? supabase.from("location_platforms").select("location_id,platform,url") : Promise.resolve({ data: [], error: null }),
+        ]),
         20000,
         "Kết nối Supabase quá thời gian chờ khi tải danh sách cơ sở.",
       );
@@ -536,32 +555,16 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         setError(`${locationError.message}. Hãy kiểm tra schema Supabase và chính sách RLS.`);
         return;
       }
-      const ids = (rows ?? []).map((row) => row.id);
-      let snapshots: Record<string, unknown>[] = [];
-      let platformLinks: Record<string, unknown>[] = [];
-      if (ids.length && (needsLiveMetrics || needsPlatformLinks)) {
-        const [{ data: snapshotData, error: snapshotError }, { data: linkData, error: linksError }] = await withTimeout(
-          Promise.all([
-            needsLiveMetrics ? supabase
-              .from("latest_metric_snapshots")
-              .select("id,location_id,platform,rating_value,rating_scale,review_count,count_label,tripadvisor_rank,tripadvisor_notice,captured_at")
-              .in("location_id", ids) : Promise.resolve({ data: [], error: null }),
-            needsPlatformLinks ? supabase.from("location_platforms").select("location_id,platform,url").in("location_id", ids) : Promise.resolve({ data: [], error: null }),
-          ]),
-          20000,
-          "Kết nối Supabase quá thời gian chờ khi tải dữ liệu cơ sở.",
-        );
-        if (snapshotError) {
-          setError(`${snapshotError.message}. Apply supabase/schema.sql.`);
-          return;
-        }
-        if (linksError) {
-          setError(`${linksError.message}. Apply the location_platforms migration.`);
-          return;
-        }
-        snapshots = (snapshotData ?? []) as Record<string, unknown>[];
-        platformLinks = (linkData ?? []) as Record<string, unknown>[];
+      if (snapshotError) {
+        setError(`${snapshotError.message}. Apply supabase/schema.sql.`);
+        return;
       }
+      if (linksError) {
+        setError(`${linksError.message}. Apply the location_platforms migration.`);
+        return;
+      }
+      const snapshots = (snapshotData ?? []) as Record<string, unknown>[];
+      const platformLinks = (linkData ?? []) as Record<string, unknown>[];
       const latest = new Map<string, Record<Platform, Metric | null>>();
       for (const row of snapshots) {
         const current = latest.get(String(row.location_id)) ?? {
@@ -1800,8 +1803,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onMouseOver={(event) => showTip(event.target)} onFocus={(event) => showTip(event.target)} onMouseLeave={() => setTip(null)} onBlur={() => setTip(null)} onScroll={() => setTip(null)} onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
         <div className="brand-row">
           <Link className="brand" href="/" aria-label="VJH Dashboard, về tổng quan">
-            <span className="brand-mark"><Activity size={19} strokeWidth={2.4} /></span>
-            <span>VJH Dashboard<span className="brand-period">.</span></span>
+            <Image className="brand-logo" src="/brand/logo.png" alt="" width={307} height={176} unoptimized />
+            <Image className="brand-emblem" src="/brand/mark.png" alt="" width={105} height={96} unoptimized />
           </Link>
           <button className="sidebar-toggle" type="button" aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-expanded={!collapsed} onClick={toggleSidebar}>{collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
         </div>
@@ -2029,31 +2032,13 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                   {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
                     <header><div><h3>So sánh điểm giữa các khách sạn</h3><p>Mỗi cột là điểm trung bình của các nền tảng đã chọn, quy đổi về thang {reportScale}. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.scoreRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
                     <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, hotelLocations.length * 24)) }}>
-                      <ResponsiveContainer width="100%" height={390}>
-                        <BarChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
-                          <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                          <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
-                          <YAxis domain={[0, reportScale]} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={38} />
-                          <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
-                          <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
-                          {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <HotelScoreBars rows={hotelComparisonData.scoreRows} locations={hotelLocations} scale={reportScale} />
                     </div></div>
                   </article>}
                   {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
                     <header><div><h3>So sánh lượt đánh giá giữa các khách sạn</h3><p>Tổng lượt đánh giá đã chốt từ các nền tảng đang chọn cho từng khách sạn, theo ngày. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.reviewRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
                     <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, hotelLocations.length * 24)) }}>
-                      <ResponsiveContainer width="100%" height={390}>
-                        <BarChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }} barGap={2}>
-                          <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                          <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
-                          <YAxis domain={[0, "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} width={58} />
-                          <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt đánh giá` : "—", String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, fontSize: 12 }} />
-                          <Legend verticalAlign="bottom" height={40} iconType="square" wrapperStyle={{ fontSize: 11 }} />
-                          {hotelLocations.map((location, index) => <Bar key={location.id} dataKey={location.id} name={location.name} fill={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} maxBarSize={32} isAnimationActive={false} />)}
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <HotelReviewBars rows={hotelComparisonData.reviewRows} locations={hotelLocations} />
                     </div></div>
                   </article>}
                 </>
@@ -2067,16 +2052,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                       <header><div><h3>Diễn biến điểm sao</h3><p>Điểm quy đổi về thang {reportScale}; trục dọc tự căn theo vùng điểm để dễ thấy thay đổi.</p></div><span className="report-scale-badge">{dailyAnalyticsRows.length} ngày</span></header>
                       {dailyAnalyticsPlatforms.some((platform) => dailyAnalyticsRows.some((row) => row.metrics[platform]?.rating != null)) ? <>
                         <div className="analytics-chart-scroll">
-                          <ResponsiveContainer width="100%" height={340}>
-                            <LineChart data={dailyAnalyticsChartData} margin={{ top: 12, right: 18, bottom: 8, left: 8 }}>
-                              <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                              <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
-                              <YAxis domain={[dailyAnalyticsScoreDomain.min, dailyAnalyticsScoreDomain.max]} tickFormatter={(value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} width={48} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
-                              <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(1).replace(".", ",")} / ${reportScale}` : "—", platformLabels[name as Platform] ?? String(name)]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
-                              <Legend verticalAlign="bottom" height={34} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#5f7086" }} formatter={(value) => platformLabels[value as Platform] ?? String(value)} />
-                              {dailyAnalyticsPlatforms.map((platform) => <Line key={platform} type="monotone" dataKey={platform} name={platform} stroke={reportPlatformColors[platform]} strokeWidth={2.5} dot={dailyAnalyticsRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />)}
-                            </LineChart>
-                          </ResponsiveContainer>
+                          <PlatformScoreLines data={dailyAnalyticsChartData} domain={dailyAnalyticsScoreDomain} scale={reportScale} platforms={dailyAnalyticsPlatforms} colors={reportPlatformColors} labels={platformLabels} days={dailyAnalyticsRows.length} />
                         </div>
                       </> : <p className="report-empty">Khoảng thời gian này chưa có điểm sao để vẽ biểu đồ.</p>}
                     </article>
@@ -2102,8 +2078,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             {platformFilter}
             {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải báo cáo đã chốt…</div> : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được báo cáo: {timelineError}</div> : hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho lựa chọn này.</div> : <>
               <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{selectedReportPlatforms.length} nguồn đang chọn</span></div>
-              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><ResponsiveContainer width="100%" height={340}><LineChart data={hotelComparisonData.scoreRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} minTickGap={24} /><YAxis domain={[(min: number) => Math.max(0, Math.floor(min * 2 - 1) / 2), reportScale]} width={38} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${value.toFixed(2).replace(".", ",")} / ${reportScale}` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Line key={location.id} type="monotone" dataKey={location.id} name={location.name} stroke={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} strokeWidth={2.5} dot={hotelComparisonData.scoreRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer></article>}
-              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><ResponsiveContainer width="100%" height={340}><LineChart data={hotelComparisonData.reviewRows} margin={{ top: 12, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} minTickGap={24} /><YAxis domain={[(min: number) => Math.floor(min * 0.95), "auto"]} allowDecimals={false} tickFormatter={(value: number) => moneyless(value)} width={58} tickLine={false} axisLine={false} /><Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, name) => [typeof value === "number" ? `${moneyless(value)} lượt` : "—", String(name)]} /><Legend verticalAlign="bottom" height={40} />{comparisonLocations.map((location, index) => <Line key={location.id} type="monotone" dataKey={location.id} name={location.name} stroke={["#3568c8", "#d88a3d", "#22a28d", "#8b63c7", "#c75c73", "#5b8e46"][index % 6]} strokeWidth={2.5} dot={hotelComparisonData.reviewRows.length <= 31 ? { r: 2.5, fill: "#fff", strokeWidth: 2 } : false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer></article>}
+              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><CompareScoreLines rows={hotelComparisonData.scoreRows} locations={comparisonLocations} scale={reportScale} /></article>}
+              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><CompareReviewLines rows={hotelComparisonData.reviewRows} locations={comparisonLocations} /></article>}
               <DailyComparisonChanges locations={comparisonLocations} scoreRows={hotelComparisonData.scoreRows} reviewRows={hotelComparisonData.reviewRows} snapshots={timelineSnapshots} platforms={selectedReportPlatforms} ratingScale={reportScale} />
               <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><ReachTable compact rows={comparisonLocations.map((location) => ({
                 location,
@@ -2293,7 +2269,7 @@ function AuthScreen({ error, onClearError }: { error: string; onClearError: () =
     if (result.error) setMessage(result.error.message);
     setPending(false);
   }
-  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#"><span className="brand-mark"><Activity size={19} /></span><span>VJH Dashboard<span className="brand-period">.</span></span></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN TRỊ VẬN HÀNH AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi đánh giá, vận hành, doanh thu và chỉ số tiếp cận của khách sạn, cafe, mart và giải trí trong cùng một không gian.</p><ul className="auth-areas" aria-label="Các phần của hệ thống">{AUTH_AREAS.map(({ icon: Icon, title, note }) => <li key={title}><span className="auth-area-icon"><Icon size={18} aria-hidden="true" /></span><div><strong>{title}</strong><small>{note}</small></div></li>)}</ul></div><div className="auth-copyright">© 2026 VJH Dashboard · Mỗi tài khoản chỉ thấy phần được cấp quyền.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><span className="brand-mark"><Activity size={18} /></span>VJH Dashboard<span className="brand-period">.</span></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>Chào mừng trở lại</h2><p className="auth-subtitle">Đăng nhập bằng tài khoản được cấp. Trình duyệt sẽ hỏi lưu mật khẩu cho lần sau.</p><form className="auth-form" onSubmit={submit}>
+  return <main className="auth-screen"><div className="auth-left"><a className="brand auth-brand" href="#" aria-label="VJH Dashboard"><Image className="brand-logo" src="/brand/logo-white.png" alt="" width={480} height={263} unoptimized /></a><div className="auth-copy"><div className="eyebrow"><ShieldCheck size={14} /> QUẢN TRỊ VẬN HÀNH AN TOÀN</div><h1>Mọi cơ sở.<br /><em>Một góc nhìn.</em></h1><p>Theo dõi đánh giá, vận hành, doanh thu và chỉ số tiếp cận của khách sạn, cafe, mart và giải trí trong cùng một không gian.</p><ul className="auth-areas" aria-label="Các phần của hệ thống">{AUTH_AREAS.map(({ icon: Icon, title, note }) => <li key={title}><span className="auth-area-icon"><Icon size={18} aria-hidden="true" /></span><div><strong>{title}</strong><small>{note}</small></div></li>)}</ul></div><div className="auth-copyright">© 2026 VJH Dashboard · Mỗi tài khoản chỉ thấy phần được cấp quyền.</div></div><div className="auth-right"><section className="auth-form-wrap"><div className="auth-mobile-brand"><Image className="brand-logo" src="/brand/logo.png" alt="" width={307} height={176} unoptimized /></div><span className="section-kicker">KHÔNG GIAN LÀM VIỆC</span><h2>Chào mừng trở lại</h2><p className="auth-subtitle">Đăng nhập bằng tài khoản được cấp. Trình duyệt sẽ hỏi lưu mật khẩu cho lần sau.</p><form className="auth-form" onSubmit={submit}>
         <div className="auth-field"><label htmlFor="auth-email">Email</label><div className="auth-input"><Mail size={17} aria-hidden="true" /><input id="auth-email" type="email" name="email" required autoComplete="username" placeholder="ban@congty.com" value={email} onChange={(event) => { const nextEmail = event.target.value; setEmail(nextEmail); try { window.sessionStorage.setItem("reviewdesk-auth-form-draft", JSON.stringify({ email: nextEmail })); } catch { /* Keep the field usable without storage. */ } }} /></div></div>
         <div className="auth-field"><label htmlFor="auth-password">Mật khẩu</label><div className="auth-input"><Lock size={17} aria-hidden="true" /><input id="auth-password" type={showPassword ? "text" : "password"} name="password" required minLength={8} autoComplete="current-password" placeholder="Tối thiểu 8 ký tự" /><button type="button" className="auth-eye" aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-pressed={showPassword} onClick={() => setShowPassword((on) => !on)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></div>
         <label className="auth-remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span>Nhớ email trên máy này</span></label>

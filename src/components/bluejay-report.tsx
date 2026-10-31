@@ -13,9 +13,9 @@ import { ReachTable, type Col } from "@/components/reach-table";
 import { BLUEJAY_HOTELS, addDays, combine, isoWeek, mondayOf, summarize, todayVN, type WeeklyReport } from "@/lib/bluejay-metrics";
 import { PageSkeleton } from "@/components/page-skeleton";
 
-const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#6b7280";
-const AXIS = { fill: "#586b84", fontSize: 12 };
-const TOOLTIP = { contentStyle: { border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 13 }, labelStyle: { color: "#344862", fontWeight: 700 } };
+const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#736b80";
+const AXIS = { fill: "#696974", fontSize: 12 };
+const TOOLTIP = { contentStyle: { border: "1px solid #e5dff0", borderRadius: 10, boxShadow: "0 8px 24px #2a1b4518", fontSize: 13 }, labelStyle: { color: "#47474f", fontWeight: 700 } };
 
 const pct = (x: number) => `${(x * 100).toFixed(2).replace(".", ",")}%`;
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
@@ -37,11 +37,11 @@ function LineTrend({ data, series, label, split, percent = true }: { data: Row[]
     <div role="img" aria-label={label} style={{ height: 300 }}>
       <ResponsiveContainer width={chartWidth(printing)} height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="#edf1f6" vertical={false} />
+          <CartesianGrid stroke="#f0edf6" vertical={false} />
           <XAxis dataKey="x" tick={AXIS} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
           <YAxis tick={AXIS} tickLine={false} axisLine={false} width={percent ? 48 : 60} tickFormatter={percent ? (v: number) => `${Math.round(v * 100)}%` : compact} domain={percent ? [0, 1] : [0, "auto"]} />
           <Tooltip {...TOOLTIP} formatter={(v) => (percent ? pct(Number(v)) : num(Number(v)))} />
-          {split && <ReferenceLine x={split} stroke="#95a2b4" strokeDasharray="4 4" label={{ value: "Đặt trước →", fill: "#586b84", fontSize: 12, position: "insideTopRight" }} />}
+          {split && <ReferenceLine x={split} stroke="#a095b4" strokeDasharray="4 4" label={{ value: "Đặt trước →", fill: "#696974", fontSize: 12, position: "insideTopRight" }} />}
           {series.length > 1 && <Legend iconType="plainline" wrapperStyle={{ fontSize: 13 }} />}
           {series.map((s) => <Line key={s.key} dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2} dot={data.length <= 14 ? { r: 4 } : false} connectNulls isAnimationActive={false} />)}
         </LineChart>
@@ -58,12 +58,12 @@ function HBars({ data, name, color, label, money = true }: { data: { name: strin
     <div role="img" aria-label={label} style={{ height: Math.max(120, data.length * 38 + 24) }}>
       <ResponsiveContainer width={chartWidth(printing)} height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="#edf1f6" horizontal={false} />
+          <CartesianGrid stroke="#f0edf6" horizontal={false} />
           <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} tickFormatter={money ? compact : undefined} />
           <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} width={130} interval={0} />
-          <Tooltip {...TOOLTIP} formatter={(v) => fmt(Number(v))} cursor={{ fill: "#f4f6f9" }} />
+          <Tooltip {...TOOLTIP} formatter={(v) => fmt(Number(v))} cursor={{ fill: "#f6f6f7" }} />
           <Bar dataKey="value" name={name} fill={color} radius={[0, 4, 4, 0]} barSize={18} isAnimationActive={false}>
-            <LabelList dataKey="value" position="right" formatter={(v) => (money ? compact(Number(v)) : Number(v).toLocaleString("vi-VN"))} fill="#586b84" fontSize={12} />
+            <LabelList dataKey="value" position="right" formatter={(v) => (money ? compact(Number(v)) : Number(v).toLocaleString("vi-VN"))} fill="#696974" fontSize={12} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -202,7 +202,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
   const recs = report ? report.hotels.filter((h) => !scopeId || h.id === scopeId) : [];
   const s = recs.length ? summarize(recs) : null;
   const c = recs.length ? combine(recs) : null;
-  const barColor = scopeId ? hotelColor(scopeId) : "#6b7280";
+  const barColor = scopeId ? hotelColor(scopeId) : "#736b80";
   const series = recs.map((h) => ({ key: `h${h.id}`, name: h.name, color: hotelColor(h.id) }));
   const daily: Row[] = recs[0]?.days.map((d, i) => ({
     x: fmtDate(d.date),
@@ -497,7 +497,7 @@ function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; v
   const bySource = byKey((b) => b.channel), byRoomType = byKey((b) => b.roomType);
   const serviceList = [...services.values()].sort((a, b) => b.total - a.total), statusList = [...statuses].sort((a, b) => b[1] - a[1]);
   const roomMoney = stays.reduce((s, b) => s + b.roomInWeek, 0), serviceMoney = serviceList.reduce((s, g) => s + g.total, 0);
-  const barColor = scopeId ? hotelColor(scopeId) : "#6b7280";
+  const barColor = scopeId ? hotelColor(scopeId) : "#736b80";
   const missingReport = data?.weeks.filter((w) => !w.report) ?? [];
   const busy = length > 0 && !ready;
   const error = ready?.cur.error ?? "";

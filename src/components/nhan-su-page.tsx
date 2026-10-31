@@ -106,10 +106,10 @@ export function NhanSuPage({ canSync = true }: { canSync?: boolean }) {
             <div className="summary-chart"><h4>Vào và nghỉ việc 12 tháng gần nhất</h4>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={sum.monthly.map((m) => ({ name: `${m.month.slice(5)}/${m.month.slice(2, 4)}`, "Vào làm": m.joined, "Nghỉ việc": m.left }))} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid stroke="#edf1f6" vertical={false} />
+                  <CartesianGrid stroke="#f0edf6" vertical={false} />
                   <XAxis dataKey="name" tick={AXIS} tickLine={false} />
                   <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={36} />
-                  <Tooltip {...TOOLTIP} cursor={{ fill: "#f4f6f9" }} />
+                  <Tooltip {...TOOLTIP} cursor={{ fill: "#f6f6f7" }} />
                   <Legend />
                   <Bar dataKey="Vào làm" fill={PALETTE[2]} radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                   <Bar dataKey="Nghỉ việc" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />

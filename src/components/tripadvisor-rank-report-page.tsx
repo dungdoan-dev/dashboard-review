@@ -59,10 +59,10 @@ export default function TripadvisorRankReportPage({ locationName, rows, loading,
               {chartRows.length > 0 ? <div className="analytics-chart-scroll">
                 <ResponsiveContainer width="100%" height={310}>
                   <LineChart data={chartRows} margin={{ top: 14, right: 18, bottom: 8, left: 8 }}>
-                    <CartesianGrid stroke="#e8edf5" strokeDasharray="3 5" vertical={false} />
-                    <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#dfe6f0" }} />
-                    <YAxis reversed domain={["dataMin", "dataMax"]} allowDecimals={false} width={54} tickFormatter={(value: number) => `#${value}`} tick={{ fill: "#71819a", fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, _name, item) => [`${typeof value === "number" ? `#${value}` : "—"}${typeof item.payload?.rankLabel === "string" ? ` · ${item.payload.rankLabel}` : ""}`, "Xếp hạng"]} contentStyle={{ border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 12 }} labelStyle={{ color: "#344862", fontWeight: 700, marginBottom: 5 }} />
+                    <CartesianGrid stroke="#ede8f5" strokeDasharray="3 5" vertical={false} />
+                    <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} minTickGap={22} tick={{ fill: "#7f7f8c", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#e5dff0" }} />
+                    <YAxis reversed domain={["dataMin", "dataMax"]} allowDecimals={false} width={54} tickFormatter={(value: number) => `#${value}`} tick={{ fill: "#7f7f8c", fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <Tooltip labelFormatter={(value) => fmtDate(String(value))} formatter={(value, _name, item) => [`${typeof value === "number" ? `#${value}` : "—"}${typeof item.payload?.rankLabel === "string" ? ` · ${item.payload.rankLabel}` : ""}`, "Xếp hạng"]} contentStyle={{ border: "1px solid #e5dff0", borderRadius: 10, boxShadow: "0 8px 24px #2a1b4518", fontSize: 12 }} labelStyle={{ color: "#47474f", fontWeight: 700, marginBottom: 5 }} />
                     <Line type="linear" dataKey="position" name="Xếp hạng" stroke="#168a68" strokeWidth={2.5} dot={{ r: 3, fill: "#168a68", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>

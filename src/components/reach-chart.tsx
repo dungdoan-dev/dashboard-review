@@ -5,8 +5,8 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 import { fmtDate } from "@/lib/format-date";
 import type { Col } from "@/components/reach-table";
 
-const AXIS = { fill: "#586b84", fontSize: 12 };
-const TOOLTIP = { contentStyle: { border: "1px solid #dfe6f0", borderRadius: 10, boxShadow: "0 8px 24px #1b2b4518", fontSize: 13 }, labelStyle: { color: "#344862", fontWeight: 700 } };
+const AXIS = { fill: "#696974", fontSize: 12 };
+const TOOLTIP = { contentStyle: { border: "1px solid #e5dff0", borderRadius: 10, boxShadow: "0 8px 24px #2a1b4518", fontSize: 13 }, labelStyle: { color: "#47474f", fontWeight: 700 } };
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const compact = (x: number) => new Intl.NumberFormat("vi-VN", { notation: "compact", maximumFractionDigits: 1 }).format(x);
 
@@ -36,11 +36,11 @@ export function ReachChart<R, D>({ rows, columns, nameOf, daily, dailyColumns, d
         <div role="img" aria-label={`${place.label} theo từng nơi`} style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={placeData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#edf1f6" vertical={false} />
+              <CartesianGrid stroke="#f0edf6" vertical={false} />
               <XAxis dataKey="name" tick={AXIS} tickLine={false} interval={0} angle={-35} textAnchor="end" height={110} tickFormatter={(v: string) => (v.length > 24 ? `${v.slice(0, 23)}…` : v)} />
               <YAxis tick={AXIS} tickLine={false} axisLine={false} width={52} tickFormatter={compact} />
-              <Tooltip {...TOOLTIP} formatter={(v) => num(Number(v))} cursor={{ fill: "#f4f6f9" }} />
-              <Bar dataKey="value" name={place.label} fill="#285ca9" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+              <Tooltip {...TOOLTIP} formatter={(v) => num(Number(v))} cursor={{ fill: "#f6f6f7" }} />
+              <Bar dataKey="value" name={place.label} fill="#5c3899" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -51,11 +51,11 @@ export function ReachChart<R, D>({ rows, columns, nameOf, daily, dailyColumns, d
         <div role="img" aria-label={`${day.label} theo ngày`} style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dayData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#edf1f6" vertical={false} />
+              <CartesianGrid stroke="#f0edf6" vertical={false} />
               <XAxis dataKey="x" tick={AXIS} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
               <YAxis tick={AXIS} tickLine={false} axisLine={false} width={52} tickFormatter={compact} />
               <Tooltip {...TOOLTIP} formatter={(v) => num(Number(v))} />
-              <Line dataKey="value" name={day.label} stroke="#285ca9" strokeWidth={2} dot={dayData.length <= 14 ? { r: 3 } : false} isAnimationActive={false} />
+              <Line dataKey="value" name={day.label} stroke="#5c3899" strokeWidth={2} dot={dayData.length <= 14 ? { r: 3 } : false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
