@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { BLUEJAY_HOTELS, addDays, todayVN } from "@/lib/bluejay-metrics";
@@ -75,7 +74,8 @@ export function BluejayPaid({ scopeId }: { scopeId: number | null }) {
     ["Tuần trước", lastMonday, addDays(lastMonday, 6)],
   ];
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     const head = ["Khách sạn", "Kênh", "Mã đặt phòng", "Mã OTA", "Phòng", "Nhận phòng", "Trả phòng", "Tổng tiền", "Đã thanh toán", "Còn nợ", "Lưu ý", "Dữ liệu tính đến"];
     const body = shown.map((r) => [r.hotel, r.channel, r.code, r.ref, r.room, fmtDate(r.checkIn), fmtDate(r.checkOut), r.totalPrice, r.payment, r.balance, r.flags.map((f) => FLAG_LABELS[f]).join("; "), fmtDateTime(r.asOf)]);
     const sum = [["Kênh", "Đặt phòng", "Đã thanh toán đủ", "Còn nợ", "Tổng tiền", "Đã thu", "Còn lại"], ...[...summary.channels, summary.all].map((c) => [c.name, c.bookings, c.paidBookings, c.openBookings, c.total, c.paid, c.balance])];

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
@@ -66,7 +65,8 @@ export function GoogleAnalytics() {
   const daily = (data?.daily ?? []).filter((d) => !site || d.id === site);
   const sessions = sites.reduce((s, t) => s + t.sessions, 0);
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     const book = XLSX.utils.book_new();
     const sheet = <R,>(name: string, cols: Col<R>[], rows: R[]) => XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([cols.map((c) => c.label), ...rows.map((r) => cols.map((c) => c.value ? c.value(r) : c.text(r)))]), name);
     sheet("Theo website", siteCols, sites); sheet("Theo nguồn", channelCols, channels); sheet("Theo ngày", dayCols, daily);

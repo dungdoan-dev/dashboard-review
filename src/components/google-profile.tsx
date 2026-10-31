@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
@@ -50,7 +49,8 @@ export function GoogleProfile() {
     setVersion((v) => v + 1);
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     const head = ["Cơ sở", "Từ ngày", "Đến ngày", ...COLUMNS.map(([label]) => label)];
     const body = locations.map((t) => [t.name, fmtDate(from), fmtDate(to), ...COLUMNS.map(([, value]) => value(t))]);
     const book = XLSX.utils.book_new();

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, ExternalLink, FileDown, FileSpreadsheet } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -69,7 +68,8 @@ export function BluejayReconcile({ scopeId }: { scopeId: number | null }) {
     setShown((current) => (current.includes(kind) ? current.filter((k) => k !== kind) : [...current, kind]));
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     if (!result || !ledger) return;
     const head = ["Kết quả", "Mã / ID", "Nguồn", "Phòng", "Nhận phòng", "Trả phòng", "Trạng thái Blue Jay", "So sánh theo", "Bảng kê", "Blue Jay", "Chênh (bảng kê − Blue Jay)", "Số dòng bảng kê", "Ghi chú"];
     const body = result.items.map((i) => [KIND_LABELS[i.kind], i.id, i.channel, i.room, i.checkIn && fmtDate(i.checkIn), i.checkOut && fmtDate(i.checkOut), i.status, i.basis ? BASIS[i.basis] : "", i.excel, i.bluejay, i.diff, i.lines, i.notes.join("; ")]);

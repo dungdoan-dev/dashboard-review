@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
 import { addDays, todayVN } from "@/lib/bluejay-metrics";
@@ -58,7 +57,8 @@ export function FacebookPage() {
   const pages = (data?.pages ?? []).filter((t) => !page || t.id === page);
   const daily = (data?.daily ?? []).filter((d) => !page || d.id === page);
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["Trang", "Từ ngày", "Đến ngày", ...COLUMNS.map(([label]) => label)], ...pages.map((t) => [t.name, fmtDate(from), fmtDate(to), ...COLUMNS.map(([, value]) => value(t) ?? "")])]), "Facebook");
     XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["Ngày", "Trang", ...DAILY.map(([label]) => label)], ...daily.map((d) => [fmtDate(d.day), d.name, ...DAILY.map(([, value]) => value(d))])]), "Theo ngày");

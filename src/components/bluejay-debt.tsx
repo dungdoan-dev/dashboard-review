@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
 import { BLUEJAY_HOTELS } from "@/lib/bluejay-metrics";
@@ -50,7 +49,8 @@ export function BluejayDebt({ scopeId }: { scopeId: number | null }) {
   const total = all.reduce((s, r) => s + r.balance, 0);
   const hotelName = BLUEJAY_HOTELS.find((h) => h.id === scopeId)?.name ?? "Toàn chuỗi";
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx"); // loaded when the file is made, not with the page
     const head = ["Khách sạn", "OTA", "Mã đặt phòng", "Mã OTA", "Phòng", "Nhận phòng", "Trả phòng", "Số ngày kể từ trả phòng", "Tổng tiền", "Đã thanh toán", "Còn nợ", "Dữ liệu tính đến"];
     const body = rows.map((r) => [r.hotel, r.channel, r.code, r.ref, r.room, fmtDate(r.checkIn), fmtDate(r.checkOut), r.days, r.totalPrice, r.payment, r.balance, fmtDateTime(r.asOf)]);
     const book = XLSX.utils.book_new();
