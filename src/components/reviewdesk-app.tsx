@@ -1882,7 +1882,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isOverviewPage && <>
           {(selectedType === "cafe" || selectedType === "mart") && <div className="manual-import-bar">{shopeefoodButtons.filter((button) => button.key === selectedType)}</div>}
           {platformFilter}
-          <OverviewScoreboard locations={typeLocations} platforms={selectedReportPlatforms} scale={reportScale} userId={supabaseConfigured ? user?.id ?? null : null} selectedId={dashboardLocation?.id ?? null} typeLabel={filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""} onSelect={(id) => { setSelectedLocationId(id); router.push("/detail"); }} />
+          <OverviewScoreboard locations={typeLocations} platforms={selectedReportPlatforms} scale={reportScale} userId={supabaseConfigured ? user?.id ?? null : null} typeLabel={filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""} onSelect={(id) => { setSelectedLocationId(id); router.push("/detail"); }} />
           </>}
 
           {isGoogleProfilePage && <GoogleProfile />}

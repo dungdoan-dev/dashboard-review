@@ -13,7 +13,10 @@ export type Slice = { name: string; value: number; color: string };
 
 /** Biểu đồ tròn rỗng giữa, chú thích bên phải kèm tỷ trọng. */
 export function Donut({ slices: unsorted, unit, width, animate }: { slices: Slice[]; unit: string; width: number | "100%"; animate: boolean }) {
-  const slices = [...unsorted].sort((a, b) => b.value - a.value);
+  const sorted = [...unsorted].sort((a, b) => b.value - a.value);
+  // more parts than palette colours would repeat colours, so the smallest ones are folded into one grey "Khác"
+  const rest = sorted.slice(PALETTE.length - 1);
+  const slices = sorted.length > PALETTE.length ? [...sorted.slice(0, PALETTE.length - 1), { name: `Khác (${rest.length})`, value: rest.reduce((sum, item) => sum + item.value, 0), color: "#b4b4be" }] : sorted;
   const total = slices.reduce((sum, item) => sum + item.value, 0);
   if (total <= 0) return <p className="summary-note">Chưa có số liệu để vẽ.</p>;
   return <ResponsiveContainer width={width} height={Math.max(200, slices.length * 28 + 40)}>

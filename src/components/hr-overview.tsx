@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AXIS, Donut, PALETTE, TOOLTIP } from "@/components/dashboard-charts";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { countBy, statusTone, type HrBirthday, type HrCand, type HrNeed, type HrIntv, type HrPayload, type HrStaff } from "@/lib/hr";
@@ -13,10 +13,10 @@ export function Columns({ rows, unit }: { rows: [string, number][]; unit: string
   return <ResponsiveContainer width="100%" height={280}>
     <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
       <CartesianGrid stroke="#f0edf6" vertical={false} />
-      <XAxis dataKey="name" tick={AXIS} tickLine={false} interval={0} angle={data.length > 4 ? -25 : 0} textAnchor={data.length > 4 ? "end" : "middle"} height={data.length > 4 ? 70 : 30} tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)} />
+      <XAxis dataKey="name" tick={AXIS} tickLine={false} interval={0} padding={{ left: data.length > 4 ? 24 : 0, right: 0 }} angle={data.length > 4 ? -25 : 0} textAnchor={data.length > 4 ? "end" : "middle"} height={data.length > 4 ? 70 : 30} tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)} />
       <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={36} />
       <Tooltip {...TOOLTIP} cursor={{ fill: "#f6f6f7" }} formatter={(v) => `${v} ${unit}`} />
-      <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>{data.map((d, i) => <Cell key={d.name} fill={PALETTE[i % PALETTE.length]} />)}</Bar>
+      <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false} fill="#7956b5" />
     </BarChart>
   </ResponsiveContainer>;
 }
