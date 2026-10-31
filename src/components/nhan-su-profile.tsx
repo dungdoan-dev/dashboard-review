@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState, type ReactNode } from "react";
 import { Briefcase, CalendarClock, GraduationCap, MapPin, Phone, Search, UserRound } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
@@ -7,6 +8,14 @@ import { ageOn, isLeft, tenureText, type HrStaffRow } from "@/lib/hr-staff";
 
 const plain = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/gi, "d").toLowerCase();
 const initials = (name: string) => { const w = name.trim().split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[w.length - 1][0] : (w[0] ?? "?").slice(0, 2)).toUpperCase(); };
+const isLeader = (position: string) => /giam doc|truong phong|quan l[yi]/.test(plain(position));
+/** Picture by gender (Nam / Nữ) and role (leaders: giám đốc, trưởng phòng, quản lý; everyone else: staff). Gender not filled in → initials. */
+function Avatar({ person, large }: { person: HrStaffRow; large?: boolean }) {
+  const cls = `np-avatar${large ? " np-avatar-lg" : ""}`;
+  const sex = /^nữ/i.test(person.gender) ? "nu" : /^nam/i.test(person.gender) ? "nam" : "";
+  if (!sex) return <span className={cls} aria-hidden="true">{initials(person.name)}</span>;
+  return <span className={cls} aria-hidden="true"><Image src={`/avatars/${sex}-${isLeader(person.position) ? "ql" : "nv"}.png`} alt="" width={160} height={160} /></span>;
+}
 const date = (d: string | null) => (d ? fmtDate(d) : "");
 const daysTo = (d: string | null, today: string) => (d ? Math.round((Date.parse(d) - Date.parse(today)) / 86_400_000) : null);
 export const staffKey = (s: HrStaffRow) => `${s.unit}|${s.staff_id}`;
@@ -41,7 +50,7 @@ export function NhanSuProfile({ staff, picked, onPick, today }: { staff: HrStaff
         <ul className="np-list" aria-label="Danh sách nhân viên">
           {shown.map((x) => <li key={staffKey(x)}>
             <button type="button" className="np-item" aria-current={staffKey(x) === staffKey(s) ? "true" : undefined} onClick={() => onPick(staffKey(x))}>
-              <span className="np-avatar" aria-hidden="true">{initials(x.name)}</span>
+              <Avatar person={x} />
               <span className="np-item-text"><strong>{x.name || x.staff_id}</strong><small>{x.position || x.department || "—"} · {x.unit}</small></span>
               {isLeft(x) && <span className="hr-badge red">Đã nghỉ</span>}
             </button>
@@ -53,7 +62,7 @@ export function NhanSuProfile({ staff, picked, onPick, today }: { staff: HrStaff
 
       <article className="np-main" aria-label={`Hồ sơ ${s.name}`}>
         <header className="np-head">
-          <span className="np-avatar np-avatar-lg" aria-hidden="true">{initials(s.name)}</span>
+          <Avatar person={s} large />
           <div>
             <h3>{s.name || s.staff_id}</h3>
             <p>{[s.staff_id, s.position, s.unit].filter(Boolean).join(" · ")}</p>

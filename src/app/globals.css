@@ -1336,7 +1336,9 @@ select { cursor: pointer; }
 .np-item-text strong, .np-item-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-item-text small { color: var(--muted); font-size: 12px; }
 .np-avatar { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 800; }
-.np-avatar-lg { width: 64px; height: 64px; font-size: 20px; }
+.np-avatar { overflow: hidden; }
+.np-avatar img { display: block; width: 100%; height: 100%; }
+.np-avatar-lg { width: 64px; height: 64px; }
 .np-count { margin: 0; color: var(--faint); font-size: 12px; }
 .np-main { display: grid; gap: 14px; min-width: 0; }
 .np-head { display: flex; align-items: center; gap: 16px; padding: 18px; border: 1px solid #ededef; border-radius: 12px; background: #fff; }
