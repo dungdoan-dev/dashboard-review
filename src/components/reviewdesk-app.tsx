@@ -1831,10 +1831,10 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
             <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
             <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
-            <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
-            <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
             <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} href="/google-analytics" data-tip="Google Analytics"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
             <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
+            <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
+            <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
           </>)}
         </nav>
         <div className="sidebar-bottom">
