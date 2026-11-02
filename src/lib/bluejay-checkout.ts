@@ -3,7 +3,7 @@
 // M-Standard and Unassigned rooms are left out of the totals, as in every other report, and kept apart in "excluded".
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
-import type { HotelRevenue, RevenueBooking, RevenueWeek } from "./bluejay-revenue.ts";
+import { latestStays, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 
 export type CheckoutDay = {
   date: string;
@@ -25,13 +25,9 @@ const datesBetween = (from: string, to: string) => { const dates: string[] = [];
 
 /** One record per booking over all stored weeks (the latest snapshot wins), summed on its check-out day when that is inside from..to. */
 function byCheckout(weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string) {
-  const latest = new Map<string, { b: RevenueBooking; at: string }>();
-  for (const { week, hotel } of weeks) for (const b of pick(hotel)) {
-    const key = `${b.code}|${b.room}|${b.roomType}`, at = week.paymentsAt ?? week.fetchedAt;
-    if (!latest.has(key) || at > latest.get(key)!.at) latest.set(key, { b, at });
-  }
+  const snapshots = weeks.flatMap(({ week, hotel }) => pick(hotel).map((b) => ({ b, at: week.paymentsAt ?? week.fetchedAt })));
   const byDay = new Map<string, { nights: number; room: number; service: number }>();
-  for (const { b } of latest.values()) {
+  for (const { b } of latestStays(snapshots)) {
     if (!b.stay || b.nights <= 0 || b.checkOut < from || b.checkOut > to) continue;
     const day = byDay.get(b.checkOut) ?? { nights: 0, room: 0, service: 0 };
     day.nights += b.nights; day.room += b.roomPrice; day.service += b.servicePrice; byDay.set(b.checkOut, day);

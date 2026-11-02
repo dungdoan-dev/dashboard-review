@@ -83,6 +83,18 @@ export function serviceDay(date: string, response: { data?: unknown } | null): S
 export type Money = { bookings: number; nights: number; room: number; service: number; total: number; payment: number; balance: number; deposit: number };
 const zero = (): Money => ({ bookings: 0, nights: 0, room: 0, service: 0, total: 0, payment: 0, balance: 0, deposit: 0 });
 
+/** One record per stay over stored snapshots of bookings (the newest pull wins). A booking can hold two stays in the same room (the guest leaves and comes back), so snapshots with the same code, room and room type are one stay only when they start the same day or their dates overlap; stays that only touch (out on the 1st, in on the 1st) stay apart. */
+export function latestStays(snapshots: { b: RevenueBooking; at: string }[]) {
+  const kept = new Map<string, { b: RevenueBooking; at: string }[]>();
+  for (const s of snapshots) {
+    const key = `${s.b.code}|${s.b.room}|${s.b.roomType}`, list = kept.get(key) ?? [];
+    const i = list.findIndex((k) => k.b.checkIn === s.b.checkIn || (k.b.checkIn < s.b.checkOut && s.b.checkIn < k.b.checkOut));
+    if (i < 0) list.push(s); else if (s.at > list[i].at) list[i] = s;
+    kept.set(key, list);
+  }
+  return [...kept.values()].flat();
+}
+
 /** Totals over real stays. Room money is the part inside the week; service, total, payment and balance are whole-booking amounts. */
 export function revenueTotals(rows: RevenueBooking[]) {
   const stays = rows.filter((r) => r.stay);

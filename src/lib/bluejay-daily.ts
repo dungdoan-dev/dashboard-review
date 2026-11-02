@@ -3,7 +3,7 @@
 // Service money: the stored daily totals by service group. M-Standard and Unassigned rooms are left out of the totals, as in every other report, and kept apart in "excluded".
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
-import type { HotelRevenue, RevenueBooking, RevenueWeek } from "./bluejay-revenue.ts";
+import { latestStays, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 import { otaSplit } from "./ota-commission.ts";
 
 export type DailyDay = {
@@ -30,13 +30,9 @@ const datesBetween = (from: string, to: string) => { const dates: string[] = [];
 
 /** One record per booking over all stored weeks (the latest snapshot wins), its room money split over its nights, for the nights inside from..to (checkout: the whole stay on its check-out day, the finance team's rule). */
 function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string, checkout: boolean) {
-  const latest = new Map<string, { b: RevenueBooking; at: string }>();
-  for (const { week, hotel } of weeks) for (const b of pick(hotel)) {
-    const key = `${b.code}|${b.room}|${b.roomType}`, at = week.paymentsAt ?? week.fetchedAt;
-    if (!latest.has(key) || at > latest.get(key)!.at) latest.set(key, { b, at });
-  }
+  const snapshots = weeks.flatMap(({ week, hotel }) => pick(hotel).map((b) => ({ b, at: week.paymentsAt ?? week.fetchedAt })));
   const byDay = new Map<string, { nights: number; money: number; gross: number; commission: number }>();
-  for (const { b } of latest.values()) {
+  for (const { b } of latestStays(snapshots)) {
     if (!b.stay || b.nights <= 0 || !b.checkIn) continue;
     const count = checkout ? b.nights : 1, perNight = checkout ? b.roomPrice : b.roomPrice / b.nights, split = otaSplit(b.channel, hotelId, perNight);
     for (let i = 0; i < (checkout ? 1 : b.nights); i++) {

@@ -59,3 +59,15 @@ test("checkout: a stay's whole room money and OTA split land on its check-out da
   assert.deepEqual(days.map((x) => x.room), [0, 0, 0, 0, 900_000, 0]);
   assert.deepEqual([days[4].rooms, Math.round(days[4].commission)], [3, 135_000]);
 });
+
+test("two stays of one booking in the same room both count; a later snapshot of the same stay (extended) replaces the earlier one; stays that only touch stay apart", () => {
+  const first = booking({ code: "010209", checkIn: "2026-08-02", checkOut: "2026-08-05", nights: 3, roomPrice: 900_000 });
+  const back = booking({ code: "010209", checkIn: "2026-08-10", checkOut: "2026-08-11", nights: 1, roomPrice: 400_000 });
+  const touching = booking({ code: "010216", checkIn: "2026-08-05", checkOut: "2026-08-06", nights: 1, roomPrice: 750_000 });
+  const touching2 = booking({ code: "010216", checkIn: "2026-08-06", checkOut: "2026-08-08", nights: 2, roomPrice: 1_500_000 });
+  const room = (weeks: RevenueWeek[]) => dailyRevenue(weeks, "2026-08-01", "2026-08-16", true).hotels[0].days.reduce((s, d) => s + d.room, 0);
+  assert.equal(room([week("2026-07-27", [first]), week("2026-08-10", [back])]), 1_300_000);
+  assert.equal(room([week("2026-08-03", [touching, touching2])]), 2_250_000);
+  const extended = booking({ code: "010209", checkIn: "2026-08-02", checkOut: "2026-08-07", nights: 5, roomPrice: 1_500_000 });
+  assert.equal(room([week("2026-07-27", [first], {}, "2026-08-10T00:00:00Z"), week("2026-08-03", [extended], {}, "2026-08-20T00:00:00Z")]), 1_500_000); // the newer pull wins
+});
