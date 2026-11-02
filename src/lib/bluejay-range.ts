@@ -55,7 +55,7 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
         const nights = checkout ? b.nights : lo <= hi ? nightsIn({ checkInTime: b.checkIn, checkOutTime: b.checkOut }, lo, hi) : 0;
         if (checkout ? !(lo <= hi && b.checkOut >= lo && b.checkOut <= hi) : nights <= 0) continue;
         const room = b.stay && b.nights > 0 ? (checkout ? b.roomPrice : (b.roomPrice / b.nights) * nights) : 0;
-        const key = `${b.code}|${b.room}|${b.roomType}`;
+        const key = `${b.code}|${b.room}|${b.roomType}${checkout ? `|${b.checkIn}` : ""}`; // a check-out week holds whole stays: a booking that comes back to the same room is a second stay, with its own money
         const seen = merged.get(key);
         const pulled = week.paymentsAt ?? week.fetchedAt;
         if (seen) {

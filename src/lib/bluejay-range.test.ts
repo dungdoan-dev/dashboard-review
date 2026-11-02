@@ -67,3 +67,15 @@ test("a booking stored in two weeks keeps the money of the newest snapshot, whil
   assert.equal(booking.payment, 2000000);
   assert.equal(booking.balance, 0);
 });
+
+test("in a check-out week two stays of one booking in the same room stay two rows, with their own room and service money", () => {
+  const stay = (checkIn: string, checkOut: string, nights: number, roomPrice: number, servicePrice: number) => ({
+    code: "010209", ref: "", source: "Walking", channel: "Khách lẻ", roomType: "Deluxe", room: "P - 102", status: "Đã trả phòng", bookDate: "2026-10-01", checkIn, checkOut, nights, nightsInWeek: nights,
+    roomPrice, roomInWeek: roomPrice, servicePrice, totalPrice: roomPrice + servicePrice, payment: 0, balance: 0, deposit: 0, stay: true, flags: [],
+  });
+  const monday = "2026-10-05", bookings = [stay("2026-10-03", "2026-10-06", 3, 1_350_000, 35_000), stay("2026-10-08", "2026-10-09", 1, 400_000, 180_000)];
+  const co: RevenueWeek = { v: REVENUE_VERSION, monday, end: "2026-10-11", fetchedAt: "x", hotels: [{ id: 1, name: "H", bookings, services: [], basis: "checkout" }] };
+  const h = rangeData([], [co], "2026-10-01", "2026-10-31").hotels[0];
+  assert.equal(h.bookings.length, 2);
+  assert.deepEqual([h.bookings.reduce((s, b) => s + b.roomInWeek, 0), h.bookings.reduce((s, b) => s + b.servicePrice, 0)], [1_750_000, 215_000]);
+});

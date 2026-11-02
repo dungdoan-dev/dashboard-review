@@ -16,12 +16,14 @@ export type DailyDay = {
   service: number;
   total: number;                      // room + service
   excludedRooms: number; excludedRoom: number; // M-Standard / Unassigned nights and their room money: not in the totals
+  checkoutService: number;            // service money of the stays that check out this day (only filled with checkout, else 0)
 };
 export type DailyHotel = { id: number; name: string; days: DailyDay[] };
 export type DailyRevenue = {
   from: string; to: string;
   groups: string[];                   // service groups found, biggest first
   hotels: DailyHotel[];
+  serviceOnCheckout: boolean;         // the room money and checkoutService are by check-out day (service by group is still by the day sold)
   reliableThrough: string;            // days after this one may be missing stays that have not checked out yet: a week is stored when it is pulled, with the stays that check out in it
   missingWeeks: string[];             // Mondays of the range with no stored revenue week
 };
@@ -31,15 +33,15 @@ const datesBetween = (from: string, to: string) => { const dates: string[] = [];
 /** One record per booking over all stored weeks (the latest snapshot wins), its room money split over its nights, for the nights inside from..to (checkout: the whole stay on its check-out day, the finance team's rule). */
 function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string, checkout: boolean) {
   const snapshots = weeks.flatMap(({ week, hotel }) => pick(hotel).map((b) => ({ b, at: week.paymentsAt ?? week.fetchedAt })));
-  const byDay = new Map<string, { nights: number; money: number; gross: number; commission: number }>();
+  const byDay = new Map<string, { nights: number; money: number; gross: number; commission: number; service: number }>();
   for (const { b } of latestStays(snapshots)) {
     if (!b.stay || b.nights <= 0 || !b.checkIn) continue;
     const count = checkout ? b.nights : 1, perNight = checkout ? b.roomPrice : b.roomPrice / b.nights, split = otaSplit(b.channel, hotelId, perNight);
     for (let i = 0; i < (checkout ? 1 : b.nights); i++) {
       const date = checkout ? b.checkOut : addDays(b.checkIn, i);
       if (date < from || date > to) continue;
-      const day = byDay.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 };
-      day.nights += count; day.money += perNight; day.gross += split.gross; day.commission += split.commission; byDay.set(date, day);
+      const day = byDay.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0, service: 0 };
+      day.nights += count; day.money += perNight; day.gross += split.gross; day.commission += split.commission; if (checkout) day.service += b.servicePrice; byDay.set(date, day);
     }
   }
   return byDay;
@@ -67,13 +69,13 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string, 
       serviceOf.set(d.date, { at, groups: Object.fromEntries(d.groups.map((g) => [g.name, g.total])) });
     }
     const days = dates.map((date): DailyDay => {
-      const r = rooms.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 };
+      const r = rooms.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0, service: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0, service: 0 };
       const services = serviceOf.get(date)?.groups ?? {};
       const service = Object.values(services).reduce((s, v) => s + v, 0);
       for (const [g, v] of Object.entries(services)) groupTotal.set(g, (groupTotal.get(g) ?? 0) + v);
-      return { date, rooms: r.nights, room: r.money, roomGross: r.gross, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money };
+      return { date, rooms: r.nights, room: r.money, roomGross: r.gross, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money, checkoutService: r.service };
     });
     return { id, name, days };
   });
-  return { from, to, groups: [...groupTotal].sort((a, b) => b[1] - a[1]).map(([g]) => g), hotels, reliableThrough: latestMonday ? addDays(latestMonday, -1) : "", missingWeeks };
+  return { from, to, serviceOnCheckout: checkout, groups: [...groupTotal].sort((a, b) => b[1] - a[1]).map(([g]) => g), hotels, reliableThrough: latestMonday ? addDays(latestMonday, -1) : "", missingWeeks };
 }

@@ -53,3 +53,12 @@ test("a week split by two months shows in full in both, the month row only adds 
   assert.equal(rows.find((r) => r.week === "Cả tháng")!.room, 1000);
   assert.deepEqual([compareSpan("2026-10"), compareSpan("2026-11")], [{ from: "2026-09-28", to: "2026-11-01" }, { from: "2026-10-26", to: "2026-12-06" }]);
 });
+
+test("with check-out service, the total is the checked-out bookings' and the groups share it as they sold; nothing sold gives Thu khác; no check-out service gives zero", () => {
+  const out = (checkoutService: number, services: Record<string, number>) => ({ hotels: [{ id: 1, name: "A", days: [{ ...day("2026-10-01", 0, services), checkoutService }] }], serviceOnCheckout: true }) as unknown as DailyRevenue;
+  const row = (d: DailyRevenue) => compareRows("2026-10", d, { dates: [], hotels: [] } as unknown as RangeData).find((r) => r.week === "Cả tháng")!;
+  const a = row(out(1000, { Minibar: 100, "Giặt ủi": 300 }));
+  assert.deepEqual([a.minibar, a.laundry, a.other], [250, 750, 0]); // sold 1:3
+  assert.equal(row(out(500, {})).other, 500);
+  assert.equal(row(out(0, { Minibar: 100 })).minibar, 0);
+});
