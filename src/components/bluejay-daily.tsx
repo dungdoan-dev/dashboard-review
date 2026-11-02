@@ -6,6 +6,7 @@ import { BLUEJAY_HOTELS, addDays, isoWeek, mondayOf } from "@/lib/bluejay-metric
 import type { CheckoutDay, CheckoutRevenue } from "@/lib/bluejay-checkout";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { DailyCharts } from "@/components/operations-charts";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => fmtDate(date);
@@ -81,6 +82,7 @@ export function BluejayDaily({ scopeId }: { scopeId: number | null }) {
           <div className="summary-kpi"><span>M-Standard / Unassigned</span><strong>{num(excluded)}</strong><small>{num(sum((d) => d.excludedRooms))} đêm, không tính ở trên</small></div>
           <div className="summary-kpi"><span>Tổng có M-Standard / Unassigned</span><strong>{num(room + service + excluded)}</strong><small>số để so với kế toán</small></div>
         </div>
+        <DailyCharts days={days} />
         <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Theo tuần</h4></summary>
           <ReachTable rows={weekRows} rowKey={(r) => r.key} columns={cols("Tuần")} compact />

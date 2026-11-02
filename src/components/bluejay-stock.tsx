@@ -9,6 +9,7 @@ import { SheetKindSwitch } from "@/components/sheet-kind-switch";
 import { SHEET_KINDS, type SheetKind } from "@/lib/ledger-sheets";
 import { parseInventorySheet, salesCheck, stockReport, type Inventory, type SalesCheck, type StockLine } from "@/lib/inventory";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { StockCharts } from "@/components/operations-charts";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const signed = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(x));
@@ -112,6 +113,7 @@ export function BluejayStock({ scopeId }: { scopeId: number | null }) {
           <div className="summary-kpi"><span>Giá trị tồn cuối</span><strong>{num(report.totals.closingValue)}</strong></div>
           <div className="summary-kpi"><span>Chênh kiểm kê</span><strong>{counted.length ? signed(report.totals.countDiffValue) : "–"}</strong><small>{counted.length ? `${counted.filter((l) => l.count!.diff).length}/${counted.length} mặt hàng lệch` : "Chưa có kiểm kê"}</small></div>
         </div>
+        <StockCharts lines={report.lines.map((l) => ({ name: l.item.name, kind: l.item.kind, closingValue: l.closingValue, issueValue: l.issueValue }))} />
         <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Tồn kho theo mặt hàng</h4></summary>
           <ReachTable rows={report.lines} rowKey={(l) => l.item.name} columns={lineCols} groupOf={(l) => l.item.kind || "Khác"} compact />

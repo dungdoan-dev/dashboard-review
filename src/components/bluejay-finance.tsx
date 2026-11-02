@@ -12,6 +12,7 @@ import { ledgerWarnings, parseLedgerWorkbook, type Ledger } from "@/lib/bluejay-
 import { financeReport, parseExpenses, summarizeFinance, type ExpenseLine, type ReportRow } from "@/lib/finance-summary";
 import { parseOutsideServices } from "@/lib/outside-services";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { FinanceCharts } from "@/components/operations-charts";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const signed = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(x));
@@ -148,6 +149,8 @@ export function BluejayFinance({ scopeId }: { scopeId: number | null }) {
           <div className="summary-kpi"><span>Cọc chưa ở</span><strong>{num(s.income.advance.total)}</strong><small>Cọc của khách chưa nhận phòng</small></div>
           <div className="summary-kpi"><span>POS cafe</span><strong>{num(s.income.pos)}</strong><small>Chưa tính vào quỹ nào</small></div>
         </div>
+
+        <FinanceCharts days={s.daily} groups={s.expense.byGroup} />
 
         {report && <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Báo cáo thu chi theo tuần</h4></summary>

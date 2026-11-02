@@ -5,6 +5,7 @@ import { fmtDate } from "@/lib/format-date";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { FLAG_LABELS, revenueTotals, serviceMatrix, upgradeTotal, type RevenueBooking, type RevenueFlag, type RevenueWeek, type ServiceDay } from "@/lib/bluejay-revenue";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { RevenueCharts } from "@/components/bluejay-revenue-charts";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const dm = (date: string) => (date ? fmtDate(date) : "–"); // dd/mm/yyyy
@@ -47,6 +48,12 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
   const services = useMemo(() => serviceMatrix(serviceDays), [serviceDays]);
   const serviceLines = useMemo(() => serviceDays.flatMap((d) => d.groups.flatMap((g) => g.items.map((i) => ({ date: d.date, group: g.name, ...i })))), [serviceDays]); // every service line Blue Jay returned; filters come later
 
+  const checkoutDays = useMemo(() => { // room and service money by check-out day, as the cards count it
+    const byDay = new Map<string, { date: string; room: number; service: number }>();
+    for (const r of rows) if (r.stay) { const d = byDay.get(r.checkOut) ?? { date: r.checkOut, room: 0, service: 0 }; d.room += r.roomInWeek; d.service += r.servicePrice; byDay.set(r.checkOut, d); }
+    return [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }, [rows]);
+
   const channels = [...new Set(rows.map((r) => r.channel))].sort();
   const statuses = [...new Set(rows.map((r) => r.status))].sort();
   const q = query.trim().toLowerCase();
@@ -74,6 +81,8 @@ export function RevenueView({ hotels, showHotel, period }: { hotels: { name: str
       <Kpi label="Hủy / no-show đã thu" value={num(totals.cancelled.payment)} hint={`${num(totals.cancelled.bookings)} đặt phòng`} />
       <Kpi label="Hủy / no-show chưa thu" value={num(totals.cancelled.balance)} hint="Blue Jay vẫn tính giá phòng, OTA chưa trả" />
     </div>
+
+    <RevenueCharts channels={totals.channels} days={checkoutDays} />
 
     <details className="summary-chart wide revenue-fold" open>
       <summary><h4>Theo nguồn</h4></summary>

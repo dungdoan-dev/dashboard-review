@@ -8,6 +8,7 @@ import { HOTEL_ROOMS, lineMonths, pnlRows, roomByCheckout, revenueLines, type Mo
 import type { DailyRevenue } from "@/lib/bluejay-daily";
 import type { RangeData } from "@/lib/bluejay-range";
 import { ReachTable, type Col } from "@/components/reach-table";
+import { PnlCharts } from "@/components/operations-charts";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const signed = (x: number) => (x < 0 ? "−" : "") + num(Math.abs(x));
@@ -123,6 +124,7 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
       {loaded > 0 && missing.length > 0 && <p className="summary-note bad" role="alert">Tháng {missing.join(", ")} có doanh thu nhưng chưa có link Google Sheet (Cài đặt → Link Google Sheet) hoặc tab BK THU, BK CHI nên chưa có chi phí; cột Cả năm chỉ hiện chi phí và lợi nhuận khi đủ các tháng.</p>}
       {moved > 0 && <p className="summary-note">{moved} dòng chi được tính vào tháng khác với tháng chi theo nội dung ghi trong dòng. Chi phí của một tháng chỉ đủ khi đã có tab của chính tháng đó và của các tháng sau (tiền lương tháng 8 thường trả vào tháng 9).</p>}
       {scopeId && monthRows.length > 0 && <>
+        <PnlCharts months={monthRows.map((r) => ({ m: r.m, occ: capacity(r.m) ? (r.d?.rooms ?? 0) / capacity(r.m) : null, room: r.d ? revenueLines(r.d)["Tiền phòng"] : 0, minibar: r.d ? revenueLines(r.d)["Minibar"] : 0, outside: r.d ? revenueLines(r.d)["Dịch vụ ngoài"] : 0, laundry: r.d ? revenueLines(r.d)["Giặt ủi"] : 0, other: r.d ? revenueLines(r.d)["Thu khác"] : 0 }))} />
         <details className="summary-chart wide revenue-fold" open>
           <summary><h4>Kết quả hoạt động kinh doanh {year}</h4></summary>
           <ReachTable rows={rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} columns={pnlCols} sortable={false} compact rowClass={(r) => (r.kind === "total" ? "report-total" : r.kind === "section" ? "report-section" : undefined)} />
