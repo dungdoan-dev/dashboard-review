@@ -7,8 +7,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 /** One column: text(row) is what shows (sort(row) is what a text column sorts by); a column with value(row) is a number (right aligned, sorts by number, gets a bar, and a total when total is set). */
 export type Col<R> = { label: string; text: (row: R) => string; render?: (row: R) => ReactNode; value?: (row: R) => number | null; total?: boolean; sort?: (row: R) => string };
 
-/** Columns that add up across rows; ratios, rates, people counted over the whole range and the ads "Kết quả" (a different goal per campaign) do not. */
-export const additive = (label: string) => !/CTR|CPC|Tần suất|Chi phí \/|Người|tiếp cận|Tỷ lệ|Kết quả/i.test(label);
+export { additive } from "@/lib/reach-sum"; // which columns add up: shared with the Excel of the reach total
 
 const sumText = (x: number) => (Number.isInteger(x) ? x : Math.round(x * 100) / 100).toLocaleString("vi-VN");
 
