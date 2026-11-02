@@ -32,6 +32,11 @@ export async function syncHr(db: SupabaseClient) {
       result[f.unit] = { error: message };
     }
   }
+  // A renamed or removed file leaves its old unit behind (the same staff would count twice); only prune when the folder listing is not empty.
+  if (files.length) {
+    const keep = `(${files.map((f) => `"${f.unit.replace(/"/g, "")}"`).join(",")})`;
+    for (const table of ["hr_staff", "hr_sync"]) await db.from(table).delete().not("unit", "in", keep);
+  }
   return result;
 }
 
