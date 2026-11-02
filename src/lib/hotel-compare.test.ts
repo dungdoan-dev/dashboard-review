@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareRows } from "./hotel-compare.ts";
+import { compareRows, compareSpan } from "./hotel-compare.ts";
 import type { DailyRevenue } from "./bluejay-daily.ts";
 import type { RangeData } from "./bluejay-range.ts";
 
@@ -25,7 +25,7 @@ test("one row per hotel and week then the chain, like the accountant's sheet: ni
   assert.deepEqual([chain.rooms, chain.available, chain.occ, chain.room, chain.deduction, chain.total, chain.chain], [11, 20, 0.55, 1600, -100, 1615, true]);
 });
 
-test("a week and the month are cut at the month's ends, the last block is the whole month, days without a stored occupancy are counted", () => {
+test("a week is the whole Monday-Sunday even when it starts in the previous month, the last block is cut at the month's ends, days without a stored occupancy are counted", () => {
   const rows = compareRows("2026-10", daily, range);
   assert.equal(rows.filter((r) => r.week === "Tuần 41").find((r) => r.hotel === "A")!.room, 400); // 5-11 Oct: the 6th
   const month = rows.filter((r) => r.week === "Cả tháng");
@@ -44,4 +44,12 @@ test("the Excel sheet is ruled: two header rows with the revenue band, a week ce
   assert.ok(merges.includes("A4:A6") && merges.includes("F2:L2")); // week 40: A, B and the chain
   assert.deepEqual([ws.getCell("C4").value, ws.getCell("E4").value, ws.getCell("E4").numFmt, ws.getCell("K4").value, ws.getCell("L4").value], [6, 0.6, "0.00%", -100, 1005]);
   assert.ok(ws.getCell("B6").font?.bold && ws.getCell("A4").border?.top?.style === "thin");
+});
+
+test("a week split by two months shows in full in both, the month row only adds its own days, compareSpan covers the whole weeks", () => {
+  const spill = { hotels: [{ id: 1, name: "A", days: [day("2026-09-29", 700), day("2026-10-01", 1000)] }] } as unknown as DailyRevenue;
+  const rows = compareRows("2026-10", spill, { dates: [], hotels: [] } as unknown as RangeData);
+  assert.equal(rows.find((r) => r.week === "Tuần 40")!.room, 1700); // 28 Sep - 4 Oct
+  assert.equal(rows.find((r) => r.week === "Cả tháng")!.room, 1000);
+  assert.deepEqual([compareSpan("2026-10"), compareSpan("2026-11")], [{ from: "2026-09-28", to: "2026-11-01" }, { from: "2026-10-26", to: "2026-12-06" }]);
 });

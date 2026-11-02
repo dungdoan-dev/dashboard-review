@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownToLine } from "lucide-react";
 import { fmtDate } from "@/lib/format-date";
-import { compareRows, type CompareRow } from "@/lib/hotel-compare";
+import { compareRows, compareSpan, type CompareRow } from "@/lib/hotel-compare";
 import type { DailyRevenue } from "@/lib/bluejay-daily";
 import type { RangeData } from "@/lib/bluejay-range";
 import { ReachTable, type Col } from "@/components/reach-table";
@@ -11,7 +11,6 @@ import { PageSkeleton } from "@/components/page-skeleton";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
 const pct = (x: number | null) => (x === null ? "–" : `${(x * 100).toFixed(2).replace(".", ",")}%`);
-const monthEnd = (month: string) => { const [y, m] = month.split("-").map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
 const shiftMonth = (month: string, by: number) => { const [y, m] = month.split("-").map(Number); return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7); };
 
 type Loaded = { month: string; daily: DailyRevenue | null; range: RangeData | null; message: string };
@@ -20,7 +19,7 @@ type Loaded = { month: string; daily: DailyRevenue | null; range: RangeData | nu
 export function BluejayCompare() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [state, setState] = useState<Loaded | null>(null);
-  const from = `${month}-01`, to = monthEnd(month);
+  const { from, to } = compareSpan(month); // whole weeks, so a week that sits in two months is complete in both
 
   useEffect(() => {
     let active = true;
@@ -66,7 +65,7 @@ export function BluejayCompare() {
       <div className="summary-hero">
         <div>
           <h1>So sánh khách sạn · tháng {month.slice(5)}/{month.slice(0, 4)}</h1>
-          <p>Báo cáo tổng hợp theo tuần của từng khách sạn và toàn chuỗi, theo mẫu của kế toán. Số phòng (đêm), phòng bán và công suất lấy từ báo cáo công suất Blue Jay đã lưu; doanh thu phòng tính theo ngày trả phòng (cả đợt ở thuộc ngày khách trả phòng, theo giá hiển thị: Expedia, Trip, Agoda đổ về Blue Jay đã trừ hoa hồng nên được cộng lại), dịch vụ theo ngày bán, bỏ M-Standard và Unassigned. Giảm trừ doanh thu là hoa hồng OTA tính theo % của giá hiển thị (chính sách OTA: Booking 15%, Expedia 15%, Trip 18%, Agoda 20%; Traveloka 20% ở Sontra Sea và Gia Lai, 19% ở Yzistel và Quy Nhơn), không lấy từ Google Sheet nên không gồm phí quẹt thẻ và giảm giá khách.</p>
+          <p>Báo cáo tổng hợp theo tuần của từng khách sạn và toàn chuỗi, theo mẫu của kế toán. Mỗi tuần đủ từ thứ Hai đến Chủ nhật (tuần nằm giữa hai tháng hiện đủ ở cả hai tháng, cùng số liệu); dòng Cả tháng chỉ cộng các ngày trong tháng. Số phòng (đêm), phòng bán và công suất lấy từ báo cáo công suất Blue Jay đã lưu; doanh thu phòng tính theo ngày trả phòng (cả đợt ở thuộc ngày khách trả phòng, theo giá hiển thị: Expedia, Trip, Agoda đổ về Blue Jay đã trừ hoa hồng nên được cộng lại), dịch vụ theo ngày bán, bỏ M-Standard và Unassigned. Giảm trừ doanh thu là hoa hồng OTA tính theo % của giá hiển thị (chính sách OTA: Booking 15%, Expedia 15%, Trip 18%, Agoda 20%; Traveloka 20% ở Sontra Sea và Gia Lai, 19% ở Yzistel và Quy Nhơn), không lấy từ Google Sheet nên không gồm phí quẹt thẻ và giảm giá khách.</p>
         </div>
         <div className="summary-controls">
           <button type="button" onClick={() => setMonth(shiftMonth(month, -1))}>‹ Tháng trước</button>

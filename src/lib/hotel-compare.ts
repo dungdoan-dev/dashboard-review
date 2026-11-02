@@ -4,6 +4,7 @@
 // Pure function: tested by hotel-compare.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { DailyRevenue } from "./bluejay-daily.ts";
 import type { RangeData } from "./bluejay-range.ts";
+import { addDays, mondayOf } from "./bluejay-metrics.ts";
 import { weekColumns } from "./finance-summary.ts";
 import { revenueLines } from "./pnl.ts";
 
@@ -18,8 +19,12 @@ export type CompareRow = {
 
 const monthEnd = (month: string) => { const [y, m] = month.split("-").map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
 
+/** daily and range must cover the whole weeks of the month: from compareSpan(month). */
+export function compareSpan(month: string) { return { from: mondayOf(`${month}-01`), to: addDays(mondayOf(monthEnd(month)), 6) }; }
+
 export function compareRows(month: string, daily: DailyRevenue, range: RangeData): CompareRow[] {
-  const columns = weekColumns({ from: `${month}-01`, to: monthEnd(month) });
+  // A week is the whole Monday-Sunday (the same week as the operations report, so a week split by two months shows in full in both); only "Cả tháng" is cut at the month's ends.
+  const columns = weekColumns({ from: `${month}-01`, to: monthEnd(month) }).map((c) => (c.label === "Cả kỳ" ? c : { ...c, from: mondayOf(c.from), to: addDays(mondayOf(c.from), 6) }));
   const rows: CompareRow[] = [];
   for (const c of columns) {
     const week = c.label === "Cả kỳ" ? "Cả tháng" : c.label;
