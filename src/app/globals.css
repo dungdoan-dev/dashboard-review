@@ -1449,4 +1449,8 @@ select { cursor: pointer; }
 @media (max-width: 700px) { .boot-skeleton { grid-template-columns: 1fr; } .boot-skeleton > aside { display: none; } .boot-skeleton > div { padding: 18px 16px; } }
 /* Narrow login panel (tablet): the four areas keep icon and name only, the one-line notes would wrap to five lines */
 @media (max-width: 1100px) { .auth-areas small { display: none; } .auth-areas li { align-items: center; } }
-
+.month-sub { margin: 20px 0 4px; color: #3b3b42; font: 750 18px var(--font-inter),sans-serif; }
+/* a menu link without an icon shows two letters when the sidebar is shrunk to icons */
+.nav-text-only::before { content: "BC"; display: none; font-size: 12px; font-weight: 800; }
+.app-shell.collapsed .nav-text-only::before { display: block; }
+.month-boards { display: grid; gap: 16px; }

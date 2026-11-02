@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, parseDmy } from "@/lib/format-date";
 import { DatePicker } from "@/components/date-picker";
@@ -23,6 +23,61 @@ function ageText(iso: string | null) {
   if (!iso) return { text: "Chưa có dữ liệu", stale: true };
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY);
   return { text: days < 1 ? "Hôm nay" : `${days} ngày trước`, stale: days >= 2 };
+}
+
+/** The score table of one type of place: heading, the three highlights and the table. Rows come sorted. Shared by Tổng quan and the monthly report; updated gives the "Cập nhật" text and whether a row is out of date. */
+export function ScoreboardView({ rows, platforms, scale, typeLabel, note, dates, actions, onSelect, updated }: {
+  rows: ScoreRow[]; platforms: Platform[]; scale: 5 | 10; typeLabel: string; note: ReactNode; dates: { base: string; current: string };
+  actions?: ReactNode; onSelect?: (id: string) => void; updated: (row: ScoreRow) => { text: string; stale: boolean };
+}) {
+  const titleId = useId();
+  const columns: Col<ScoreRow>[] = [
+    { label: "Cơ sở", text: (row) => row.location.name, render: (row) => <>{onSelect ? <button type="button" className="scoreboard-link" onClick={() => onSelect(row.location.id)} title="Xem chi tiết cơ sở này">{row.location.name}</button> : row.location.name}<small>{row.location.area}</small></> },
+    { label: "Điểm TB", text: (row) => (row.avg == null ? "—" : num(row.avg)), value: (row) => row.avg, render: (row) => (row.avg == null ? <span className="muted">—</span> : <span className={`score ${tone(row.avg, scale)}`}>{num(row.avg)}</span>) },
+    ...platforms.map((platform): Col<ScoreRow> => ({
+      label: PLATFORM_LABELS[platform],
+      text: (row) => { const score = row.cells[platform]?.score; return score == null ? "—" : num(score); },
+      value: (row) => row.cells[platform]?.score ?? null,
+      render: (row) => {
+        const cell = row.cells[platform];
+        if (cell?.score == null && cell?.count == null) return <span className="muted">—</span>;
+        return <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <span className="count"><strong>{cell.count.toLocaleString("vi-VN")}</strong> đánh giá</span>}
+          {cell?.dScore != null && Math.abs(cell.dScore) > EPSILON && <small className={`delta ${trend(cell.dScore, EPSILON)}`}>{signed(cell.dScore)} điểm</small>}
+          {cell?.dCount != null && cell.dCount !== 0 && <small className={`delta ${trend(cell.dCount, 0)}`}>{signed(cell.dCount, 0)} đánh giá</small>}
+        </div>;
+      },
+    })),
+    { label: "Tổng đánh giá", text: (row) => (row.total == null ? "—" : row.total.toLocaleString("vi-VN")), value: (row) => row.total, total: true },
+    { label: "Cập nhật", text: (row) => updated(row).text, sort: (row) => row.latest ?? "", render: (row) => { const age = updated(row); return <span className={`age ${age.stale ? "stale" : ""}`}>{age.text}</span>; } },
+  ];
+
+
+  const withScore = rows.filter((row) => row.avg != null);
+  const lowest = withScore.length > 1 ? withScore.reduce((min, row) => (row.avg! < min.avg! ? row : min)) : null;
+  const drops = rows.flatMap((row) => platforms.map((platform) => ({ row, platform, d: row.cells[platform]?.dScore ?? null })))
+    .filter((item): item is { row: ScoreRow; platform: Platform; d: number } => item.d != null && item.d < -EPSILON);
+  const biggestDrop = drops.sort((a, b) => a.d - b.d)[0] ?? null;
+  const noData = rows.filter((row) => row.avg == null).length;
+  const stale = rows.filter((row) => row.avg != null && updated(row).stale).length;
+
+
+  return <section className="scoreboard" aria-labelledby={titleId}>
+    <header className="scoreboard-head">
+      <div><div className="section-kicker">BẢNG ĐIỂM · {typeLabel.toUpperCase()}</div>
+        <h2 id={titleId}>Tất cả cơ sở {typeLabel} ({rows.length})</h2>
+        <p>{note}</p></div>
+      <div className="scoreboard-dates"><span>Ngày mốc: <strong>{dates.base}</strong></span><span>Ngày so sánh: <strong>{dates.current}</strong></span></div>
+      {actions}
+    </header>
+    {rows.length === 0 ? <p className="scoreboard-empty">Chưa có cơ sở loại {typeLabel}. Thêm cơ sở trong Cài đặt.</p> : <>
+      <div className="scoreboard-highlights">
+        <div className="highlight">{lowest ? <><div><small>Điểm thấp nhất</small><strong>{lowest.location.name}</strong><em>{num(lowest.avg!)}/{scale}</em></div></> : <div><small>Điểm thấp nhất</small><strong>—</strong></div>}</div>
+        <div className="highlight">{biggestDrop ? <><div><small>Giảm mạnh nhất</small><strong>{biggestDrop.row.location.name}</strong><em>{PLATFORM_LABELS[biggestDrop.platform]}: {signed(biggestDrop.d)} điểm</em></div></> : <div><small>Giảm mạnh nhất</small><strong>Không có cơ sở giảm điểm</strong></div>}</div>
+        <div className="highlight"><div><small>Cần cập nhật</small><strong>{noData + stale === 0 ? "Tất cả đều mới" : `${noData} thiếu dữ liệu · ${stale} chưa cập nhật ≥2 ngày`}</strong></div></div>
+      </div>
+      <ReachTable compact rows={rows} columns={columns} rowKey={(row) => row.location.id} />
+    </>}
+  </section>;
 }
 
 /** Bảng điểm: mỗi hàng là một cơ sở cùng loại, để thấy ngay cơ sở nào cần chú ý. */
@@ -82,38 +137,10 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, typeLa
 
   // Mặc định điểm thấp nhất trước (cơ sở không có điểm xếp cuối); bấm tiêu đề cột để đổi.
   const sorted = useMemo(() => [...rows].sort((a, b) => (a.avg == null || b.avg == null ? (a.avg == null ? 1 : 0) - (b.avg == null ? 1 : 0) : a.avg - b.avg)), [rows]);
-  const columns: Col<ScoreRow>[] = [
-    { label: "Cơ sở", text: (row) => row.location.name, render: (row) => <><button type="button" className="scoreboard-link" onClick={() => onSelect(row.location.id)} title="Xem chi tiết cơ sở này">{row.location.name}</button><small>{row.location.area}</small></> },
-    { label: "Điểm TB", text: (row) => (row.avg == null ? "—" : num(row.avg)), value: (row) => row.avg, render: (row) => (row.avg == null ? <span className="muted">—</span> : <span className={`score ${tone(row.avg, scale)}`}>{num(row.avg)}</span>) },
-    ...platforms.map((platform): Col<ScoreRow> => ({
-      label: PLATFORM_LABELS[platform],
-      text: (row) => { const score = row.cells[platform]?.score; return score == null ? "—" : num(score); },
-      value: (row) => row.cells[platform]?.score ?? null,
-      render: (row) => {
-        const cell = row.cells[platform];
-        if (cell?.score == null && cell?.count == null) return <span className="muted">—</span>;
-        return <div className="cell">{cell?.score != null && <span className={`score ${tone(cell.score, scale)}`}>{num(cell.score)}</span>}{cell?.count != null && <span className="count"><strong>{cell.count.toLocaleString("vi-VN")}</strong> đánh giá</span>}
-          {cell?.dScore != null && Math.abs(cell.dScore) > EPSILON && <small className={`delta ${trend(cell.dScore, EPSILON)}`}>{signed(cell.dScore)} điểm</small>}
-          {cell?.dCount != null && cell.dCount !== 0 && <small className={`delta ${trend(cell.dCount, 0)}`}>{signed(cell.dCount, 0)} đánh giá</small>}
-        </div>;
-      },
-    })),
-    { label: "Tổng đánh giá", text: (row) => (row.total == null ? "—" : row.total.toLocaleString("vi-VN")), value: (row) => row.total, total: true },
-    { label: "Cập nhật", text: (row) => ageText(row.latest).text, sort: (row) => row.latest ?? "", render: (row) => { const age = ageText(row.latest); return <span className={`age ${age.stale ? "stale" : ""}`}>{age.text}</span>; } },
-  ];
-
   const baselineDates = [...new Set(Object.values(baseline).map((item) => item.date).filter((date): date is string => !!date))].sort();
   const baselineText = baselineDates.length === 0 ? "chưa có mốc" : baselineDates.length === 1 ? fmtDate(baselineDates[0]) : `${fmtDate(baselineDates[0])} – ${fmtDate(baselineDates[baselineDates.length - 1])}`;
   const latestCapture = rows.reduce<string | null>((max, row) => (row.latest && (!max || row.latest > max) ? row.latest : max), null);
   const currentText = latestCapture ? fmtDate(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(latestCapture))) : fmtDate(vnToday());
-  const withScore = rows.filter((row) => row.avg != null);
-  const lowest = withScore.length > 1 ? withScore.reduce((min, row) => (row.avg! < min.avg! ? row : min)) : null;
-  const drops = rows.flatMap((row) => platforms.map((platform) => ({ row, platform, d: row.cells[platform]?.dScore ?? null })))
-    .filter((item): item is { row: ScoreRow; platform: Platform; d: number } => item.d != null && item.d < -EPSILON);
-  const biggestDrop = drops.sort((a, b) => a.d - b.d)[0] ?? null;
-  const noData = rows.filter((row) => row.avg == null).length;
-  const stale = rows.filter((row) => row.avg != null && ageText(row.latest).stale).length;
-
   function exportExcel() {
     const note = `Điểm thang ${scale}, số liệu chưa chốt. Thay đổi so với ${compareDate ? `số chốt tới ${fmtDate(compareDate)}` : "lần chốt gần nhất"}. Ngày mốc: ${baselineText}. Ngày so sánh: ${currentText}.`;
     const data = sorted.map((row) => ({
@@ -126,23 +153,11 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, typeLa
     void Promise.all([import("@/lib/scoreboard-excel"), import("@/lib/ql-excel")]).then(([m, q]) => q.downloadQlWorkbook(`bang-diem-${vnToday()}.xlsx`, m.scoreboardWorkbook(`BẢNG ĐIỂM · ${typeLabel.toUpperCase()}`, note, platforms.map((platform) => PLATFORM_LABELS[platform]), data, scale)));
   }
 
-  return <section className="scoreboard" aria-labelledby="scoreboard-title">
-    <header className="scoreboard-head">
-      <div><div className="section-kicker">BẢNG ĐIỂM · {typeLabel.toUpperCase()}</div>
-        <h2 id="scoreboard-title">Tất cả cơ sở {typeLabel} ({rows.length})</h2>
-        <p>Điểm thang {scale}, số liệu chưa chốt. Thay đổi so với {compareDate ? `số chốt tới ${fmtDate(compareDate)}` : "lần chốt gần nhất"}.</p></div>
-      <div className="scoreboard-dates"><span>Ngày mốc: <strong>{baselineText}</strong></span><span>Ngày so sánh: <strong>{currentText}</strong></span></div>
+  return <ScoreboardView rows={sorted} platforms={platforms} scale={scale} typeLabel={typeLabel} onSelect={onSelect} updated={(row) => ageText(row.latest)} dates={{ base: baselineText, current: currentText }}
+    note={`Điểm thang ${scale}, số liệu chưa chốt. Thay đổi so với ${compareDate ? `số chốt tới ${fmtDate(compareDate)}` : "lần chốt gần nhất"}.`}
+    actions={<>
       <label className="scoreboard-sort"><span>So sánh với ngày</span><DatePicker label="Ngày so sánh" text={dateInput} onText={(text) => { setDateInput(text); const iso = parseDmy(text); setCompareDate(iso && iso < vnToday() ? iso : ""); }} max={daysBefore(vnToday(), 1)} />
         {compareDate && <button type="button" onClick={() => { setCompareDate(""); setDateInput(""); }}>Gần nhất</button>}</label>
       {rows.length > 0 && <button type="button" className="button button-outline" onClick={exportExcel}>Xuất Excel</button>}
-    </header>
-    {rows.length === 0 ? <p className="scoreboard-empty">Chưa có cơ sở loại {typeLabel}. Thêm cơ sở trong Cài đặt.</p> : <>
-      <div className="scoreboard-highlights">
-        <div className="highlight">{lowest ? <><div><small>Điểm thấp nhất</small><strong>{lowest.location.name}</strong><em>{num(lowest.avg!)}/{scale}</em></div></> : <div><small>Điểm thấp nhất</small><strong>—</strong></div>}</div>
-        <div className="highlight">{biggestDrop ? <><div><small>Giảm mạnh nhất</small><strong>{biggestDrop.row.location.name}</strong><em>{PLATFORM_LABELS[biggestDrop.platform]}: {signed(biggestDrop.d)} điểm</em></div></> : <div><small>Giảm mạnh nhất</small><strong>Không có cơ sở giảm điểm</strong></div>}</div>
-        <div className="highlight"><div><small>Cần cập nhật</small><strong>{noData + stale === 0 ? "Tất cả đều mới" : `${noData} thiếu dữ liệu · ${stale} chưa cập nhật ≥2 ngày`}</strong></div></div>
-      </div>
-      <ReachTable compact rows={sorted} columns={columns} rowKey={(row) => row.location.id} />
-    </>}
-  </section>;
+    </>} />;
 }

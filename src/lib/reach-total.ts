@@ -20,8 +20,8 @@ import type { DailyRow, LocationTotals } from "./google-profile.ts";
 export type Cell = string | number | null;
 /** One table: head, rows, and per column whether it adds up in a total row. */
 export type Block = { title: string; head: string[]; rows: Cell[][]; sum: boolean[] };
-export type ChannelTables = { name: string; summary: Block[]; daily: Block | null; error?: string };
-export type Channel = { key: string; name: string; api: string; maxDays: number; build: (body: Record<string, unknown>) => { summary: Block[]; daily: Block } };
+export type ChannelTables = { name: string; ads?: boolean; summary: Block[]; daily: Block | null; error?: string }; // ads: an advertising channel (the monthly report puts these on their own sheet)
+export type Channel = { key: string; name: string; ads?: boolean; api: string; maxDays: number; build: (body: Record<string, unknown>) => { summary: Block[]; daily: Block } };
 
 type Metric<R> = [label: string, value: (r: R) => Cell];
 type Site = Ga4Totals & { site: string };
@@ -67,13 +67,25 @@ export const CHANNELS: Channel[] = [
   { key: "tiktok", name: "TikTok", api: "/api/tiktok", maxDays: TT_MAX_DAYS, build: (b) => ({
     summary: [block<TtTotals>("TikTok · theo tài khoản", [["Tài khoản", (t) => t.name]], TT, list(b, "accounts"))],
     daily: block<TtDaily>("TikTok theo ngày", [dayCol(), ["Tài khoản", (d) => d.name]], TT_DAY, list(b, "daily")) }) },
-  { key: "facebook-ads", name: "Facebook Ads", api: "/api/facebook-ads", maxDays: ADS_MAX_DAYS, build: (b) => ({
+  { key: "facebook-ads", name: "Facebook Ads", ads: true, api: "/api/facebook-ads", maxDays: ADS_MAX_DAYS, build: (b) => ({
     summary: [block<AdsTotals>("Facebook Ads · theo chiến dịch", [["Chiến dịch", (t) => t.campaign]], ADS, list(b, "campaigns"))],
     daily: block<AdsDaily>("Facebook Ads theo ngày", [dayCol(), ["Chiến dịch", (d) => d.campaign]], ADS_DAY, list(b, "daily")) }) },
-  { key: "google-ads", name: "Google Ads", api: "/api/google-ads", maxDays: GADS_MAX_DAYS, build: (b) => ({
+  { key: "google-ads", name: "Google Ads", ads: true, api: "/api/google-ads", maxDays: GADS_MAX_DAYS, build: (b) => ({
     summary: [block<GadsTotals>("Google Ads · theo chiến dịch", [["Chiến dịch", (t) => t.campaign]], GADS, list(b, "campaigns"))],
     daily: block<GadsDaily>("Google Ads theo ngày", [dayCol(), ["Chiến dịch", (d) => d.campaign]], GADS_DAY, list(b, "daily")) }) },
 ];
+
+/** Every channel for the range, from the same stored figures as the channel's own page; a channel that cannot answer keeps its message and the others still load. */
+export async function loadReachTotal(from: string, to: string): Promise<ChannelTables[]> {
+  return Promise.all(CHANNELS.map(async (c): Promise<ChannelTables> => {
+    const failed = (error: string): ChannelTables => ({ name: c.name, ads: c.ads, summary: [], daily: null, error });
+    if (spanDays(from, to) > c.maxDays) return failed(`Khoảng ngày dài hơn ${c.maxDays} ngày, kênh này chỉ trả tối đa ${c.maxDays} ngày. Chọn khoảng ngắn hơn để có số liệu ${c.name}.`);
+    const res = await fetch(`${c.api}?from=${from}&to=${to}`, { cache: "no-store" }).catch(() => null);
+    if (!res) return failed("Không kết nối được máy chủ.");
+    const body = await res.json().catch(() => ({}));
+    return res.ok ? { name: c.name, ads: c.ads, ...c.build(body) } : failed(body.message ?? `Lỗi ${res.status}`);
+  }));
+}
 
 /** The longest range every channel can answer; a longer range is still run, the channels that cannot take it say so. */
 export const REACH_MAX_DAYS = Math.max(...CHANNELS.map((c) => c.maxDays));

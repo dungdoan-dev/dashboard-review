@@ -26,32 +26,54 @@ function platformCell(c: ExcelScoreCell, scale: number): { value: ExcelJS.CellRi
   return { value: parts.length ? { richText: parts } : null, lines: parts.reduce((n, p) => n + (p.text.match(/\n/g)?.length ?? 0), parts.length ? 1 : 0) };
 }
 
+export type ScoreTable = { heading?: string; platforms: string[]; rows: ExcelScoreRow[]; scale: number };
+
+/**
+ * One sheet with a ruled score table per entry of `tables` (a banner with the heading above each when there are several), under a title line and a note line.
+ * Used for the Tổng quan file (one table) and the monthly report (a table per type of place).
+ */
+export function addScoreboardSheet(book: ExcelJS.Workbook, name: string, title: string, note: string, tables: ScoreTable[]) {
+  const single = tables.length === 1 && !tables[0].heading;
+  const ws = book.addWorksheet(name, { views: [{ state: "frozen", xSplit: 1, ySplit: single ? 3 : 2, showGridLines: false }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  Object.assign(ws.addRow([title]), { font: { bold: true, size: 14, color: { argb: "FF1F3A5F" } } });
+  Object.assign(ws.addRow([note]), { font: { italic: true, color: { argb: MUTED } } });
+  const widest = Math.max(...tables.map((t) => t.platforms.length + 4));
+  tables.forEach(({ heading, platforms, rows, scale }, k) => {
+    const head = ["Cơ sở", "Điểm TB", ...platforms, "Tổng đánh giá", "Cập nhật"], n = head.length;
+    if (k > 0) ws.addRow([]);
+    if (heading) {
+      const banner = ws.addRow([heading]);
+      ws.mergeCells(banner.number, 1, banner.number, n);
+      Object.assign(banner.getCell(1), { font: { bold: true, color: { argb: "FFFFFFFF" } }, fill: fill("1F3A5F"), alignment: { vertical: "middle" } });
+    }
+    const header = ws.addRow(head);
+    header.height = 28;
+    header.eachCell((c) => Object.assign(c, { border: BORDER, font: { bold: true, color: { argb: "FF1F3A5F" } }, fill: fill("D9E2F3"), alignment: { horizontal: "center", vertical: "middle", wrapText: true } }));
+
+    rows.forEach((r) => {
+      const cells = r.cells.map((c) => platformCell(c, scale));
+      const row = ws.addRow([null, r.avg, ...cells.map((c) => c.value), r.total, r.updated]);
+      row.height = Math.max(34, Math.max(2, ...cells.map((c) => c.lines)) * 15 + 6);
+      for (let i = 1; i <= n; i++) {
+        const c = row.getCell(i);
+        c.border = BORDER;
+        c.alignment = { horizontal: i === 1 || i === n ? "left" : "right", vertical: "middle", wrapText: true };
+      }
+      row.getCell(1).value = { richText: [{ text: r.name, font: { bold: true, color: { argb: INK } } }, { text: `
+${r.area}`, font: { size: 10, color: { argb: MUTED } } }] };
+      if (r.avg != null) Object.assign(row.getCell(2), { numFmt: "0.0", font: { bold: true, size: 12, color: { argb: tone(r.avg, scale) } } });
+      row.getCell(n - 1).numFmt = "#,##0";
+    });
+    const total = ws.addRow(["Tổng", ...Array(n - 3).fill(null), rows.reduce((sum, r) => sum + (r.total ?? 0), 0), null]);
+    total.eachCell({ includeEmpty: true }, (c, i) => Object.assign(c, { border: BORDER, font: { bold: true }, fill: fill("EEF2F8"), alignment: { horizontal: i === n - 1 ? "right" : "left", vertical: "middle" }, numFmt: i === n - 1 ? "#,##0" : undefined }));
+  });
+  ws.columns = Array.from({ length: widest }, (_, i) => ({ width: i === 0 ? 34 : i === 1 ? 10 : 15 }));
+  return ws;
+}
+
 /** title: the sheet's title; note: the line under it (scale, compare date, base date); platforms: the platform labels; scale: 5 or 10, for the colour of a score. */
 export function scoreboardWorkbook(title: string, note: string, platforms: string[], rows: ExcelScoreRow[], scale: number) {
   const book = new ExcelJS.Workbook();
-  const ws = book.addWorksheet("Bảng điểm", { views: [{ state: "frozen", xSplit: 1, ySplit: 3 }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-  const head = ["Cơ sở", "Điểm TB", ...platforms, "Tổng đánh giá", "Cập nhật"], n = head.length;
-  Object.assign(ws.addRow([title]), { font: { bold: true, size: 14, color: { argb: "FF1F3A5F" } } });
-  Object.assign(ws.addRow([note]), { font: { italic: true, color: { argb: MUTED } } });
-  const header = ws.addRow(head);
-  header.height = 28;
-  header.eachCell((c) => Object.assign(c, { border: BORDER, font: { bold: true, color: { argb: "FF1F3A5F" } }, fill: fill("D9E2F3"), alignment: { horizontal: "center", vertical: "middle", wrapText: true } }));
-
-  rows.forEach((r) => {
-    const cells = r.cells.map((c) => platformCell(c, scale));
-    const row = ws.addRow([null, r.avg, ...cells.map((c) => c.value), r.total, r.updated]);
-    row.height = Math.max(34, Math.max(2, ...cells.map((c) => c.lines)) * 15 + 6);
-    for (let i = 1; i <= n; i++) {
-      const c = row.getCell(i);
-      c.border = BORDER;
-      c.alignment = { horizontal: i === 1 || i === n ? "left" : "right", vertical: "middle", wrapText: true };
-    }
-    row.getCell(1).value = { richText: [{ text: r.name, font: { bold: true, color: { argb: INK } } }, { text: `\n${r.area}`, font: { size: 10, color: { argb: MUTED } } }] };
-    if (r.avg != null) Object.assign(row.getCell(2), { numFmt: "0.0", font: { bold: true, size: 12, color: { argb: tone(r.avg, scale) } } });
-    row.getCell(n - 1).numFmt = "#,##0";
-  });
-  const total = ws.addRow(["Tổng", ...Array(n - 3).fill(null), rows.reduce((sum, r) => sum + (r.total ?? 0), 0), null]);
-  total.eachCell({ includeEmpty: true }, (c, i) => Object.assign(c, { border: BORDER, font: { bold: true }, fill: fill("EEF2F8"), alignment: { horizontal: i === n - 1 ? "right" : "left", vertical: "middle" }, numFmt: i === n - 1 ? "#,##0" : undefined }));
-  ws.columns = head.map((_, i) => ({ width: i === 0 ? 34 : i === n - 1 ? 16 : i === 1 ? 10 : i === n - 2 ? 14 : 15 }));
+  addScoreboardSheet(book, "Bảng điểm", title, note, [{ platforms, rows, scale }]);
   return book;
 }
