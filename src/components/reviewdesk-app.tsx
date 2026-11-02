@@ -234,6 +234,11 @@ type DailyReportSnapshot = {
 const formDraftStorageKey = "reviewdesk-open-form-draft";
 
 const moneyless = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
+/** Change in the review count against the previous closed day: + or - in green or red; nothing when unchanged. */
+function Change({ value, since }: { value: number | null; since: string }) {
+  if (!value) return null;
+  return <em className={`timeline-delta ${value > 0 ? "up" : "down"}`} title={`So với ${fmtDate(since)}`}>{value > 0 ? "+" : "-"}{moneyless(Math.abs(value))} đánh giá</em>;
+}
 function reportDateInVietnam() {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
@@ -920,6 +925,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
     }
     return Array.from(grouped, ([date, metrics]) => ({ date, metrics })).sort((left, right) => left.date.localeCompare(right.date));
   }, [timelineSnapshots, dashboardLocation?.id, isTripadvisorRankPage, selectedReportPlatforms]);
+  const timelineIndex = useMemo(() => new Map(timelineRows.map((row, i) => [row.date, i])), [timelineRows]);
+  /** The nearest earlier closed day that has this platform: what a day's numbers are compared with. */
+  const previousMetric = (date: string, platform: Platform) => {
+    for (let i = (timelineIndex.get(date) ?? 0) - 1; i >= 0; i--) { const metric = timelineRows[i].metrics[platform]; if (metric) return { date: timelineRows[i].date, metric }; }
+    return null;
+  };
 
   const dailyAnalyticsRows = useMemo(() => {
     if (!timelineRows.length) return timelineRows;
@@ -2018,9 +2029,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
                             const metric = row.metrics[platform];
                             if (!metric) return <span className="timeline-no-data">Chưa chốt</span>;
                             const value = score(row);
+                            const before = previousMetric(row.date, platform);
+                            const countChange = metric.reviewCount != null && before?.metric.reviewCount != null ? metric.reviewCount - before.metric.reviewCount : null;
                             return <div className="cell" title={metric.rating == null ? undefined : `Điểm gốc ${metric.rating.toFixed(1).replace(".", ",")} / ${metric.ratingScale}`}>
                               <strong className="star-score"><Star size={12} fill="currentColor" aria-hidden="true" />{value == null ? "—" : value.toFixed(1).replace(".", ",")}</strong>
                               <span className="count"><strong>{metric.reviewCount == null ? "—" : moneyless(metric.reviewCount)}</strong> đánh giá</span>
+                              {before && <Change value={countChange} since={before.date} />}
                               {platform === "tripadvisor" && metric.tripadvisorRank && <small>{metric.tripadvisorRank}</small>}
                             </div>;
                           },

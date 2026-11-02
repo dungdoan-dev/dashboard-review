@@ -485,6 +485,9 @@ tbody tr:hover { background: #fcfcfd; }
 .timeline-review-count { display: flex; align-items: baseline; gap: 4px; margin-top: 8px; color: #6d6d78; font-size: 11px; }
 .timeline-review-count strong { color: #3e3e45; font-size: 13px; font-variant-numeric: tabular-nums; }
 .timeline-no-data { color: #6d6d78; font-size: 12px; }
+.reach-table .cell .timeline-delta { display: block; font-style: normal; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.reach-table .cell .timeline-delta.up { color: #247b5b; }
+.reach-table .cell .timeline-delta.down { color: #c0392b; }
 .timeline-footer { padding: 10px 13px; color: #6d6d78; background: #fcfcfd; font-size: 11px; }
 .timeline-empty { display: flex; min-height: 95px; align-items: center; justify-content: center; gap: 10px; padding: 20px; color: #6d6d78; font-size: 11px; }
 .timeline-empty > div { display: grid; gap: 3px; }
