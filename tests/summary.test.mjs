@@ -9,6 +9,8 @@ test("scores are converted to a 0-10 scale and reviews are summed", () => {
   const row = summarizeLocation(location("A", { google: metric(4.5, 5, 100), agoda: metric(9, 10, 50) }), ["google", "agoda"]);
   assert.equal(row.score, 9);
   assert.equal(row.reviews, 150);
+  assert.deepEqual(row.platformReviews, { google: 100, agoda: 50 });
+  assert.deepEqual(summarizeLocation(location("B", { google: metric(4, 5, null) }), ["google", "agoda"]).platformReviews, {}); // no count stays missing, not 0
 });
 
 test("type summary picks best and worst only when there are at least two scored locations", () => {

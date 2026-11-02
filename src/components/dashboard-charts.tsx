@@ -26,15 +26,15 @@ export function Donut({ slices: unsorted, unit, width, animate }: { slices: Slic
       </Pie>
       <Tooltip {...TOOLTIP} formatter={(value, name) => [typeof value === "number" ? `${value.toLocaleString("vi-VN")} ${unit}` : "—", name]} />
       <Legend itemSorter={null} layout="vertical" verticalAlign="middle" align="right" iconType="circle" iconSize={9}
-        formatter={(name: string) => { const item = slices.find((slice) => slice.name === name); return <span style={{ color: "#56565f", fontSize: 13 }}>{name} <strong style={{ color: "#3b3b42" }}>{item ? Math.round((item.value / total) * 100) : 0}%</strong></span>; }} />
+        formatter={(name: string) => { const item = slices.find((slice) => slice.name === name); return <span style={{ color: "#56565f", fontSize: 13 }}>{name} <strong style={{ color: "#3b3b42" }}>{item ? Math.round((item.value / total) * 100) : 0}%</strong>{item && <span style={{ color: "#6b6b78" }}> · {item.value.toLocaleString("vi-VN")}</span>}</span>; }} />
     </PieChart>
   </ResponsiveContainer>;
 }
 
 /** Thanh tiến độ trên nền xám: dễ so thứ hạng, giá trị ghi ngay bên phải. */
-export function TrackBars({ rows: unsorted, max, width, animate, format = num }: { rows: { name: string; value: number; color: string }[]; max: number; width: number | "100%"; animate: boolean; format?: (value: number) => string }) {
+export function TrackBars({ rows: unsorted, max, width, animate, format = num, empty = "Chưa có điểm để vẽ." }: { empty?: string; rows: { name: string; value: number; color: string }[]; max: number; width: number | "100%"; animate: boolean; format?: (value: number) => string }) {
   const rows = [...unsorted].sort((a, b) => b.value - a.value);
-  if (rows.length === 0) return <p className="summary-note">Chưa có điểm để vẽ.</p>;
+  if (rows.length === 0) return <p className="summary-note">{empty}</p>;
   return <ResponsiveContainer width={width} height={rows.length * 44 + 16}>
     <BarChart layout="vertical" data={rows} margin={{ left: 0, right: 40, top: 4, bottom: 4 }}>
       <XAxis type="number" domain={[0, max]} hide />

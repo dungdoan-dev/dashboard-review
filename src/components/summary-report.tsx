@@ -22,6 +22,7 @@ const WATCH = 8; // dưới 8/10: cần chú ý
 const vnToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 const daysBefore = (date: string, days: number) => new Date(new Date(`${date}T00:00:00Z`).getTime() - days * DAY).toISOString().slice(0, 10);
 const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toLocaleString("vi-VN")}`;
+const count = (value: number) => value.toLocaleString("vi-VN");
 const level = (score: number) => (score >= GOOD ? { text: "Xuất sắc", cls: "good" } : score >= WATCH ? { text: "Tốt", cls: "ok" } : { text: "Cần chú ý", cls: "bad" });
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
@@ -142,8 +143,8 @@ export function SummaryReport({ sections, userId, range, customRange }: { sectio
         <ChartCard title="Tỷ trọng đánh giá theo loại hình" unit="Tổng số đánh giá">
           <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={byType.map((item) => ({ name: item.section.label, value: item.summary.totalReviews, color: item.section.color }))} />
         </ChartCard>
-        <ChartCard title="Điểm trung bình theo loại hình" unit={`Thang ${SUMMARY_SCALE}`}>
-          <TrackBars max={SUMMARY_SCALE} width={chartWidth} animate={!printing} rows={byType.flatMap((item) => item.summary.avgScore == null ? [] : [{ name: item.section.label, value: item.summary.avgScore, color: item.section.color }])} />
+        <ChartCard title="Số đánh giá theo loại hình" unit="Tổng số đánh giá">
+          <TrackBars max={Math.max(1, ...byType.map((item) => item.summary.totalReviews))} width={chartWidth} animate={!printing} format={count} empty="Chưa có đánh giá để vẽ." rows={byType.map((item) => ({ name: item.section.label, value: item.summary.totalReviews, color: item.section.color }))} />
         </ChartCard>
       </div>
       <div className="summary-insights">
@@ -159,7 +160,7 @@ export function SummaryReport({ sections, userId, range, customRange }: { sectio
 
     {data.map(({ section, rows, summary, trend }, index) => {
       const sorted = [...rows].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-      const bars = sorted.filter((row) => row.score != null).map((row) => ({ name: row.name, score: row.score }));
+      const bars = sorted.filter((row) => row.reviews != null).map((row) => ({ name: row.name, reviews: row.reviews! }));
       const topGain = Object.entries(trend.byLocation).sort((a, b) => b[1] - a[1])[0];
       const gainName = topGain ? rows.find((row) => row.id === topGain[0])?.name : null;
       const watch = rows.filter((row) => row.score != null && row.score < WATCH).sort((a, b) => a.score! - b.score!);
@@ -189,16 +190,16 @@ export function SummaryReport({ sections, userId, range, customRange }: { sectio
             <ChartCard title="Tỷ trọng đánh giá theo nền tảng" unit="Tổng số đánh giá">
               <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={section.platforms.map((platform, i) => ({ name: PLATFORM_LABELS[platform], value: section.locations.reduce((sum, location) => sum + (location[platform]?.reviewCount ?? 0), 0), color: PALETTE[i % PALETTE.length] })).filter((slice) => slice.value > 0)} />
             </ChartCard>
-            <ChartCard title="Điểm theo cơ sở" unit={`Thang ${SUMMARY_SCALE}`}>
-              <TrackBars max={SUMMARY_SCALE} width={chartWidth} animate={!printing} rows={bars.map((bar) => ({ name: bar.name, value: bar.score!, color: section.color }))} />
+            <ChartCard title="Số đánh giá theo cơ sở" unit="Tổng số đánh giá">
+              <TrackBars max={Math.max(1, ...bars.map((bar) => bar.reviews))} width={chartWidth} animate={!printing} format={count} empty="Chưa có đánh giá để vẽ." rows={bars.map((bar) => ({ name: bar.name, value: bar.reviews, color: section.color }))} />
             </ChartCard>
           </div>
           <details className="summary-table" open>
-            <summary>Bảng số liệu chi tiết · {section.label}</summary>
+            <summary>Bảng số liệu chi tiết · {section.label} · số đánh giá theo nền tảng</summary>
             <ReachTable compact rows={sorted} rowKey={(row) => row.id} columns={[
               { label: "Cơ sở", text: (row) => row.name, render: (row) => <>{row.name}<small>{row.area}</small></> },
               { label: `Điểm /${SUMMARY_SCALE}`, text: (row) => (row.score == null ? "—" : num(row.score)), value: (row) => row.score },
-              ...section.platforms.map((platform) => ({ label: PLATFORM_LABELS[platform], text: (row: LocationSummary) => (row.platformScores[platform] == null ? "—" : num(row.platformScores[platform]!)), value: (row: LocationSummary) => row.platformScores[platform] ?? null })),
+              ...section.platforms.map((platform) => ({ label: PLATFORM_LABELS[platform], text: (row: LocationSummary) => (row.platformReviews[platform] == null ? "—" : count(row.platformReviews[platform]!)), value: (row: LocationSummary) => row.platformReviews[platform] ?? null, total: true })),
               { label: "Tổng đánh giá", text: (row) => (row.reviews == null ? "—" : row.reviews.toLocaleString("vi-VN")), value: (row) => row.reviews, total: true },
               { label: "Mới trong kỳ", text: (row) => (hasHistory && row.id in trend.byLocation ? signed(trend.byLocation[row.id]) : "—"), value: (row) => (hasHistory && row.id in trend.byLocation ? trend.byLocation[row.id] : null), total: true },
             ]} />

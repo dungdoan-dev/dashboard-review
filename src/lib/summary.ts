@@ -10,6 +10,7 @@ export type LocationSummary = {
   score: number | null;
   reviews: number | null;
   platformScores: Partial<Record<Platform, number>>;
+  platformReviews: Partial<Record<Platform, number>>;
 };
 
 export type TypeSummary = {
@@ -30,14 +31,15 @@ const toScale = (rating: number, scale: number) => (rating / scale) * SUMMARY_SC
 
 export function summarizeLocation(location: LocationRecord, platforms: Platform[]): LocationSummary {
   const platformScores: LocationSummary["platformScores"] = {};
+  const platformReviews: LocationSummary["platformReviews"] = {};
   let reviews: number | null = null;
   for (const platform of platforms) {
     const metric = location[platform];
     if (metric?.rating != null && metric.ratingScale > 0) platformScores[platform] = toScale(metric.rating, metric.ratingScale);
-    if (metric?.reviewCount != null) reviews = (reviews ?? 0) + metric.reviewCount;
+    if (metric?.reviewCount != null) { reviews = (reviews ?? 0) + metric.reviewCount; platformReviews[platform] = metric.reviewCount; }
   }
   const scores = Object.values(platformScores);
-  return { id: location.id, name: location.name, area: location.area, score: scores.length ? mean(scores) : null, reviews, platformScores };
+  return { id: location.id, name: location.name, area: location.area, score: scores.length ? mean(scores) : null, reviews, platformScores, platformReviews };
 }
 
 export function summarizeType(rows: LocationSummary[], platforms: Platform[]): TypeSummary {

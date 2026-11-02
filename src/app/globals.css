@@ -958,8 +958,8 @@ tbody tr:hover { background: #fcfcfd; }
 @media print {
   .sidebar, .dashboard-topbar, .summary-no-print { display: none !important; }
   .main-area { margin: 0 !important; padding: 0 !important; width: 100% !important; }
-  .summary-section { break-inside: avoid-page; break-before: page; border: 0; padding: 0; }
-  .summary-section:first-of-type { break-before: auto; }
+  .summary-section { border: 0; padding: 0; }
+  .summary-section > h2 { break-after: avoid; }
   .summary-chart, .summary-kpi { break-inside: avoid; }
 
 }
@@ -1109,8 +1109,7 @@ select { cursor: pointer; }
   .sidebar, .dashboard-topbar, .summary-no-print { display: none !important; }
   .main-area { margin: 0 !important; padding: 0 !important; width: 100% !important; }
   .summary-report { display: block !important; }
-  .summary-section { break-before: page; border: 0 !important; padding: 0 !important; margin: 0 0 12px; }
-  .summary-hero + .summary-section, .summary-note + .summary-section { break-before: auto; }
+  .summary-section { break-before: auto; border: 0 !important; padding: 0 !important; margin: 0 0 12px; } /* sections flow one after another: a page per section left most pages half empty */
   .summary-chart, .summary-kpi, .summary-insights, .summary-table tr, .summary-table thead { break-inside: avoid; }
   .summary-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .summary-chart { overflow: hidden; }
@@ -1426,7 +1425,7 @@ select { cursor: pointer; }
 @media print {
   .summary-controls, .compare-bar select, .bluejay-range-picker { display: none !important; }
   .summary-report .summary-kpis { break-inside: avoid; }
-  .summary-report .summary-chart { break-inside: auto; } /* a card with a long table may start on the page of the one before */
+  .summary-report .summary-chart:has(.reach-table) { break-inside: auto; } /* a card with a long table may start on the page of the one before; chart-only cards (also on /summary) stay whole */
   .summary-report .summary-chart [role="img"] { break-inside: avoid; }
 }
 
@@ -1450,3 +1449,4 @@ select { cursor: pointer; }
 @media (max-width: 700px) { .boot-skeleton { grid-template-columns: 1fr; } .boot-skeleton > aside { display: none; } .boot-skeleton > div { padding: 18px 16px; } }
 /* Narrow login panel (tablet): the four areas keep icon and name only, the one-line notes would wrap to five lines */
 @media (max-width: 1100px) { .auth-areas small { display: none; } .auth-areas li { align-items: center; } }
+

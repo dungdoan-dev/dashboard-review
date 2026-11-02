@@ -114,6 +114,18 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, typeLa
   const noData = rows.filter((row) => row.avg == null).length;
   const stale = rows.filter((row) => row.avg != null && ageText(row.latest).stale).length;
 
+  function exportExcel() {
+    const note = `Điểm thang ${scale}, số liệu chưa chốt. Thay đổi so với ${compareDate ? `số chốt tới ${fmtDate(compareDate)}` : "lần chốt gần nhất"}. Ngày mốc: ${baselineText}. Ngày so sánh: ${currentText}.`;
+    const data = sorted.map((row) => ({
+      name: row.location.name, area: row.location.area, avg: row.avg, total: row.total, updated: ageText(row.latest).text,
+      cells: platforms.map((platform) => {
+        const cell = row.cells[platform];
+        return { score: cell?.score ?? null, count: cell?.count ?? null, dScore: cell?.dScore != null && Math.abs(cell.dScore) > EPSILON ? Math.round(cell.dScore * 10) / 10 : null, dCount: cell?.dCount ?? null };
+      }),
+    }));
+    void Promise.all([import("@/lib/scoreboard-excel"), import("@/lib/ql-excel")]).then(([m, q]) => q.downloadQlWorkbook(`bang-diem-${vnToday()}.xlsx`, m.scoreboardWorkbook(`BẢNG ĐIỂM · ${typeLabel.toUpperCase()}`, note, platforms.map((platform) => PLATFORM_LABELS[platform]), data, scale)));
+  }
+
   return <section className="scoreboard" aria-labelledby="scoreboard-title">
     <header className="scoreboard-head">
       <div><div className="section-kicker">BẢNG ĐIỂM · {typeLabel.toUpperCase()}</div>
@@ -122,6 +134,7 @@ export function OverviewScoreboard({ locations, platforms, scale, userId, typeLa
       <div className="scoreboard-dates"><span>Ngày mốc: <strong>{baselineText}</strong></span><span>Ngày so sánh: <strong>{currentText}</strong></span></div>
       <label className="scoreboard-sort"><span>So sánh với ngày</span><DatePicker label="Ngày so sánh" text={dateInput} onText={(text) => { setDateInput(text); const iso = parseDmy(text); setCompareDate(iso && iso < vnToday() ? iso : ""); }} max={daysBefore(vnToday(), 1)} />
         {compareDate && <button type="button" onClick={() => { setCompareDate(""); setDateInput(""); }}>Gần nhất</button>}</label>
+      {rows.length > 0 && <button type="button" className="button button-outline" onClick={exportExcel}>Xuất Excel</button>}
     </header>
     {rows.length === 0 ? <p className="scoreboard-empty">Chưa có cơ sở loại {typeLabel}. Thêm cơ sở trong Cài đặt.</p> : <>
       <div className="scoreboard-highlights">
