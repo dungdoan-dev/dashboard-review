@@ -15,22 +15,24 @@ test("the range of a month: whole month when over, up to yesterday while running
   assert.equal(monthRange("2026-11", "2026-11-01").length, 0);
 });
 
-test("a place shows its last report up to the end of the range, and the change against the last report of the month before", () => {
+test("a place shows its last report up to the end of the range, and the change against the report of the first day of the month (the last one before it when that day has none)", () => {
   const range = monthRange("2026-10", "2026-10-31");
   const reports = [
-    report("google", "2026-09-15", 4.5, 100), report("google", "2026-09-30", 4.6, 110),
+    report("google", "2026-09-15", 4.5, 100), report("google", "2026-09-30", 4.6, 110), report("google", "2026-10-01", 4.7, 120),
+    report("tripadvisor", "2026-09-30", 4.0, 50), report("tripadvisor", "2026-10-20", 4.2, 60), // no report on the first day: the one of 30/9 is the base
     report("google", "2026-10-20", 4.8, 150), report("google", "2026-10-31", 4.9, 160), // today is not over: not used
     report("booking", "2026-10-10", 8.8, 30, 10), report("booking", "2026-08-31", 8.0, 20, 10), // the August report is two months back: no base
   ];
-  const row = monthScoreRow(place, ["google", "booking", "agoda"], reports, range, 5);
+  const row = monthScoreRow(place, ["google", "booking", "agoda", "tripadvisor"], reports, range, 5);
   assert.deepEqual([row.cells.google!.score, row.cells.google!.count], [4.8, 150]);
-  assert.ok(Math.abs(row.cells.google!.dScore! - 0.2) < 1e-9 && row.cells.google!.dCount === 40);
+  assert.ok(Math.abs(row.cells.google!.dScore! - 0.1) < 1e-9 && row.cells.google!.dCount === 30); // against 4,7 and 120 of 1/10, not 4,6 and 110 of 30/9
+  assert.ok(Math.abs(row.cells.tripadvisor!.dScore! - 0.2) < 1e-9 && row.cells.tripadvisor!.dCount === 10);
   assert.deepEqual([row.cells.booking!.score, row.cells.booking!.dScore, row.cells.booking!.dCount], [4.4, null, null]); // 8.8 of 10 is 4.4 of 5
   assert.deepEqual([row.cells.agoda!.score, row.cells.agoda!.count], [null, null]);
-  assert.equal(row.total, 180);
+  assert.equal(row.total, 240); // 150 + 60 + 30
   assert.equal(row.latest, "2026-10-20");
   const excel = toExcelRow(row, ["google", "booking", "agoda"]);
-  assert.deepEqual([excel.updated, excel.cells[0].dScore, excel.cells[0].dCount, excel.cells[2].score], ["20/10/2026", 0.2, 40, null]);
+  assert.deepEqual([excel.updated, excel.cells[0].dScore, excel.cells[0].dCount, excel.cells[2].score], ["20/10/2026", 0.1, 30, null]);
 });
 
 test("the monthly workbook has three sheets: Review (a score table per type), Tiếp cận and Quảng cáo (advertising channels apart)", async () => {

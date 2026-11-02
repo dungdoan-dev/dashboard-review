@@ -1,5 +1,5 @@
 // Báo cáo tháng: the score table of a month, from the finalized daily reports. The score and review count of a place are the last report up to the end of the month
-// (up to yesterday while the month is running); the change is against the last report of the month before. No runtime "@/" imports: tested with plain Node.
+// (up to yesterday while the month is running); the change is against the report of the first day of the month (the last report before it, from the month before, when that day has none). No runtime "@/" imports: tested with plain Node.
 import { computeScoreRow, normalize, type Baseline, type ScoreRow } from "./scoreboard.ts";
 import { fmtDate } from "./format-date.ts";
 import type { ExcelScoreRow } from "./scoreboard-excel.ts";
@@ -22,13 +22,13 @@ export function monthRange(month: string, today: string) {
 
 const lastUpTo = (rows: DayReport[], limit: string) => rows.filter((r) => r.date <= limit).reduce<DayReport | null>((best, r) => (!best || r.date > best.date ? r : best), null);
 
-/** One place of the month table. `reports`: that place's daily reports from the start of the month before to the end of this month. */
+/** One place of the month table. `reports`: that place's daily reports from the start of the month before to the end of this month (the month before is only the fallback for a base day without a report). */
 export function monthScoreRow(location: LocationRecord, platforms: Platform[], reports: DayReport[], range: ReturnType<typeof monthRange>, scale: number): ScoreRow {
   const baseline: Baseline = {};
   const asOf: Partial<Record<Platform, Metric | null>> = {};
   for (const platform of platforms) {
     const own = reports.filter((r) => r.platform === platform);
-    const now = lastUpTo(own, range.to), before = lastUpTo(own.filter((r) => r.date >= range.prevStart), range.prevEnd);
+    const now = lastUpTo(own, range.to), before = lastUpTo(own.filter((r) => r.date >= range.prevStart), range.from);
     asOf[platform] = now ? { rating: now.rating, ratingScale: now.ratingScale, reviewCount: now.reviewCount, countLabel: "đánh giá", capturedAt: now.date } : null;
     if (before && before.rating != null) baseline[`${location.id}|${platform}`] = { score: normalize(before.rating, before.ratingScale, scale), count: before.reviewCount, date: before.date };
   }

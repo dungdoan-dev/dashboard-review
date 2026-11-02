@@ -69,7 +69,7 @@ export function MonthReport({ sections, userId }: { sections: SummarySection[]; 
   async function exportExcel() {
     if (!data) return;
     const [m, q] = await Promise.all([import("@/lib/month-report-excel"), import("@/lib/ql-excel")]);
-    const note = `Điểm thang ${scale}. Số liệu là báo cáo đã chốt đến ${fmtDate(range.to)}; thay đổi so với cuối tháng trước (${fmtDate(range.prevEnd)}). Mỗi ô nền tảng ghi điểm, số đánh giá và thay đổi.`;
+    const note = `Điểm thang ${scale}. Số liệu là báo cáo đã chốt đến ${fmtDate(range.to)}; thay đổi so với đầu tháng (${fmtDate(range.from)}). Mỗi ô nền tảng ghi điểm, số đánh giá và thay đổi.`;
     const scoreTables = tables.map(({ section, rows }) => ({ heading: section.label, platforms: section.platforms.map((p) => PLATFORM_LABELS[p]), rows: rows.map((r) => toExcelRow(r, section.platforms)), scale }));
     await q.downloadQlWorkbook(`bao-cao-thang-${month}.xlsx`, m.monthWorkbook(month, note, scoreTables, `Kỳ: ${fmtDate(range.from)} – ${fmtDate(range.to)}`, data.reach));
   }
@@ -101,8 +101,8 @@ export function MonthReport({ sections, userId }: { sections: SummarySection[]; 
         <h2 className="month-sub">Review</h2>
         <div className="month-boards">{tables.map(({ section, rows }) => (
           <ScoreboardView key={section.type} rows={rows} platforms={section.platforms} scale={scale} typeLabel={section.label} updated={updated}
-            note={`Điểm thang ${scale}, số liệu đã chốt đến ${fmtDate(range.to)}. Thay đổi so với cuối tháng trước.`}
-            dates={{ base: fmtDate(range.prevEnd), current: fmtDate(range.to) }} />
+            note={`Điểm thang ${scale}, số liệu đã chốt đến ${fmtDate(range.to)}. Thay đổi so với đầu tháng.`}
+            dates={{ base: fmtDate(range.from), current: fmtDate(range.to) }} />
         ))}</div>
         <h2 className="month-sub">Tiếp cận</h2>
         <ReachChannels data={data.reach.filter((c) => !c.ads)} />
