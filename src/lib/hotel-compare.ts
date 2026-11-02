@@ -1,5 +1,5 @@
 // The accountant's "BÁO CÁO TỔNG HỢP <khách sạn>" (one row per week: nights, rooms for sale, occupancy, revenue by line, deductions, total) for every hotel side by side, then the same for the whole chain.
-// Nights and rooms for sale come from the occupancy report (the day of the stored week), room money and services from the daily revenue (room money split over the nights slept, services by the day sold).
+// Nights and rooms for sale come from the occupancy report (the day of the stored week), room money and services from the daily revenue by check-out day (a stay's whole room money on the day it checks out, services by the day sold).
 // Room revenue is at the displayed price and the deduction is the OTA commission, by the finance team's policy (ota-commission.ts): Blue Jay holds a net price for Expedia, Trip and Agoda, so their room money is grossed up here.
 // Pure function: tested by hotel-compare.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { DailyRevenue } from "./bluejay-daily.ts";

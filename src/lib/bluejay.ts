@@ -175,15 +175,15 @@ export async function readServiceItems(db: SupabaseClient, hotelId: number, from
   return { items, weeks: weeks.map((w) => w.monday) };
 }
 
-/** Revenue per day for [from, to] from the stored revenue weeks: by night slept (default; a stay that ends after the range still has nights in it, so weeks up to 5 weeks after the range are read too) or by check-out day (the finance team's rule, only the weeks of the range). */
-export async function readDailyRevenue(db: SupabaseClient, from: string, to: string, basis: "stay" | "checkout" = "stay") {
+/** Revenue per day for [from, to] from the stored revenue weeks: by night slept (default; a stay that ends after the range still has nights in it, so weeks up to 5 weeks after the range are read too) or by check-out day (the finance team's rule, only the weeks of the range; "lines" is the same with the room gross and commission and the services by group that the hotel comparison needs). */
+export async function readDailyRevenue(db: SupabaseClient, from: string, to: string, basis: "stay" | "checkout" | "lines" = "stay") {
   if (!isDate(from) || !isDate(to) || from > to) throw new Error("Khoảng ngày không hợp lệ.");
   if (addDays(from, MAX_RANGE_DAYS) <= to) throw new Error(`Chọn tối đa ${MAX_RANGE_DAYS} ngày.`);
-  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(from)).lte("week_start", basis === "checkout" ? mondayOf(to) : addDays(mondayOf(to), 35));
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(from)).lte("week_start", basis !== "stay" ? mondayOf(to) : addDays(mondayOf(to), 35));
   if (error) throw new Error(error.message);
   const weeks = (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
   if (basis === "checkout") return checkoutRevenue(weeks, from, to);
-  return dailyRevenue(weeks, from, to);
+  return dailyRevenue(weeks, from, to, basis === "lines");
 }
 
 /**

@@ -28,8 +28,8 @@ export type DailyRevenue = {
 
 const datesBetween = (from: string, to: string) => { const dates: string[] = []; for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d); return dates; };
 
-/** One record per booking over all stored weeks (the latest snapshot wins), its room money split over its nights, for the nights inside from..to. */
-function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string) {
+/** One record per booking over all stored weeks (the latest snapshot wins), its room money split over its nights, for the nights inside from..to (checkout: the whole stay on its check-out day, the finance team's rule). */
+function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelRevenue }[], pick: (h: HotelRevenue) => RevenueBooking[], from: string, to: string, checkout: boolean) {
   const latest = new Map<string, { b: RevenueBooking; at: string }>();
   for (const { week, hotel } of weeks) for (const b of pick(hotel)) {
     const key = `${b.code}|${b.room}|${b.roomType}`, at = week.paymentsAt ?? week.fetchedAt;
@@ -38,19 +38,19 @@ function roomByDay(hotelId: number, weeks: { week: RevenueWeek; hotel: HotelReve
   const byDay = new Map<string, { nights: number; money: number; gross: number; commission: number }>();
   for (const { b } of latest.values()) {
     if (!b.stay || b.nights <= 0 || !b.checkIn) continue;
-    const perNight = b.roomPrice / b.nights, split = otaSplit(b.channel, hotelId, perNight);
-    for (let i = 0; i < b.nights; i++) {
-      const date = addDays(b.checkIn, i);
+    const count = checkout ? b.nights : 1, perNight = checkout ? b.roomPrice : b.roomPrice / b.nights, split = otaSplit(b.channel, hotelId, perNight);
+    for (let i = 0; i < (checkout ? 1 : b.nights); i++) {
+      const date = checkout ? b.checkOut : addDays(b.checkIn, i);
       if (date < from || date > to) continue;
       const day = byDay.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0 };
-      day.nights += 1; day.money += perNight; day.gross += split.gross; day.commission += split.commission; byDay.set(date, day);
+      day.nights += count; day.money += perNight; day.gross += split.gross; day.commission += split.commission; byDay.set(date, day);
     }
   }
   return byDay;
 }
 
-/** revenues: every stored week from the Monday of `from` to some weeks after `to` (a stay that ends after the range still has nights inside it). */
-export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string): DailyRevenue {
+/** revenues: every stored week from the Monday of `from` to some weeks after `to` (a stay that ends after the range still has nights inside it); with checkout, only the weeks of the range are needed. */
+export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string, checkout = false): DailyRevenue {
   const dates = datesBetween(from, to);
   const have = new Set(revenues.map((w) => w.monday));
   const missingWeeks: string[] = [];
@@ -62,7 +62,7 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string):
   const groupTotal = new Map<string, number>();
   const hotels = [...names].map(([id, name]): DailyHotel => {
     const weeks = revenues.flatMap((week) => { const hotel = week.hotels.find((h) => h.id === id); return hotel ? [{ week, hotel }] : []; });
-    const rooms = roomByDay(id, weeks, (h) => h.bookings, from, to), excluded = roomByDay(id, weeks, (h) => h.excluded ?? [], from, to);
+    const rooms = roomByDay(id, weeks, (h) => h.bookings, from, to, checkout), excluded = roomByDay(id, weeks, (h) => h.excluded ?? [], from, to, checkout);
     const serviceOf = new Map<string, { at: string; groups: Record<string, number> }>(); // a day is stored once per week; if two weeks hold it, the latest pull wins
     for (const { week, hotel } of weeks) for (const d of hotel.services) {
       if (d.date < from || d.date > to) continue;

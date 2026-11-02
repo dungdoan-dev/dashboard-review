@@ -24,7 +24,7 @@ export function BluejayCompare() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([fetch(`/api/bluejay/daily?from=${from}&to=${to}`, { cache: "no-store" }), fetch(`/api/bluejay/range?from=${from}&to=${to}`, { cache: "no-store" })])
+    Promise.all([fetch(`/api/bluejay/daily?basis=lines&from=${from}&to=${to}`, { cache: "no-store" }), fetch(`/api/bluejay/range?from=${from}&to=${to}`, { cache: "no-store" })])
       .then(async ([d, r]) => {
         const dailyBody = await d.json().catch(() => ({})), rangeBody = await r.json().catch(() => ({}));
         if (!active) return;
@@ -66,7 +66,7 @@ export function BluejayCompare() {
       <div className="summary-hero">
         <div>
           <h1>So sánh khách sạn · tháng {month.slice(5)}/{month.slice(0, 4)}</h1>
-          <p>Báo cáo tổng hợp theo tuần của từng khách sạn và toàn chuỗi, theo mẫu của kế toán. Số phòng (đêm), phòng bán và công suất lấy từ báo cáo công suất Blue Jay đã lưu; doanh thu phòng tính theo đêm ở (giá phòng chia đều theo đêm, theo giá hiển thị: Expedia, Trip, Agoda đổ về Blue Jay đã trừ hoa hồng nên được cộng lại), dịch vụ theo ngày bán, bỏ M-Standard và Unassigned. Giảm trừ doanh thu là hoa hồng OTA tính theo % của giá hiển thị (chính sách OTA: Booking 15%, Expedia 15%, Trip 18%, Agoda 20%; Traveloka 20% ở Sontra Sea và Gia Lai, 19% ở Yzistel và Quy Nhơn), không lấy từ Google Sheet nên không gồm phí quẹt thẻ và giảm giá khách.</p>
+          <p>Báo cáo tổng hợp theo tuần của từng khách sạn và toàn chuỗi, theo mẫu của kế toán. Số phòng (đêm), phòng bán và công suất lấy từ báo cáo công suất Blue Jay đã lưu; doanh thu phòng tính theo ngày trả phòng (cả đợt ở thuộc ngày khách trả phòng, theo giá hiển thị: Expedia, Trip, Agoda đổ về Blue Jay đã trừ hoa hồng nên được cộng lại), dịch vụ theo ngày bán, bỏ M-Standard và Unassigned. Giảm trừ doanh thu là hoa hồng OTA tính theo % của giá hiển thị (chính sách OTA: Booking 15%, Expedia 15%, Trip 18%, Agoda 20%; Traveloka 20% ở Sontra Sea và Gia Lai, 19% ở Yzistel và Quy Nhơn), không lấy từ Google Sheet nên không gồm phí quẹt thẻ và giảm giá khách.</p>
         </div>
         <div className="summary-controls">
           <button type="button" onClick={() => setMonth(shiftMonth(month, -1))}>‹ Tháng trước</button>

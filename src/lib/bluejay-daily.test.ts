@@ -52,3 +52,10 @@ test("the OTA commission of a day follows the policy: Booking and Traveloka send
   assert.equal(Math.round(day(6495).commission), 45_000 + 25_000 + 19_000);
   assert.equal(Math.round(day(5381).roomGross), 300_000 + 125_000 + 100_000 + 100_000); // the room money Blue Jay holds is 600.000, the displayed one 625.000
 });
+
+test("checkout: a stay's whole room money and OTA split land on its check-out day, and only there", () => {
+  const d = dailyRevenue([week("2026-08-03", [booking({})])], "2026-08-01", "2026-08-06", true);
+  const days = d.hotels[0].days;
+  assert.deepEqual(days.map((x) => x.room), [0, 0, 0, 0, 900_000, 0]);
+  assert.deepEqual([days[4].rooms, Math.round(days[4].commission)], [3, 135_000]);
+});
