@@ -37,11 +37,25 @@ export function parseGrabFeedback(text: string): { ratingValue: number; count: n
   return ratingValue >= 0 && ratingValue <= 5 && Number.isSafeInteger(count) ? { ratingValue, count } : null;
 }
 
-async function readFeedback(page: Page, waitMs: number) {
+/** Runs fn over items, `limit` at a time; the results keep the order of items. */
+export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i]); }
+  }));
+  return out;
+}
+// Every account has its own profile and login, so accounts can be read side by side; the serverless Chromium on Vercel has memory for one.
+export const GRAB_PARALLEL = process.env.VERCEL ? 1 : 3;
+
+/** stopOnLogin: give up as soon as Grab sends the browser to the login page (the score will not show there), so the caller can log in at once. */
+async function readFeedback(page: Page, waitMs: number, stopOnLogin = false) {
   const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
     const parsed = parseGrabFeedback(await page.evaluate(() => document.body.innerText).catch(() => ""));
     if (parsed) return parsed;
+    if (stopOnLogin && page.url().includes("weblogin.grab.com")) return null;
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
   return null;
@@ -114,7 +128,7 @@ export async function scrapeGrabFeedback(opts: {
   try {
     const page = await browser.newPage();
     await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    let result = await readFeedback(page, opts.login ? 5_000 : 15_000);
+    let result = await readFeedback(page, opts.login ? 5_000 : 15_000, Boolean(opts.user && opts.password));
     if (!result && page.url().includes("weblogin.grab.com") && opts.user && opts.password) {
       await autoLogin(page, opts.user, opts.password).catch((err) => console.warn("Tự đăng nhập lỗi:", err.message));
       result = await readFeedback(page, 40_000);
@@ -139,24 +153,23 @@ export function grabProfileDir(locationId: string) {
 }
 
 export async function runGrabfoodScraper(targets: GrabfoodTarget[]) {
-  const results: GrabfoodResult[] = [];
-  for (const target of targets) {
+  const results = await mapPool(targets, GRAB_PARALLEL, async (target): Promise<GrabfoodResult> => {
     const base = { id: target.id, name: target.name, url: FEEDBACK_URL, capturedAt: new Date().toISOString() };
     try {
       const { ratingValue, count } = await scrapeGrabFeedback({
         profileDir: grabProfileDir(target.id), headless: process.env.GRAB_HEADED !== "1" || Boolean(process.env.VERCEL), user: target.username, password: target.password,
       });
-      results.push({
+      return {
         ...base, success: true, ratingValue, count,
         rating: ratingValue.toFixed(1).replace(".", ","), ratingRaw: String(ratingValue), countRaw: String(count),
-      });
+      };
     } catch (error) {
-      results.push({
+      return {
         ...base, success: false, rating: null, ratingValue: null, ratingRaw: null, count: null, countRaw: null,
         error: error instanceof Error ? error.message : String(error),
-      });
+      };
     }
-  }
+  });
   return {
     success: results.some((r) => r.success),
     totalTargets: targets.length,

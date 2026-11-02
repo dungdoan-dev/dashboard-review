@@ -11,7 +11,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { decryptSecret } from "../src/lib/grab-credentials.ts";
-import { grabProfileDir, scrapeGrabFeedback } from "../src/lib/scraper/grabfood-scraper.ts";
+import { GRAB_PARALLEL, grabProfileDir, mapPool, scrapeGrabFeedback } from "../src/lib/scraper/grabfood-scraper.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 async function loadEnv() {
@@ -68,7 +68,8 @@ async function main() {
     if (error) throw new Error(`Không đọc được tài khoản Grab: ${error.message}`);
     if (!data?.length) throw new Error("Chưa có cơ sở nào lưu tài khoản Grab. Nhập trong form sửa cơ sở (loại Cà phê & F&B).");
     let failed = 0;
-    for (const row of data) {
+    // --login opens a visible window for typing an OTP by hand: one at a time. Otherwise a few accounts at once (the order of the lines follows who finishes first).
+    await mapPool(data, login ? 1 : GRAB_PARALLEL, async (row) => {
       const name = row.locations.name;
       try {
         const result = await scrapeGrabFeedback({
@@ -81,7 +82,7 @@ async function main() {
         failed++;
         console.error(`${name}: LỖI - ${err.message}`);
       }
-    }
+    });
     console.log(`Xong: ${data.length - failed}/${data.length} cơ sở thành công.`);
     if (failed) process.exitCode = 1;
     return;
