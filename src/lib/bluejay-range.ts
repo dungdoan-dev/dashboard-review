@@ -2,7 +2,7 @@
 // Occupancy: the stored day of the week that contains it. Room revenue and nights: the stays that check out inside the range, whole (older weeks: each booking's nights inside the range,
 // counted once per week window so a booking that spans two weeks is not counted twice). Service revenue: the stored daily totals.
 // Imports use ".ts" because tests run this with plain Node.
-import { addDays, mondayOf, nightsIn, rate, type Day, type WeeklyReport } from "./bluejay-metrics.ts";
+import { addDays, mondayOf, nightsIn, rate, topGroups, type Day, type WeeklyReport } from "./bluejay-metrics.ts";
 import { latestStays, type RevenueBooking, type RevenueWeek, type ServiceDay } from "./bluejay-revenue.ts";
 
 export const MAX_RANGE_DAYS = 366;
@@ -92,7 +92,7 @@ export function rangeSummary(hotels: RangeHotel[], dateCount: number) {
   return { occupied, total, rate: r, nights: occupied, room, adr, revpar: total ? room / total : 0, missingDays: Math.max(0, dateCount * hotels.length - covered) };
 }
 
-/** The stored weekly report with its room money and nights by check-out day (the stays that check out in the week, whole), like the revenue reports and the range view, so ADR and RevPAR mean the same everywhere. A week whose revenue was stored by nights keeps its own figures. */
+/** The stored weekly report with its room money, nights and their split by source and room type by check-out day (the stays that check out in the week, whole), like the revenue reports and the range view, so ADR and RevPAR mean the same everywhere. A week whose revenue was stored by nights keeps its own figures. */
 export function checkoutWeek(report: WeeklyReport, revenue: RevenueWeek | undefined): WeeklyReport {
   if (!revenue) return report;
   return {
@@ -101,7 +101,8 @@ export function checkoutWeek(report: WeeklyReport, revenue: RevenueWeek | undefi
       if (stored?.basis !== "checkout") return h;
       const stays = stored.bookings.filter((b) => b.stay && b.nights > 0 && b.checkOut >= revenue.monday && b.checkOut <= revenue.end);
       const room = stays.reduce((s, b) => s + b.roomPrice, 0);
-      return { ...h, roomSum: room, nightSum: stays.reduce((s, b) => s + b.nights, 0), stats: { ...h.stats, roomPrice: room } };
+      const by = (key: (b: RevenueBooking) => string) => topGroups(stays, key, (b) => b.code, (b) => b.nights, (b) => b.roomPrice);
+      return { ...h, roomSum: room, nightSum: stays.reduce((s, b) => s + b.nights, 0), stats: { ...h.stats, roomPrice: room, bySource: by((b) => b.source), byRoomType: by((b) => b.roomType) } };
     }),
   };
 }

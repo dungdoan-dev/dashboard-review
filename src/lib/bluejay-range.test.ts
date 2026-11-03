@@ -106,6 +106,8 @@ test("the weekly report takes its room money and nights by check-out day from a 
   const co: RevenueWeek = { v: REVENUE_VERSION, monday: MONDAY, end: "2026-10-11", fetchedAt: "x", hotels: [{ id: 1, name: "H", bookings: [stay("2026-10-06", 3, 3_000_000), stay("2026-10-09", 6, 4_200_000)], services: [], basis: "checkout" }] };
   const weekly = checkoutWeek(w41, co).hotels[0];
   assert.deepEqual([weekly.roomSum, weekly.nightSum, weekly.stats.roomPrice], [7_200_000, 9, 7_200_000]);
+  assert.deepEqual(weekly.stats.bySource.map((g) => [g.name, g.bookings, g.nights, g.value]), [["Walking", 2, 9, 7_200_000]]); // the charts add up to the room money
+  assert.deepEqual(weekly.stats.byRoomType.map((g) => g.value), [7_200_000]);
   const s = rangeSummary(rangeData([w41], [co], MONDAY, "2026-10-11").hotels, 7), w = summarize([weekly]);
   assert.deepEqual([w.adr, w.revpar], [s.adr, s.revpar]);
   assert.equal(checkoutWeek(w41, revenue(MONDAY)).hotels[0], w41.hotels[0]); // a week stored by nights keeps its figures

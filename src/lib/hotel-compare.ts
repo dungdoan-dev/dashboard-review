@@ -23,7 +23,7 @@ const monthEnd = (month: string) => { const [y, m] = month.split("-").map(Number
 export function compareSpan(month: string) { return { from: mondayOf(`${month}-01`), to: addDays(mondayOf(monthEnd(month)), 6) }; }
 
 /** Blue Jay gives the service groups only by the day sold, and the service money of a booking only as one figure. On check-out day the total is the bookings' and it is split over the groups in the proportion sold in the same period ("Thu khác" when nothing was sold in it). */
-const onCheckout = (sold: Record<string, number>, total: number): Record<string, number> => {
+export const onCheckout = (sold: Record<string, number>, total: number): Record<string, number> => {
   const all = Object.values(sold).reduce((s, v) => s + v, 0);
   if (!total) return {};
   if (all <= 0) return { "Thu khác": total };

@@ -7,6 +7,7 @@ import { parseExpenses, summarizeFinance, type ExpenseLine } from "@/lib/finance
 import { HOTEL_ROOMS, lineMonths, pnlRows, roomByCheckout, revenueLines, type MonthData, type PnlRow } from "@/lib/pnl";
 import type { DailyRevenue } from "@/lib/bluejay-daily";
 import type { RangeData } from "@/lib/bluejay-range";
+import { onCheckout } from "@/lib/hotel-compare";
 import { ReachTable, type Col } from "@/components/reach-table";
 import { PnlCharts } from "@/components/operations-charts";
 
@@ -30,7 +31,7 @@ function readLedger(sheets: Sheets, month: string): Ledger | null {
   return { commission: s.income.commission, otherDeduction: s.income.otherDeduction, expenses };
 }
 
-/** The yearly result of one hotel like the accountant's sheet: result by month, nights and occupancy. Revenue comes from Blue Jay (by day of stay), the rest from the month tabs of the hotel's Google Sheet. */
+/** The yearly result of one hotel like the accountant's sheet: result by month, nights and occupancy. Revenue comes from Blue Jay (room and service money by check-out day), the rest from the month tabs of the hotel's Google Sheet. */
 export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
   const [year, setYear] = useState(() => String(new Date().getFullYear()));
   const [daily, setDaily] = useState<Record<string, Daily | null>>({});
@@ -45,17 +46,18 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
     let active = true;
     setDaily({}); setLedgers({}); setError("");
     Promise.all(list.map(async (m): Promise<[string, Daily | null]> => {
-      const get = (path: string) => fetch(`/api/bluejay/${path}?from=${m}-01&to=${monthEnd(m)}`, { cache: "no-store" }).catch(() => null);
-      const [res, range] = await Promise.all([get("daily"), get("range")]);
+      const get = (path: string, extra = "") => fetch(`/api/bluejay/${path}?from=${m}-01&to=${monthEnd(m)}${extra}`, { cache: "no-store" }).catch(() => null);
+      const [res, range] = await Promise.all([get("daily", "&basis=lines"), get("range")]); // lines: room and service money by check-out day, as So sánh khách sạn and Báo cáo quản lý
       if (!res?.ok) return [m, null];
       const stays = range?.ok ? ((await range.json()) as RangeData).hotels.find((h) => h.id === scopeId) : undefined; // room money by check-out day
       const hotel = ((await res.json()) as DailyRevenue).hotels.find((h) => h.id === scopeId);
       const d = hotel?.days ?? [];
       if (!d.some((x) => x.total || x.rooms)) return [m, null];
-      const services: Record<string, number> = {};
-      for (const x of d) for (const [g, v] of Object.entries(x.services)) services[g] = (services[g] ?? 0) + v;
-      for (const g of Object.keys(services)) services[g] = Math.round(services[g]);
-      return [m, { rooms: d.reduce((s, x) => s + x.rooms, 0), room: stays ? roomByCheckout(stays) : Math.round(d.reduce((s, x) => s + x.room, 0)), services }];
+      const sold: Record<string, number> = {};
+      for (const x of d) for (const [g, v] of Object.entries(x.services)) sold[g] = (sold[g] ?? 0) + v;
+      const services = onCheckout(sold, d.reduce((s, x) => s + x.checkoutService, 0)); // service money of the stays that check out in the month, over the groups in the proportion sold
+      const slept = stays?.days.some(Boolean) ? stays.days.reduce((s, x) => s + (x?.occupied ?? 0), 0) : undefined; // nights slept, from the occupancy report: occupancy is by night, not by check-out
+      return [m, { rooms: slept ?? d.reduce((s, x) => s + x.rooms, 0), room: stays ? roomByCheckout(stays) : Math.round(d.reduce((s, x) => s + x.room, 0)), services }];
     })).then((entries) => { if (active) setDaily(Object.fromEntries(entries)); });
     return () => { active = false; };
   }, [scopeId, year, list]);

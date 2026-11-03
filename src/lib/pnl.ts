@@ -1,4 +1,4 @@
-// The yearly result of one hotel, laid out like the accountant's sheet "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH" (months in columns): room money by check-out day from Blue Jay, services by the day they were sold, deductions and costs from the month's ledger tabs.
+// The yearly result of one hotel, laid out like the accountant's sheet "BẢNG KẾT QUẢ HOẠT ĐỘNG KINH DOANH" (months in columns): room and service money by check-out day from Blue Jay (services split over the groups in the proportion sold), deductions and costs from the month's ledger tabs.
 // Costs are the ledger's payments filed in the five report groups (see reportGroup), each counted in the month its "Nội dung chi" names ("lương tháng 7" paid in August is July's cost), else in the month it was paid.
 // Pure functions: tested by pnl.test.ts. Imports use ".ts" because tests run this with plain Node.
 import { EXPENSES } from "./expense-kinds.ts";
@@ -14,7 +14,7 @@ export const roomByCheckout = (h: Pick<RangeHotel, "bookings" | "excludedRoom">)
 export const HOTEL_ROOMS: Record<number, number> = { 5381: 15 };
 
 export type MonthData = {
-  rooms: number; room: number; services: Record<string, number>; // from Blue Jay: nights slept, room money of the stays checked out in the month, service money by Blue Jay group
+  rooms: number; room: number; services: Record<string, number>; // from Blue Jay: nights slept, room and service money of the stays checked out in the month (service by Blue Jay group)
   commission: number; otherDeduction: number;                    // from the income ledger
   expenses: ExpenseLine[] | null;                                // null: the month has no expense tab
 };

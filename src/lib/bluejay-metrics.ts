@@ -147,12 +147,12 @@ function top(map: Map<string, Bucket>, by: "value" | "bookings"): Group[] {
   const rest = list.slice(MAX_GROUPS - 1).reduce((s, g) => ({ name: "Khác", bookings: s.bookings + g.bookings, nights: s.nights + g.nights, value: s.value + g.value }), { name: "Khác", bookings: 0, nights: 0, value: 0 });
   return [...list.slice(0, MAX_GROUPS - 1), rest];
 }
-function group<R extends Reservation>(rows: R[], key: (r: R) => unknown, nightsOf: (r: R) => number, valueOf: (r: R) => number) {
+function group<R>(rows: R[], key: (r: R) => unknown, nightsOf: (r: R) => number, valueOf: (r: R) => number, codeOf: (r: R) => unknown = (r) => (r as Reservation).bookingCode) {
   const map = new Map<string, Bucket>();
   for (const r of rows) {
     const name = String(key(r) || "").trim() || "Không rõ";
     const g = map.get(name) || { codes: new Set<string>(), anon: 0, nights: 0, value: 0 };
-    const code = String(r.bookingCode || "").trim();
+    const code = String(codeOf(r) || "").trim();
     if (code) g.codes.add(code); else g.anon++;
     g.nights += nightsOf(r); g.value += valueOf(r);
     map.set(name, g);
@@ -173,6 +173,9 @@ export function reservationStats(rows: Reservation[], from: string, to: string):
 }
 
 // Status mix uses every booking (cancelled / no-show included).
+/** Groups of any rows (the weekly report's stays by check-out day use it too), biggest first, the tail folded into "Khác". */
+export const topGroups = <R>(rows: R[], key: (r: R) => unknown, codeOf: (r: R) => unknown, nightsOf: (r: R) => number, valueOf: (r: R) => number) => top(group(rows, key, nightsOf, valueOf, codeOf), "value");
+
 export const statusCounts = (rows: Reservation[]) =>
   top(group(dedupe(rows), (r) => r.status, () => 0, () => 0), "bookings").map(({ name, bookings }) => ({ name, bookings }));
 
