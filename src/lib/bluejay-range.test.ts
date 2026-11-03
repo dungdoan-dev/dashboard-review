@@ -79,3 +79,21 @@ test("in a check-out week two stays of one booking in the same room stay two row
   assert.equal(h.bookings.length, 2);
   assert.deepEqual([h.bookings.reduce((s, b) => s + b.roomInWeek, 0), h.bookings.reduce((s, b) => s + b.servicePrice, 0)], [1_750_000, 215_000]);
 });
+
+test("RevPAR is room money over room-nights for sale, not rate × ADR (the occupancy report and the bookings count nights differently)", () => {
+  const data = rangeData([w41], [revenue(MONDAY)], MONDAY, "2026-10-11");
+  const s = rangeSummary(data.hotels, data.dates.length);
+  assert.equal(s.revpar, s.room / s.total);
+  assert.notEqual(s.revpar, s.rate * s.adr); // 28 occupied nights in the report, 4 booked nights in the week
+});
+
+test("a stay whose check-out moved to the next week is counted once, with the newest snapshot", () => {
+  const stay = (checkOut: string, nights: number, roomPrice: number) => ({
+    code: "X1", ref: "", source: "Walking", channel: "Khách lẻ", roomType: "Deluxe", room: "P - 101", status: "Đã trả phòng", bookDate: "2026-10-01", checkIn: "2026-10-08", checkOut, nights, nightsInWeek: nights,
+    roomPrice, roomInWeek: roomPrice, servicePrice: 0, totalPrice: roomPrice, payment: 0, balance: 0, deposit: 0, stay: true, flags: [],
+  });
+  const before: RevenueWeek = { v: REVENUE_VERSION, monday: "2026-10-05", end: "2026-10-11", fetchedAt: "2026-10-09T00:00:00Z", hotels: [{ id: 1, name: "H", bookings: [stay("2026-10-10", 2, 800_000)], services: [], basis: "checkout" }] };
+  const after: RevenueWeek = { v: REVENUE_VERSION, monday: "2026-10-12", end: "2026-10-18", fetchedAt: "2026-10-19T00:00:00Z", hotels: [{ id: 1, name: "H", bookings: [stay("2026-10-13", 5, 2_000_000)], services: [], basis: "checkout" }] };
+  const h = rangeData([], [before, after], "2026-10-01", "2026-10-31").hotels[0];
+  assert.deepEqual(h.bookings.map((b) => [b.checkOut, b.nightsInWeek, b.roomInWeek]), [["2026-10-13", 5, 2_000_000]]);
+});

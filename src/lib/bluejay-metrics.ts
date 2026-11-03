@@ -202,7 +202,8 @@ export function summarize(records: Pick<HotelRecord, "weeks" | "roomSum" | "nigh
   const [cur, p1, p2] = [w(0), w(1), w(2)];
   const room = records.reduce((s, h) => s + h.roomSum, 0), nights = records.reduce((s, h) => s + h.nightSum, 0);
   const adr = nights ? room / nights : 0;
-  return { rate: rate(cur), nights: cur.occ, adr, revpar: rate(cur) * adr, pickup1: rate(p1), pickup2: rate(p2) };
+  // RevPAR = room money / room-nights for sale, not rate × ADR: ADR's nights come from the bookings, the rate's from the occupancy report, and the two differ.
+  return { rate: rate(cur), nights: cur.occ, adr, revpar: cur.total ? room / cur.total : 0, pickup1: rate(p1), pickup2: rate(p2) };
 }
 
 export type Merged = { name: string; bookings: number; nights: number; value: number; quantity: number; total: number };

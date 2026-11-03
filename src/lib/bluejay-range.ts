@@ -1,9 +1,9 @@
 // Report for any date range, built only from the weekly snapshots already stored (no call to Blue Jay).
-// Occupancy: the stored day of the week that contains it. Room revenue and nights: each booking's nights inside the range,
-// counted once per week window so a booking that spans two weeks is not counted twice. Service revenue: the stored daily totals.
+// Occupancy: the stored day of the week that contains it. Room revenue and nights: the stays that check out inside the range, whole (older weeks: each booking's nights inside the range,
+// counted once per week window so a booking that spans two weeks is not counted twice). Service revenue: the stored daily totals.
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf, nightsIn, rate, type Day, type WeeklyReport } from "./bluejay-metrics.ts";
-import type { RevenueBooking, RevenueWeek, ServiceDay } from "./bluejay-revenue.ts";
+import { latestStays, type RevenueBooking, type RevenueWeek, type ServiceDay } from "./bluejay-revenue.ts";
 
 export const MAX_RANGE_DAYS = 366;
 
@@ -44,27 +44,36 @@ export function rangeData(reports: WeeklyReport[], revenues: RevenueWeek[], from
     const stamp = new Map<string, string>(); // when the snapshot behind each merged booking was pulled
     const services: ServiceDay[] = [];
     let excludedRoom: number | undefined = 0, excludedService = 0;
+    const whole: { b: RevenueBooking; at: string }[] = [], wholeExcluded: { b: RevenueBooking; at: string }[] = []; // snapshots of the check-out weeks, merged below
     for (const week of revenues) {
       const hotel = week.hotels.find((h) => h.id === id);
       if (!hotel) continue;
       const lo = from > week.monday ? from : week.monday, hi = to < week.end ? to : week.end;
+      const pulled = week.paymentsAt ?? week.fetchedAt;
       if (!hotel.excluded) excludedRoom = undefined;
-      else if (excludedRoom !== undefined && lo <= hi) for (const b of hotel.excluded) if (b.stay && b.nights > 0 && b.checkOut >= lo && b.checkOut <= hi) { excludedRoom += b.roomPrice; excludedService += b.servicePrice; }
-      const checkout = hotel.basis === "checkout"; // newer weeks hold the stays that check out in the week, whole; older ones hold stays with nights in the week
-      for (const b of hotel.bookings) {
-        const nights = checkout ? b.nights : lo <= hi ? nightsIn({ checkInTime: b.checkIn, checkOutTime: b.checkOut }, lo, hi) : 0;
-        if (checkout ? !(lo <= hi && b.checkOut >= lo && b.checkOut <= hi) : nights <= 0) continue;
-        const room = b.stay && b.nights > 0 ? (checkout ? b.roomPrice : (b.roomPrice / b.nights) * nights) : 0;
-        const key = `${b.code}|${b.room}|${b.roomType}${checkout ? `|${b.checkIn}` : ""}`; // a check-out week holds whole stays: a booking that comes back to the same room is a second stay, with its own money
+      else for (const b of hotel.excluded) wholeExcluded.push({ b, at: pulled });
+      for (const d of hotel.services) if (d.date >= from && d.date <= to) services.push(d);
+      // Newer weeks hold the stays that check out in the week, whole: a stay whose check-out moved to another week sits in both, so they go through latestStays (newest pull wins) instead of being added up.
+      if (hotel.basis === "checkout") { for (const b of hotel.bookings) whole.push({ b, at: pulled }); continue; }
+      for (const b of hotel.bookings) { // older weeks hold the stays with nights in the week
+        const nights = lo <= hi ? nightsIn({ checkInTime: b.checkIn, checkOutTime: b.checkOut }, lo, hi) : 0;
+        if (nights <= 0) continue;
+        const room = b.stay && b.nights > 0 ? (b.roomPrice / b.nights) * nights : 0;
+        const key = `${b.code}|${b.room}|${b.roomType}`;
         const seen = merged.get(key);
-        const pulled = week.paymentsAt ?? week.fetchedAt;
         if (seen) {
           seen.nightsInWeek += nights; seen.roomInWeek += room; // same booking in the next week: add its nights
           if (pulled > (stamp.get(key) ?? "")) { Object.assign(seen, { status: b.status, payment: b.payment, balance: b.balance, totalPrice: b.totalPrice, servicePrice: b.servicePrice, deposit: b.deposit, flags: b.flags }); stamp.set(key, pulled); } // the newest snapshot has the money
         } else { merged.set(key, { ...b, nightsInWeek: nights, roomInWeek: room }); stamp.set(key, pulled); }
       }
-      for (const d of hotel.services) if (d.date >= from && d.date <= to) services.push(d);
     }
+    const inRange = (b: RevenueBooking) => b.checkOut >= from && b.checkOut <= to;
+    for (const { b } of latestStays(whole)) {
+      if (!inRange(b)) continue;
+      const key = `${b.code}|${b.room}|${b.roomType}|${b.checkIn}`; // a booking that comes back to the same room is a second stay, with its own money
+      merged.set(key, { ...b, nightsInWeek: b.nights, roomInWeek: b.stay && b.nights > 0 ? b.roomPrice : 0 });
+    }
+    if (excludedRoom !== undefined) for (const { b } of latestStays(wholeExcluded)) if (b.stay && b.nights > 0 && inRange(b)) { excludedRoom += b.roomPrice; excludedService += b.servicePrice; }
     return { id, name, days, excludedRoom, excludedService, bookings: [...merged.values()], services: services.sort((a, b) => a.date.localeCompare(b.date)) };
   });
   return { from, to, dates, weeks, hotels };
@@ -79,5 +88,6 @@ export function rangeSummary(hotels: RangeHotel[], dateCount: number) {
   }
   const adr = bookedNights ? room / bookedNights : 0; // nights below = occupied room-nights from the occupancy report, like the weekly report
   const r = rate({ occ: occupied, total });
-  return { occupied, total, rate: r, nights: occupied, room, adr, revpar: r * adr, missingDays: Math.max(0, dateCount * hotels.length - covered) };
+  // RevPAR = room money / room-nights for sale (not rate × ADR: the room money is by check-out day, the occupancy by night slept).
+  return { occupied, total, rate: r, nights: occupied, room, adr, revpar: total ? room / total : 0, missingDays: Math.max(0, dateCount * hotels.length - covered) };
 }
