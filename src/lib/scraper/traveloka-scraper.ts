@@ -1,3 +1,4 @@
+import { secret } from "../app-secrets.ts";
 export interface TravelokaTarget {
   id: string;
   name: string;
@@ -126,7 +127,7 @@ async function scrapeTravelokaTarget(target: TravelokaTarget, apiToken: string):
 }
 
 export async function runTravelokaScraper(targets: TravelokaTarget[]) {
-  const apiToken = process.env.APIFY_API_TOKEN?.trim();
+  const apiToken = await secret("APIFY_API_TOKEN");
   if (!apiToken) {
     const results = targets.map((target) => errorResult(
       target,

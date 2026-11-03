@@ -1,4 +1,5 @@
 import { type Browser } from "puppeteer";
+import { secret } from "../app-secrets.ts";
 import { launchBrowser } from "./launch-browser";
 import { fetchTripcomViaZenRows } from "./tripcom-zenrows";
 
@@ -305,7 +306,7 @@ export async function runTripcomScraper(
   } = options;
 
   // Trip.com chuyển Chrome từ IP datacenter (Vercel) sang trang đăng nhập; ZenRows có proxy và trình duyệt phù hợp.
-  const zenrowsKey = process.env.ZENROWS_API_KEY?.trim();
+  const zenrowsKey = await secret("ZENROWS_API_KEY");
   if (zenrowsKey) {
     const results: TripcomResult[] = [];
     for (const target of targets) results.push(await fetchTripcomViaZenRows(target, zenrowsKey));

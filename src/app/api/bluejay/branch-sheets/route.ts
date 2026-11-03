@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     const links = await branchSheets(month);
     return Response.json({
-      serviceEmail: serviceAccountEmail(),
+      serviceEmail: await serviceAccountEmail(),
       month,
       branches: BRANCHES.map((h) => {
         const hotel = links[h.id]?.hotel, fnb = links[h.id]?.fnb;

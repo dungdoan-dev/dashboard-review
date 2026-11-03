@@ -2,24 +2,25 @@ import { createSign } from "node:crypto";
 
 import type { SheetKind } from "./ledger-sheets.ts";
 import { isKiotvietTab } from "./kiotviet.ts";
+import { secret } from "./app-secrets.ts";
 
 type ServiceKey = { client_email: string; private_key: string; token_uri: string };
 let cached: { token: string; expires: number } | null = null;
 
-function serviceKey(): ServiceKey {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+async function serviceKey(): Promise<ServiceKey> {
+  const raw = await secret("GOOGLE_SERVICE_ACCOUNT_JSON");
   if (!raw) throw new Error("Chưa cấu hình tài khoản đọc Google Sheet.");
   try { return JSON.parse(raw) as ServiceKey; } catch { throw new Error("Tài khoản đọc Google Sheet cấu hình sai (không phải JSON)."); }
 }
 
 /** The address a sheet must be shared with (view only) for the app to read it; "" when the account is not configured. */
-export function serviceAccountEmail() {
-  try { return serviceKey().client_email; } catch { return ""; }
+export async function serviceAccountEmail() {
+  try { return (await serviceKey()).client_email; } catch { return ""; }
 }
 
 async function accessToken() {
   if (cached && cached.expires > Date.now() + 60_000) return cached.token;
-  const key = serviceKey();
+  const key = await serviceKey();
   const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${enc({ alg: "RS256", typ: "JWT" })}.${enc({ iss: key.client_email, scope: "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly", aud: key.token_uri, iat: now, exp: now + 3000 })}`;

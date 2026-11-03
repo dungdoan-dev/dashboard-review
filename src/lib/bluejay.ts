@@ -1,5 +1,6 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
+import { secret } from "./app-secrets.ts";
 import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
 import { dailyRevenue } from "./bluejay-daily.ts";
 import { checkoutRevenue } from "./bluejay-checkout.ts";
@@ -23,7 +24,7 @@ export function serviceDb() {
 
 /** One GET to Blue Jay; every attempt, failed or not, is stored in bluejay_api_calls. Throws when the call failed. */
 export async function callBluejay(db: SupabaseClient, hotelId: number, endpoint: string, params: Params = {}) {
-  const key = process.env.BLUEJAY_API_KEY?.trim();
+  const key = await secret("BLUEJAY_API_KEY");
   if (!key) throw new Error("Chưa cấu hình BLUEJAY_API_KEY.");
   const sent = { hotelId, ...params };
   const url = new URL(endpoint, BASE);

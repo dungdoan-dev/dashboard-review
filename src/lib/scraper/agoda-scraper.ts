@@ -1,3 +1,4 @@
+import { secret } from "../app-secrets.ts";
 export interface AgodaTarget {
   id: string;
   name: string;
@@ -181,7 +182,7 @@ async function scrapeAgodaTarget(target: AgodaTarget, apiToken: string): Promise
 }
 
 export async function runAgodaScraper(targets: AgodaTarget[]) {
-  const apiToken = process.env.APIFY_API_TOKEN?.trim();
+  const apiToken = await secret("APIFY_API_TOKEN");
   if (!apiToken) {
     const results = targets.map((target) => errorResult(
       target,

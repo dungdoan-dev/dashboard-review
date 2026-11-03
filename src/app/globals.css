@@ -466,6 +466,9 @@ tbody tr:hover { background: #fcfcfd; }
 .daily-report-location-picker select { min-width: 0; flex: 1; border: 0; outline: 0; color: #4a4a52; background: transparent; font: 600 12px var(--font-inter),sans-serif; }
 .timeline-count { flex: 0 0 auto; padding: 6px 9px; border-radius: 7px; color: #613ca1; background: #f4eefe; font-size: 12px; font-weight: 700; }
 .timeline-panel { overflow: hidden; border: 1px solid #eaeaeb; border-radius: 13px; background: #fff; box-shadow: 0 1px 6px #2a1a4508; }
+/* The history table scrolls inside the panel, so its header (and the Ngày column) stay in view; a sticky header inside the page scroll cannot work under overflow-x on the wrapper. */
+.timeline-panel .reach-table { max-height: calc(100vh - 150px); margin-top: 0; overflow: auto; }
+.timeline-panel .reach-table thead th:first-child { left: 0; z-index: 3; }
 .timeline-table-scroll { width: 100%; overflow: auto; max-height: 570px; }
 .timeline-table { width: 100%; min-width: 1160px; table-layout: fixed; border-collapse: separate; border-spacing: 0; text-align: center; }
 .timeline-table th,.timeline-table td { min-width: 150px; height: auto; padding: 12px 11px; border-right: 1px solid #eeeeef; border-bottom: 1px solid #eeeeef; white-space: normal; vertical-align: middle; }
@@ -1420,6 +1423,27 @@ select { cursor: pointer; }
 .role-table { width: 100%; min-width: 560px; border-collapse: collapse; }
 .role-table th, .role-table td { padding: 10px 12px; border-top: 1px solid #f0f0f1; text-align: left; font-size: 13px; vertical-align: middle; }
 .role-table thead th { border-top: 0; color: #6b6b78; font-size: 11px; font-weight: 700; }
+.api-key-list { margin: 14px 0 0; padding: 0; list-style: none; border: 1px solid #eaeaeb; border-radius: 12px; background: #fff; }
+.api-key-row { display: grid; grid-template-columns: minmax(170px, 260px) 84px minmax(220px, 1fr) auto; gap: 12px; align-items: center; padding: 8px 14px; font-size: 13px; }
+.api-key-row + .api-key-row { border-top: 1px solid #f0f0f1; }
+.api-key-name { display: grid; min-width: 0; }
+.api-key-name small { overflow: hidden; color: #6b6b78; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.api-key-state { display: inline-flex; width: fit-content; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: #f4f4f5; color: #52525b; font-size: 11px; font-weight: 700; }
+.api-key-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #a1a1aa; }
+.api-key-state.database { background: #ecfdf3; color: #166534; }
+.api-key-state.database::before { background: #16a34a; }
+.api-key-state.env { background: #fff7e6; color: #92400e; }
+.api-key-state.env::before { background: #d97706; }
+.api-key-field { position: relative; display: flex; }
+.api-key-field input { flex: 1; min-width: 0; height: 36px; padding: 0 38px 0 12px; border: 1px solid #dcdce0; border-radius: 8px; background: #fff; color: #222; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.api-key-field input:focus { border-color: #7956b5; outline: 2px solid #7956b533; }
+.api-key-eye { position: absolute; top: 2px; right: 2px; display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #6b6b78; cursor: pointer; }
+.api-key-eye:hover:not(:disabled) { background: #f4eefe; color: #613ca1; }
+.api-key-eye:disabled { opacity: .4; cursor: default; }
+.api-key-actions { display: flex; min-width: 150px; gap: 8px; }
+.api-key-actions .button { height: 36px; min-height: 0; padding-block: 0; }
+.api-key-error { margin: 8px 0 0; color: #b91c1c; font-size: 12px; }
+@media (max-width: 900px) { .api-key-row { grid-template-columns: 1fr auto; row-gap: 8px; padding: 10px 14px; } .api-key-field { grid-column: 1 / -1; } .api-key-actions { grid-column: 1 / -1; min-width: 0; } }
 .role-table td:nth-child(2) { display: flex; align-items: center; gap: 8px; }
 .role-table .field { min-width: 180px; }
 .role-self { color: #6b6b78; }
@@ -1457,3 +1481,4 @@ select { cursor: pointer; }
 .nav-text-only::before { content: "BC"; display: none; font-size: 12px; font-weight: 800; }
 .app-shell.collapsed .nav-text-only::before { display: block; }
 .month-boards { display: grid; gap: 16px; }
+

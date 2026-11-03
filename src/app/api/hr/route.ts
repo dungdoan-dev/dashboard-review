@@ -1,11 +1,12 @@
+import { secret } from "@/lib/app-secrets";
 import { hrViewer } from "@/lib/bluejay-auth";
 import { ID_PATTERN, cleanFields, isEntity } from "@/lib/hr-forms";
 
 export const maxDuration = 60;
 
 // The HR data of the Apps Script web app (staff, birthdays, recruitment), read and written on the server so the token never reaches the browser.
-const config = () => {
-  const base = process.env.HR_APPS_SCRIPT_URL?.trim(), token = process.env.HR_APPS_SCRIPT_TOKEN?.trim();
+const config = async () => {
+  const [base, token] = await Promise.all([secret("HR_APPS_SCRIPT_URL"), secret("HR_APPS_SCRIPT_TOKEN")]);
   return base && token ? { base, token } : null;
 };
 const NOT_CONFIGURED = { message: "Thiếu HR_APPS_SCRIPT_URL hoặc HR_APPS_SCRIPT_TOKEN trong cấu hình môi trường." };
@@ -27,7 +28,7 @@ const reply = (r: Awaited<ReturnType<typeof callScript>>) => ("body" in r ? Resp
 export async function GET() {
   const denied = await hrViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
-  const cfg = config();
+  const cfg = await config();
   if (!cfg) return Response.json(NOT_CONFIGURED, { status: 500 });
   const url = new URL(cfg.base);
   url.searchParams.set("action", "data");
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   const denied = await hrViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ message: "Yêu cầu không hợp lệ." }, { status: 415 });
-  const cfg = config();
+  const cfg = await config();
   if (!cfg) return Response.json(NOT_CONFIGURED, { status: 500 });
   const input = await request.json().catch(() => null) as { entity?: unknown; action?: unknown; id?: unknown; fields?: unknown } | null;
   if (!input || !isEntity(input.entity)) return Response.json({ message: "Loại dữ liệu không hợp lệ." }, { status: 400 });

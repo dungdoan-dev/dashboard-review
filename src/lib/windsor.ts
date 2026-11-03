@@ -1,9 +1,10 @@
 // One read from Windsor.ai (API_WINDSOR). No "@/" imports: used by files tested with plain Node.
+import { secret } from "./app-secrets.ts";
 export type WindsorRow = Record<string, string | number | null | object>; // object: list fields such as the ads "results"
 
-/** connector: e.g. "google_my_business", "facebook_organic". No select_accounts: every account linked in Windsor comes back. keyEnv: the env var holding the API key (a second Windsor account has its own). */
+/** connector: e.g. "google_my_business", "facebook_organic". No select_accounts: every account linked in Windsor comes back. keyEnv: the name of the key (Cài đặt → Khóa API, else the env var) (a second Windsor account has its own). */
 export async function windsorRows(connector: string, fields: string[], from: string, to: string, keyEnv = "API_WINDSOR"): Promise<WindsorRow[]> {
-  const key = process.env[keyEnv]?.trim();
+  const key = await secret(keyEnv);
   if (!key) throw new Error("Chưa cấu hình nguồn số liệu tiếp cận.");
   const res = await fetch(`https://connectors.windsor.ai/${connector}?${new URLSearchParams({ date_from: from, date_to: to, fields: fields.join(","), api_key: key })}`, { cache: "no-store" });
   const body = await res.json().catch(() => ({}));

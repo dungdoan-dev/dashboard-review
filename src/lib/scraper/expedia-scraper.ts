@@ -1,3 +1,4 @@
+import { secret } from "../app-secrets.ts";
 export interface ExpediaTarget {
   id: string;
   name: string;
@@ -69,7 +70,7 @@ function errorResult(target: ExpediaTarget, error: string): ExpediaResult {
 }
 
 export async function scrapeExpediaPage(target: ExpediaTarget): Promise<ExpediaResult> {
-  const apiKey = process.env.ZENROWS_API_KEY?.trim();
+  const apiKey = await secret("ZENROWS_API_KEY");
   if (!apiKey) {
     return errorResult(target, "Thiếu ZENROWS_API_KEY. Thêm key mới vào .env.local rồi khởi động lại ứng dụng.");
   }

@@ -45,3 +45,6 @@ scraper/.grab-profile/
 
 # Google service account keys
 sheet-vjh-*.json
+
+# Local-only views of private HR columns (never pushed)
+/src/app/local-hr/

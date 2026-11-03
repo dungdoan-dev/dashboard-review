@@ -1,3 +1,4 @@
+import { secret } from "../app-secrets.ts";
 import { extractTripadvisorNotice } from "./tripadvisor-notice";
 import { decodeHtmlText, extractRankLabel, tripadvisorFetchUrl } from "./tripadvisor-rank";
 
@@ -232,7 +233,7 @@ async function scrapeTripadvisorTarget(target: TripadvisorTarget, apiKey: string
 }
 
 export async function runTripadvisorScraper(targets: TripadvisorTarget[]) {
-  const apiKey = process.env.ZENROWS_API_KEY?.trim();
+  const apiKey = await secret("ZENROWS_API_KEY");
   if (!apiKey) {
     const results = targets.map((target) => errorResult(
       target,
