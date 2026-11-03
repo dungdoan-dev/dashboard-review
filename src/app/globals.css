@@ -517,7 +517,8 @@ tbody tr:hover { background: #fcfcfd; }
 .report-rows { display: grid; gap: 12px; padding-top: 14px; }
 .report-score-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(75px,1.15fr) auto; align-items: center; gap: 7px 11px; }
 .report-row-label,.report-volume-label > span { display: inline-flex; min-width: 0; align-items: center; gap: 7px; color: #62626c; font-size: 12px; font-weight: 600; }
-.report-platform-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+.report-platform-logo { display: inline-grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; }
+.report-platform-logo svg, .report-platform-logo img { width: 100%; height: 100%; object-fit: contain; }
 .report-score-row > strong { color: #3f3f45; font-size: 12px; text-align: right; white-space: nowrap; }
 .report-score-row > small { grid-column: 1 / -1; margin-top: -5px; color: #6d6d78; font-size: 11px; }
 .report-track { height: 6px; overflow: hidden; border-radius: 99px; background: #f1f1f2; }
@@ -705,7 +706,7 @@ tbody tr:hover { background: #fcfcfd; }
   letter-spacing: 0;
   box-shadow: 0 1px 3px #301d500a;
 }
-.locations-section .platform-table-heading .brand-logo svg { display: block; width: 22px; height: 22px; }
+.locations-section .platform-table-heading .brand-logo svg, .locations-section .platform-table-heading .brand-logo img { display: block; width: 22px; height: 22px; object-fit: contain; }
 .locations-section .platform-table-heading h3 { color: #45454d; font-family: var(--font-inter), sans-serif; font-size: 12px; }
 .locations-section .platform-table-heading p { color: #6d6d78; font-size: 12px; }
 .locations-section .platform-table-actions .button { min-height: 34px; padding: 0 10px; border-radius: 8px; font-size: 12px; }

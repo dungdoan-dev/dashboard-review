@@ -55,7 +55,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { canUse, isHr, isMkt } from "@/lib/admin";
-import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
+import { getPlatformUrl, DEFAULT_RATING_SCALE, PLATFORM_COLORS, PLATFORM_URL_FIELDS, type PlatformUrlField } from "@/lib/platforms";
 import type { HistoricalReportPreview } from "@/lib/historical-report-import";
 import type { TripadvisorRankReportRow } from "@/components/tripadvisor-rank-report-page";
 import { PlatformBrandLogo } from "@/components/platform-brand-logo";
@@ -86,10 +86,9 @@ const chartLoading = () => <div className="skel skel-fill" aria-hidden="true" />
 const AreaTrend = dynamic(() => import("@/components/dashboard-charts").then((m) => m.AreaTrend), { loading: chartLoading });
 const Donut = dynamic(() => import("@/components/dashboard-charts").then((m) => m.Donut), { loading: chartLoading });
 const TrackBars = dynamic(() => import("@/components/dashboard-charts").then((m) => m.TrackBars), { loading: chartLoading });
-const HotelScoreBars = dynamic(() => import("@/components/analytics-charts").then((m) => m.HotelScoreBars), { loading: chartLoading });
-const HotelReviewBars = dynamic(() => import("@/components/analytics-charts").then((m) => m.HotelReviewBars), { loading: chartLoading });
-const CompareScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.CompareScoreLines), { loading: chartLoading });
-const CompareReviewLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.CompareReviewLines), { loading: chartLoading });
+const PlaceScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlaceScoreLines), { loading: chartLoading });
+const PlaceNewReviews = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlaceNewReviews), { loading: chartLoading });
+const PlaceReviewLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlaceReviewLines), { loading: chartLoading });
 const PlatformScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlatformScoreLines), { loading: chartLoading });
 const IsoDatePicker = dynamic(() => import("@/components/date-picker").then((m) => m.IsoDatePicker), { loading: () => null }); // brings react-day-picker and its css
 const SummaryReport = dynamic(() => import("@/components/summary-report").then((m) => m.SummaryReport), { loading: pageLoading });
@@ -158,17 +157,7 @@ const allReportPlatforms: Platform[] = [...typePlatformOrder.hotel, "grabfood", 
 function filterTypeOf(type: LocationType): LocationFilterType {
   return type === "cafe" || type === "restaurant" ? "cafe" : type === "mart" || type === "other" ? "mart" : type === "entertainment" ? "entertainment" : "hotel";
 }
-const reportPlatformColors: Record<Platform, string> = {
-  google: "#4285f4",
-  tripadvisor: "#168a68",
-  agoda: "#7b61c9",
-  booking: "#2765cb",
-  expedia: "#e7a52a",
-  tripcom: "#1494a3",
-  traveloka: "#168fd0",
-  grabfood: "#00b14f",
-  shopeefood: "#ee4d2d",
-};
+const reportPlatformColors = PLATFORM_COLORS; // one colour per platform on every page (src/lib/platforms.ts)
 
 const demoExpediaUrl = "https://www.expedia.com.vn/Da-Nang-Khach-San-YZISTEL.h113589597.Thong-tin-khach-san?chkin=2025-04-11&chkout=2025-04-13&x_pwa=1&rfrr=HSR&pwa_ts=1743476005040&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20udm4vSG90ZWwtU2VhcmNo&useRewards=false&rm1=a2&regionId=6034264&destination=H%E1%BB%99i+An%2C+Qu%E1%BA%A3ng+Nam+%28t%E1%BB%89nh%29%2C+Vi%C3%AA%CC%A3t+Nam&destType=MARKET&neighborhoodId=553248633981701234&selected=113589597&latLong=15.87749%2C108.331009&sort=RECOMMENDED&top_dp=881834&top_cur=VND&userIntent=&selectedRoomType=326233694&selectedRatePlan=400456848&searchId=9b6c19c5-5039-4499-b679-4849b8fd28a4";
 const demoLocations: LocationRecord[] = [
@@ -781,7 +770,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           const selected = current ?? allReportPlatforms;
           if (selected.includes(platform)) return selected.length > 1 ? selected.filter((item) => item !== platform) : selected;
           return reportPlatformOrder.filter((item) => selected.includes(item) || item === platform);
-        })} /><span className="report-platform-dot" style={{ backgroundColor: reportPlatformColors[platform] }} />{platformLabels[platform]}
+        })} /><span className="report-platform-logo"><PlatformBrandLogo platform={platform} /></span>{platformLabels[platform]}
       </label>)}
     </div></fieldset>
     <fieldset className="analytics-source-filter daily-report-source-filter overview-source-filter"><legend>Thang điểm</legend><div className="analytics-source-options">
@@ -2055,16 +2044,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
               : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được dữ liệu đã chốt: {timelineError}</div>
                 : allHotelsSelected ? hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho các khách sạn trong khoảng ngày này.</div> : <>
                   {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
-                    <header><div><h3>So sánh điểm giữa các khách sạn</h3><p>Mỗi cột là điểm trung bình của các nền tảng đã chọn, quy đổi về thang {reportScale}. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.scoreRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
-                    <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.scoreRows.length * Math.max(70, hotelLocations.length * 24)) }}>
-                      <HotelScoreBars rows={hotelComparisonData.scoreRows} locations={hotelLocations} scale={reportScale} />
-                    </div></div>
+                    <header><div><h3>So sánh điểm giữa các khách sạn</h3><p>Điểm trung bình của các nền tảng đã chọn theo ngày, quy đổi về thang {reportScale}. Trục dọc bắt đầu gần điểm thấp nhất để thấy chênh lệch.</p></div><span className="report-total-badge">{hotelComparisonData.scoreRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
+                    <PlaceScoreLines rows={hotelComparisonData.scoreRows} locations={hotelLocations} scale={reportScale} />
                   </article>}
                   {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card">
-                    <header><div><h3>So sánh lượt đánh giá giữa các khách sạn</h3><p>Tổng lượt đánh giá đã chốt từ các nền tảng đang chọn cho từng khách sạn, theo ngày. Ngày thiếu dữ liệu được để trống.</p></div><span className="report-total-badge">{hotelComparisonData.reviewRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
-                    <div className="hotel-comparison-scroll"><div style={{ minWidth: Math.max(680, hotelComparisonData.reviewRows.length * Math.max(70, hotelLocations.length * 24)) }}>
-                      <HotelReviewBars rows={hotelComparisonData.reviewRows} locations={hotelLocations} />
-                    </div></div>
+                    <header><div><h3>Đánh giá mới theo ngày</h3><p>Số đánh giá tăng thêm so với ngày chốt trước, cộng các nền tảng đang chọn, chồng theo khách sạn. Số âm là nền tảng đã gỡ bớt đánh giá.</p></div><span className="report-total-badge">{hotelComparisonData.reviewRows.length} ngày · {hotelLocations.length} khách sạn</span></header>
+                    <PlaceNewReviews rows={hotelComparisonData.reviewRows} locations={hotelLocations} />
                   </article>}
                 </>
                 : dailyAnalyticsRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} /><div><strong>Chưa có dữ liệu đã chốt</strong><span>Chốt dữ liệu hôm nay từ trang tổng quan, sau đó báo cáo sẽ xuất hiện tại đây.</span></div></div>
@@ -2103,8 +2088,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             {platformFilter}
             {timelineLoading ? <div className="timeline-panel timeline-empty"><LoaderCircle size={17} className="spin" />Đang tải báo cáo đã chốt…</div> : timelineError ? <div className="timeline-panel timeline-empty timeline-error">Không tải được báo cáo: {timelineError}</div> : hotelComparisonData.scoreRows.length === 0 && hotelComparisonData.reviewRows.length === 0 ? <div className="timeline-panel timeline-empty"><Clock3 size={18} />Chưa có dữ liệu đã chốt cho lựa chọn này.</div> : <>
               <div className="compare-summary"><strong>{comparisonLocations.length} cơ sở</strong><span>{new Set([...hotelComparisonData.scoreRows, ...hotelComparisonData.reviewRows].map((row) => row.date)).size} ngày có dữ liệu</span><span>{selectedReportPlatforms.length} nguồn đang chọn</span></div>
-              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><CompareScoreLines rows={hotelComparisonData.scoreRows} locations={comparisonLocations} scale={reportScale} /></article>}
-              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><CompareReviewLines rows={hotelComparisonData.reviewRows} locations={comparisonLocations} /></article>}
+              {hotelComparisonData.scoreRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Điểm đánh giá theo ngày</h3><p>Điểm trung bình các nguồn được chọn, chuẩn hóa về thang {reportScale}. Mỗi màu đại diện cho một cơ sở.</p></div></header><PlaceScoreLines rows={hotelComparisonData.scoreRows} locations={comparisonLocations} all={typeLocations} scale={reportScale} /></article>}
+              {hotelComparisonData.reviewRows.length > 0 && <article className="report-card analytics-chart-card hotel-comparison-card"><header><div><h3>Lượt đánh giá theo ngày</h3><p>Tổng lượt đánh giá đã chốt từ các nguồn được chọn cho từng cơ sở.</p></div></header><PlaceReviewLines rows={hotelComparisonData.reviewRows} locations={comparisonLocations} all={typeLocations} /></article>}
               <DailyComparisonChanges locations={comparisonLocations} scoreRows={hotelComparisonData.scoreRows} reviewRows={hotelComparisonData.reviewRows} snapshots={timelineSnapshots} platforms={selectedReportPlatforms} ratingScale={reportScale} />
               <article className="report-card compare-table-card"><header><div><h3>Số liệu gần nhất theo cơ sở</h3><p>Mỗi chỉ số lấy từ ngày chốt gần nhất có dữ liệu trong khoảng thời gian đang chọn.</p></div></header><ReachTable compact rows={comparisonLocations.map((location) => ({
                 location,

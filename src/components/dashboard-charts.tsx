@@ -1,10 +1,17 @@
 "use client";
 
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmtDate } from "@/lib/format-date";
 
 // Màu cho các phần của biểu đồ tròn khi không có màu riêng của loại hình. 7 màu đã qua bộ kiểm tra dataviz (validate_palette.js: độ sáng, độ đậm, người mù màu, mắt thường).
 export const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"];
+
+export { PLATFORM_COLORS } from "@/lib/platforms";
+
+/** A fixed colour per place: its place in the whole list of its kind (sorted by name), so choosing fewer places to compare never repaints the others. shortcut: past 7 places the colours repeat, fold or facet when a kind grows past 7. */
+export function placeColors(all: { id: string; name: string }[]) {
+  return new Map([...all].sort((a, b) => a.name.localeCompare(b.name, "vi")).map((p, i) => [p.id, PALETTE[i % PALETTE.length]]));
+}
 
 const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
 /** A fixed colour per name, so a new ranking or a filter never repaints a slice: a name in `order` keeps its place there; the others take the slots left, in name order. */
@@ -70,16 +77,16 @@ export function TrackBars({ rows: unsorted, max, width, animate, format = num, e
 }
 
 /** Biểu đồ vùng có gradient và chấm: một đường theo ngày. */
-export function AreaTrend({ points, color, width, animate, id, label, format }: { points: { date: string; value: number }[]; color: string; width: number | "100%"; animate: boolean; id: string; label: string; format: (value: number) => string }) {
+export function AreaTrend({ points, color, width, animate, label, format }: { points: { date: string; value: number }[]; color: string; width: number | "100%"; animate: boolean; id?: string; /* id: was the gradient's; the wash is flat now */ label: string; format: (value: number) => string }) {
   if (points.length < 2) return <p className="summary-note">Cần ít nhất 2 ngày đã chốt số liệu để vẽ diễn biến.</p>;
   return <ResponsiveContainer width={width} height={240}>
     <AreaChart data={points} margin={{ left: 0, right: 16, top: 8 }}>
-      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.35} /><stop offset="100%" stopColor={color} stopOpacity={0.02} /></linearGradient></defs>
       <CartesianGrid vertical={false} stroke="#ece8f4" />
       <XAxis dataKey="date" tickFormatter={(value: string) => fmtDate(value)} tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} minTickGap={24} />
       <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => value.toLocaleString("vi-VN")} />
       <Tooltip {...TOOLTIP} labelFormatter={(value) => fmtDate(String(value))} formatter={(value) => [typeof value === "number" ? format(value) : "—", label]} />
-      <Area isAnimationActive={animate} type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} fill={`url(#${id})`} dot={points.length <= 31 ? { r: 3, fill: "#fff", stroke: color, strokeWidth: 2 } : false} />
+      {points.some((p) => p.value < 0) && <ReferenceLine y={0} stroke="#9a94a6" />}
+      <Area isAnimationActive={animate} type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={color} fillOpacity={0.1} baseValue={0} dot={points.length <= 31 ? { r: 4, fill: color, stroke: "#fff", strokeWidth: 2 } : false} activeDot={{ r: 5, fill: color, stroke: "#fff", strokeWidth: 2 }} />
     </AreaChart>
   </ResponsiveContainer>;
 }

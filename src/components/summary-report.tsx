@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { AlertTriangle, CheckCircle2, FileBarChart, Printer } from "lucide-react";
-import { AreaTrend, Donut, PALETTE, TrackBars, num } from "@/components/dashboard-charts";
+import { AreaTrend, Donut, PLATFORM_COLORS, TrackBars, num } from "@/components/dashboard-charts";
 import { ReachTable } from "@/components/reach-table";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate, fmtDateTime } from "@/lib/format-date";
@@ -188,7 +188,7 @@ export function SummaryReport({ sections, userId, range, customRange }: { sectio
               <AreaTrend points={trend.points.map((p) => ({ date: p.date, value: p.gained }))} color={section.color} width={chartWidth} animate={!printing} id={`grad-${section.type}`} label="Đánh giá mới" format={signed} />
             </ChartCard>
             <ChartCard title="Tỷ trọng đánh giá theo nền tảng" unit="Tổng số đánh giá">
-              <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={section.platforms.map((platform, i) => ({ name: PLATFORM_LABELS[platform], value: section.locations.reduce((sum, location) => sum + (location[platform]?.reviewCount ?? 0), 0), color: PALETTE[i % PALETTE.length] })).filter((slice) => slice.value > 0)} />
+              <Donut unit="đánh giá" width={chartWidth} animate={!printing} slices={section.platforms.map((platform) => ({ name: PLATFORM_LABELS[platform], value: section.locations.reduce((sum, location) => sum + (location[platform]?.reviewCount ?? 0), 0), color: PLATFORM_COLORS[platform] })).filter((slice) => slice.value > 0)} />
             </ChartCard>
             <ChartCard title="Số đánh giá theo cơ sở" unit="Tổng số đánh giá">
               <TrackBars max={Math.max(1, ...bars.map((bar) => bar.reviews))} width={chartWidth} animate={!printing} format={count} empty="Chưa có đánh giá để vẽ." rows={bars.map((bar) => ({ name: bar.name, value: bar.reviews, color: section.color }))} />
