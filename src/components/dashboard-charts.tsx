@@ -3,8 +3,29 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fmtDate } from "@/lib/format-date";
 
-// Màu cho các phần của biểu đồ tròn khi không có màu riêng của loại hình.
-export const PALETTE = ["#2563eb", "#f59e0b", "#16a34a", "#8b5cf6", "#ec4899", "#0891b2", "#72648b"];
+// Màu cho các phần của biểu đồ tròn khi không có màu riêng của loại hình. 7 màu đã qua bộ kiểm tra dataviz (validate_palette.js: độ sáng, độ đậm, người mù màu, mắt thường).
+export const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"];
+
+const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+/** A fixed colour per name, so a new ranking or a filter never repaints a slice: a name in `order` keeps its place there; the others take the slots left, in name order. */
+export function entityColors(names: string[], order: string[]) {
+  const known = order.map(plain), out = new Map<string, string>();
+  const free = PALETTE.filter((_, i) => i >= known.length);
+  [...names].sort((a, b) => a.localeCompare(b, "vi")).forEach((name) => {
+    const at = known.indexOf(plain(name));
+    out.set(name, at >= 0 && at < PALETTE.length ? PALETTE[at] : free.shift() ?? "#b4b4be");
+  });
+  return out;
+}
+
+/** Two or three shares of one whole (room and service, paid and due): the numbers themselves, a ring of two slices says less. */
+export function ShareTiles({ items, unit = "đ" }: { items: { name: string; value: number }[]; unit?: string }) {
+  const total = items.reduce((s, i) => s + i.value, 0);
+  if (total <= 0) return <p className="summary-note">Chưa có số liệu.</p>;
+  return <div className="summary-kpis share-tiles">{items.map((i) => <div className="summary-kpi" key={i.name}>
+    <span>{i.name}</span><strong>{Math.round((i.value / total) * 100)}%</strong><small>{Math.round(i.value).toLocaleString("vi-VN")} {unit}</small>
+  </div>)}</div>;
+}
 export const AXIS = { fill: "#696974", fontSize: 12 };
 export const TOOLTIP = { contentStyle: { border: "1px solid #e5dff0", borderRadius: 10, boxShadow: "0 8px 24px #2a1b4518", fontSize: 13 }, labelStyle: { color: "#47474f", fontWeight: 700 } };
 export const num = (value: number, digits = 1) => value.toLocaleString("vi-VN", { minimumFractionDigits: digits, maximumFractionDigits: digits });

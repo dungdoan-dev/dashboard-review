@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { ArrowDownToLine, CalendarDays, ChevronLeft, ChevronRight, Printer, RefreshCw } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Keys, Tip, type TipProps } from "@/components/bluejay-revenue-charts";
 import { BluejayRevenue, RevenueView } from "@/components/bluejay-revenue";
 import { MAX_RANGE_DAYS, rangeSummary, type RangeData } from "@/lib/bluejay-range";
 import { fmtDate, fmtDateTime, parseDmy } from "@/lib/format-date";
@@ -15,7 +16,6 @@ import { PageSkeleton } from "@/components/page-skeleton";
 
 const hotelColor = (id: number) => BLUEJAY_HOTELS.find((h) => h.id === id)?.color ?? "#736b80";
 const AXIS = { fill: "#696974", fontSize: 12 };
-const TOOLTIP = { contentStyle: { border: "1px solid #e5dff0", borderRadius: 10, boxShadow: "0 8px 24px #2a1b4518", fontSize: 13 }, labelStyle: { color: "#47474f", fontWeight: 700 } };
 
 const pct = (x: number) => `${(x * 100).toFixed(2).replace(".", ",")}%`;
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
@@ -34,19 +34,18 @@ type Row = Record<string, string | number | null>;
 function LineTrend({ data, series, label, split, percent = true }: { data: Row[]; series: Series[]; label: string; split?: string; percent?: boolean }) {
   const printing = usePrinting();
   return (
-    <div role="img" aria-label={label} style={{ height: 300 }}>
+    <div><Keys series={series} /><div role="img" aria-label={label} style={{ height: 280 }}>
       <ResponsiveContainer width={chartWidth(printing)} height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#f0edf6" vertical={false} />
-          <XAxis dataKey="x" tick={AXIS} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
+          <XAxis dataKey="x" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} interval="preserveStartEnd" minTickGap={16} />
           <YAxis tick={AXIS} tickLine={false} axisLine={false} width={percent ? 48 : 60} tickFormatter={percent ? (v: number) => `${Math.round(v * 100)}%` : compact} domain={percent ? [0, 1] : [0, "auto"]} />
-          <Tooltip {...TOOLTIP} formatter={(v) => (percent ? pct(Number(v)) : num(Number(v)))} />
+          <Tooltip cursor={{ stroke: "#d6d0e2" }} content={(p) => <Tip {...(p as TipProps)} series={series} fmt={(v) => (percent ? pct(v) : num(v))} total={false} />} />
           {split && <ReferenceLine x={split} stroke="#a095b4" strokeDasharray="4 4" label={{ value: "Đặt trước →", fill: "#696974", fontSize: 12, position: "insideTopRight" }} />}
-          {series.length > 1 && <Legend iconType="plainline" wrapperStyle={{ fontSize: 13 }} />}
-          {series.map((s) => <Line key={s.key} dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2} dot={data.length <= 14 ? { r: 4 } : false} connectNulls isAnimationActive={false} />)}
+          {series.map((s) => <Line key={s.key} dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dot={data.length <= 14 ? { r: 4, fill: s.color, stroke: "#fff", strokeWidth: 2 } : false} activeDot={{ r: 5, fill: s.color, stroke: "#fff", strokeWidth: 2 }} connectNulls isAnimationActive={false} />)}
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </div></div>
   );
 }
 
@@ -60,8 +59,8 @@ function HBars({ data, name, color, label, money = true }: { data: { name: strin
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="#f0edf6" horizontal={false} />
           <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} tickFormatter={money ? compact : undefined} />
-          <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} width={130} interval={0} />
-          <Tooltip {...TOOLTIP} formatter={(v) => fmt(Number(v))} cursor={{ fill: "#f6f6f7" }} />
+          <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} width={130} interval={0} />
+          <Tooltip cursor={{ fill: "#f6f4fa" }} content={(p) => <Tip {...(p as TipProps)} series={[{ key: "value", name, color }]} fmt={fmt} total={false} />} />
           <Bar dataKey="value" name={name} fill={color} radius={[0, 4, 4, 0]} barSize={18} isAnimationActive={false}>
             <LabelList dataKey="value" position="right" formatter={(v) => (money ? compact(Number(v)) : Number(v).toLocaleString("vi-VN"))} fill="#696974" fontSize={12} />
           </Bar>
@@ -289,7 +288,7 @@ export function BluejayReport({ scopeId, view }: { scopeId: number | null; view:
           </div>
         )}
 
-        <Card title="Giá trị đặt phòng" note="Tiền phòng chỉ tính các đêm nằm trong tuần (giá chia đều theo đêm, bỏ đặt phòng hủy, no-show và hạng M-Standard). Tiền dịch vụ, tổng tiền, đã thanh toán và còn lại là số của cả đặt phòng.">
+        <Card title="Giá trị đặt phòng" note="Tiền phòng theo ngày trả phòng: cả tiền phòng của các đặt phòng trả phòng trong tuần (bỏ đặt phòng hủy, no-show và hạng M-Standard). Tiền dịch vụ, tổng tiền, đã thanh toán và còn lại là số của cả đặt phòng.">
           <div className="summary-kpis">
             <Kpi label="Số đặt phòng" value={num(c.bookings)} />
             <Kpi label="Tiền phòng" value={num(c.roomPrice)} />
@@ -538,7 +537,7 @@ function BluejayMonthView({ scopeId, view, onWeek }: { scopeId: number | null; v
             <Rows head={["Ngày", ...hotels.map((h) => h.name)]} rows={daily.map((d) => [String(d.x), ...hotels.map((h) => (d[`h${h.id}`] == null ? "–" : pct(Number(d[`h${h.id}`]))))])} />
           </Card>
           {weekly.length > 1 && <Card title="Công suất theo tuần" note="Tuần đầu và tuần cuối chỉ tính các ngày nằm trong tháng."><LineTrend data={weekly} series={series} label="Công suất theo tuần" /></Card>}
-          <Card title="Giá trị đặt phòng" note="Tiền phòng chỉ tính các đêm nằm trong tháng (giá chia đều theo đêm, bỏ đặt phòng hủy, no-show và hạng M-Standard). Tiền dịch vụ là doanh thu dịch vụ theo ngày bán.">
+          <Card title="Giá trị đặt phòng" note="Tiền phòng theo ngày trả phòng: cả tiền phòng của các đặt phòng trả phòng trong tháng (bỏ đặt phòng hủy, no-show và hạng M-Standard). Tiền dịch vụ là doanh thu dịch vụ theo ngày bán.">
             <div className="summary-kpis">
               <Kpi label="Số đặt phòng" value={num(stays.length)} />
               <Kpi label="Tiền phòng" value={num(roomMoney)} />

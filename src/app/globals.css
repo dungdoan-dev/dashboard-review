@@ -920,6 +920,15 @@ tbody tr:hover { background: #fcfcfd; }
 .summary-section h2 { display: flex; align-items: center; gap: 10px; margin: 0; font: 800 21px var(--font-inter),sans-serif; }
 .summary-chip { width: 14px; height: 14px; border-radius: 4px; }
 .summary-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.share-tiles { margin-top: 8px; }
+.chart-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; padding: 0; list-style: none; color: #56565f; font-size: 12px; }
+.chart-keys li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-keys i, .chart-tip i { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
+.chart-tip { display: grid; gap: 4px; min-width: 180px; padding: 10px 12px; border: 1px solid #e5dff0; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #2a1b4518; color: #47474f; font-size: 13px; }
+.chart-tip > strong { margin-bottom: 2px; }
+.chart-tip > div { display: flex; align-items: center; gap: 8px; }
+.chart-tip b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.chart-tip-total { margin-top: 2px; padding-top: 6px; border-top: 1px solid #f0edf6; }
 .summary-kpi { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid #ededef; border-radius: 12px; background: #fbfbfb; }
 .summary-kpi span { color: #6b6b78; font-size: 13px; font-weight: 600; }
 .summary-kpi strong { font: 800 28px var(--font-inter),sans-serif; }
@@ -1481,4 +1490,5 @@ select { cursor: pointer; }
 .nav-text-only::before { content: "BC"; display: none; font-size: 12px; font-weight: 800; }
 .app-shell.collapsed .nav-text-only::before { display: block; }
 .month-boards { display: grid; gap: 16px; }
+
 
