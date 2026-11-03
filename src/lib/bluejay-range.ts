@@ -91,3 +91,17 @@ export function rangeSummary(hotels: RangeHotel[], dateCount: number) {
   // RevPAR = room money / room-nights for sale (not rate × ADR: the room money is by check-out day, the occupancy by night slept).
   return { occupied, total, rate: r, nights: occupied, room, adr, revpar: total ? room / total : 0, missingDays: Math.max(0, dateCount * hotels.length - covered) };
 }
+
+/** The stored weekly report with its room money and nights by check-out day (the stays that check out in the week, whole), like the revenue reports and the range view, so ADR and RevPAR mean the same everywhere. A week whose revenue was stored by nights keeps its own figures. */
+export function checkoutWeek(report: WeeklyReport, revenue: RevenueWeek | undefined): WeeklyReport {
+  if (!revenue) return report;
+  return {
+    ...report, hotels: report.hotels.map((h) => {
+      const stored = revenue.hotels.find((x) => x.id === h.id);
+      if (stored?.basis !== "checkout") return h;
+      const stays = stored.bookings.filter((b) => b.stay && b.nights > 0 && b.checkOut >= revenue.monday && b.checkOut <= revenue.end);
+      const room = stays.reduce((s, b) => s + b.roomPrice, 0);
+      return { ...h, roomSum: room, nightSum: stays.reduce((s, b) => s + b.nights, 0), stats: { ...h.stats, roomPrice: room } };
+    }),
+  };
+}

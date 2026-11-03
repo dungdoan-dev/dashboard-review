@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MAX_RANGE_DAYS, datesBetween, rangeData, rangeSummary } from "./bluejay-range.ts";
+import { MAX_RANGE_DAYS, checkoutWeek, datesBetween, rangeData, rangeSummary } from "./bluejay-range.ts";
 import { hotelRecord, summarize, type Reservation, type WeeklyReport } from "./bluejay-metrics.ts";
 import { REVENUE_VERSION, revenueBookings, type RevenueWeek } from "./bluejay-revenue.ts";
 
@@ -96,4 +96,17 @@ test("a stay whose check-out moved to the next week is counted once, with the ne
   const after: RevenueWeek = { v: REVENUE_VERSION, monday: "2026-10-12", end: "2026-10-18", fetchedAt: "2026-10-19T00:00:00Z", hotels: [{ id: 1, name: "H", bookings: [stay("2026-10-13", 5, 2_000_000)], services: [], basis: "checkout" }] };
   const h = rangeData([], [before, after], "2026-10-01", "2026-10-31").hotels[0];
   assert.deepEqual(h.bookings.map((b) => [b.checkOut, b.nightsInWeek, b.roomInWeek]), [["2026-10-13", 5, 2_000_000]]);
+});
+
+test("the weekly report takes its room money and nights by check-out day from a check-out revenue week, so it matches the range view of the same week", () => {
+  const stay = (checkOut: string, nights: number, roomPrice: number) => ({
+    code: "C" + checkOut, ref: "", source: "Walking", channel: "Khách lẻ", roomType: "Deluxe", room: "P - 101", status: "Đã trả phòng", bookDate: "2026-10-01", checkIn: "2026-10-03", checkOut, nights, nightsInWeek: nights,
+    roomPrice, roomInWeek: roomPrice, servicePrice: 0, totalPrice: roomPrice, payment: 0, balance: 0, deposit: 0, stay: true, flags: [],
+  });
+  const co: RevenueWeek = { v: REVENUE_VERSION, monday: MONDAY, end: "2026-10-11", fetchedAt: "x", hotels: [{ id: 1, name: "H", bookings: [stay("2026-10-06", 3, 3_000_000), stay("2026-10-09", 6, 4_200_000)], services: [], basis: "checkout" }] };
+  const weekly = checkoutWeek(w41, co).hotels[0];
+  assert.deepEqual([weekly.roomSum, weekly.nightSum, weekly.stats.roomPrice], [7_200_000, 9, 7_200_000]);
+  const s = rangeSummary(rangeData([w41], [co], MONDAY, "2026-10-11").hotels, 7), w = summarize([weekly]);
+  assert.deepEqual([w.adr, w.revpar], [s.adr, s.revpar]);
+  assert.equal(checkoutWeek(w41, revenue(MONDAY)).hotels[0], w41.hotels[0]); // a week stored by nights keeps its figures
 });

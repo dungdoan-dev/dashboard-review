@@ -1,7 +1,7 @@
 // No "@/" imports: scraper/bluejay-backfill.mjs runs this file with plain Node.
 import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
 import { secret } from "./app-secrets.ts";
-import { MAX_RANGE_DAYS, rangeData } from "./bluejay-range.ts";
+import { MAX_RANGE_DAYS, checkoutWeek, rangeData } from "./bluejay-range.ts";
 import { dailyRevenue } from "./bluejay-daily.ts";
 import { checkoutRevenue } from "./bluejay-checkout.ts";
 import { channelCounts } from "./ql-channels.ts";
@@ -211,18 +211,27 @@ export async function readReconcileBookings(db: SupabaseClient, hotelId: number,
   return { bookings: latestBookings(weeks, todayVN()).filter((b) => b.hotelId === hotelId), missingWeeks };
 }
 
+/** Stored revenue weeks by Monday, for the room money by check-out day of the weekly reports. */
+async function revenueWeeks(db: SupabaseClient, first: string, last: string) {
+  const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", first).lte("week_start", last);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((r) => r.revenue as RevenueWeek).filter((w) => w?.v === REVENUE_VERSION).map((w) => [w.monday, w]));
+}
+
 export async function readReport(db: SupabaseClient, monday: string): Promise<WeeklyReport | null> {
   if (!isDate(monday)) return null;
-  const { data, error } = await db.from("bluejay_weekly_reports").select("report").eq("week_start", monday).maybeSingle();
+  const [{ data, error }, revenue] = await Promise.all([db.from("bluejay_weekly_reports").select("report").eq("week_start", monday).maybeSingle(), revenueWeeks(db, monday, monday)]);
   if (error) throw new Error(error.message);
-  return data?.report?.v === VERSION ? data.report : null;
+  return data?.report?.v === VERSION ? checkoutWeek(data.report, revenue.get(monday)) : null;
 }
 
 /** Stored weeks up to and including monday, oldest first, for the trend charts. */
 export async function listReports(db: SupabaseClient, monday: string, limit = 12): Promise<WeeklyReport[]> {
   const { data, error } = await db.from("bluejay_weekly_reports").select("report").lte("week_start", monday).order("week_start", { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => r.report).filter((r) => r?.v === VERSION).reverse();
+  const reports: WeeklyReport[] = (data ?? []).map((r) => r.report).filter((r) => r?.v === VERSION).reverse();
+  const revenue = reports.length ? await revenueWeeks(db, reports[0].monday, reports.at(-1)!.monday) : new Map<string, RevenueWeek>();
+  return reports.map((r) => checkoutWeek(r, revenue.get(r.monday)));
 }
 
 /** Mondays (newest first) up to `monday` that have a current-version operations report: the weeks the compare picker offers. */
