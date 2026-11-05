@@ -2,12 +2,14 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { LoaderCircle, X } from "lucide-react";
-import { HR_FORMS, type FieldDef, type HrEntity } from "@/lib/hr-forms";
+import type { FieldDef } from "@/lib/hr-forms";
 
 export type Option = [value: string, label: string];
 type Values = Record<string, string>;
+/** What a form field needs to be drawn: the HR forms and the asset forms both fit. */
+type BaseField = Omit<FieldDef, "options">;
 
-function Field({ def, value, options }: { def: FieldDef; value: string; options: Option[] }) {
+function Field({ def, value, options }: { def: BaseField; value: string; options: Option[] }) {
   const common = { name: def.key, required: def.required, defaultValue: value };
   return <label className={`field${def.wide || def.type === "textarea" ? " full-field" : ""}`}>{def.label}{def.required && " *"}
     {def.type === "textarea" ? <textarea {...common} rows={3} maxLength={2000} />
@@ -34,10 +36,9 @@ function Modal({ title, kicker, onClose, children }: { title: string; kicker: st
 }
 
 /** Create (no id) or edit (id) form of one row; onSubmit gets the typed values and returns an error message, or null when saved. */
-export function RecordDialog({ entity, id, initial, optionsOf, onSubmit, onClose }: { entity: HrEntity; id?: string; initial: Values; optionsOf: (def: FieldDef) => Option[]; onSubmit: (values: Values) => Promise<string | null>; onClose: () => void }) {
+export function RecordDialog<F extends BaseField>({ form, kicker = "NHÂN SỰ", id, initial, optionsOf, onSubmit, onClose }: { form: { title: string; fields: F[] }; kicker?: string; id?: string; initial: Values; optionsOf: (def: F) => Option[]; onSubmit: (values: Values) => Promise<string | null>; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const form = HR_FORMS[entity];
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError("");
@@ -45,7 +46,7 @@ export function RecordDialog({ entity, id, initial, optionsOf, onSubmit, onClose
     setBusy(false);
     if (failure) setError(failure); else onClose();
   }
-  return <Modal title={`${id ? "Sửa" : "Thêm"} ${form.title}${id ? ` ${id}` : ""}`} kicker="NHÂN SỰ" onClose={() => { if (!busy) onClose(); }}>
+  return <Modal title={`${id ? "Sửa" : "Thêm"} ${form.title}${id ? ` ${id}` : ""}`} kicker={kicker} onClose={() => { if (!busy) onClose(); }}>
     <form onSubmit={submit}>
       {error && <div className="modal-error" role="alert">{error}</div>}
       <div className="form-grid">{form.fields.map((def) => <Field key={def.key} def={def} value={initial[def.key] ?? ""} options={def.type === "select" ? optionsOf(def) : []} />)}</div>

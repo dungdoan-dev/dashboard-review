@@ -13,7 +13,7 @@ export const REACH_APIS = ["/api/facebook", "/api/instagram", "/api/tiktok", "/a
 /** What an account may call under /api: admin everything, hr the staff list (read) and recruitment, mkt the reach figures (read). */
 export function apiAllowed(user: Who, method: string, path: string) {
   if (isAdmin(user)) return true;
-  if (isHr(user)) return path === "/api/hr" || (path === "/api/nhan-su" && method === "GET");
+  if (isHr(user)) return path === "/api/hr" || path === "/api/assets" || (path === "/api/nhan-su" && method === "GET");
   if (isMkt(user)) return method === "GET" && REACH_APIS.includes(path);
   return false;
 }

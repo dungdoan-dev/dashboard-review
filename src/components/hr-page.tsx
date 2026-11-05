@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { birthdaysOf, candsOf, intvsOf, needsOf, staffOf, type HrCand, type HrIntv, type HrNeed, type HrPayload, type HrStaff } from "@/lib/hr";
-import { formValues, type FieldDef, type HrEntity } from "@/lib/hr-forms";
+import { HR_FORMS, formValues, type FieldDef, type HrEntity } from "@/lib/hr-forms";
 import { HrOverview } from "@/components/hr-overview";
 import { ConfirmDialog, RecordDialog, type Option } from "@/components/hr-form";
 import { BirthdayTable, CandTable, IntvTable, NeedsTable, StaffTable, type Crud } from "@/components/hr-tables";
@@ -79,7 +79,7 @@ export function HrPage() {
         {tab === "staff" && <StaffTable rows={rows.staff} crud={staffCrud} />}
         {tab === "bdays" && <BirthdayTable rows={rows.bdays} />}
       </>}
-      {dialog && <RecordDialog entity={dialog.entity} id={dialog.id} initial={dialog.initial} optionsOf={optionsOf} onClose={() => setDialog(null)}
+      {dialog && <RecordDialog form={HR_FORMS[dialog.entity]} id={dialog.id} initial={dialog.initial} optionsOf={optionsOf} onClose={() => setDialog(null)}
         onSubmit={(fields) => send({ entity: dialog.entity, action: "save", id: dialog.id, fields }, dialog.id ? `Đã cập nhật ${dialog.id}.` : "Đã thêm vào Google Sheet.")} />}
       {removal && <ConfirmDialog label={removal.label} onClose={() => setRemoval(null)} onConfirm={() => send({ entity: removal.entity, action: "delete", id: removal.id }, `Đã xóa ${removal.id}.`)} />}
     </section>

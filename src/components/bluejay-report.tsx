@@ -19,7 +19,7 @@ const AXIS = { fill: "#696974", fontSize: 12 };
 
 const pct = (x: number) => `${(x * 100).toFixed(2).replace(".", ",")}%`;
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
-const compact = (v: number) => (v >= 1e9 ? `${+(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${+(v / 1e6).toFixed(1)} tr` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v));
+const compact = (v: number) => (v >= 1e9 ? `${(v / 1e9).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tỷ` : v >= 1e6 ? `${(v / 1e6).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tr` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v));
 
 // While the PDF is made the charts are drawn at a fixed width: the print copy of a responsive chart keeps the screen width and its legend drifts.
 let printing = false;

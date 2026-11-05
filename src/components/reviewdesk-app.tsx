@@ -7,6 +7,7 @@ import {
   Scale,
   Wallet,
   Landmark,
+  Laptop,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -39,6 +40,7 @@ import {
   TrendingUp,
   Upload,
   UserPlus,
+  Megaphone,
   Users,
   Utensils,
   X,
@@ -111,6 +113,7 @@ const TiktokPage = dynamic(() => import("@/components/tiktok-page").then((m) => 
 const MarketingReport = dynamic(() => import("@/components/marketing-report").then((m) => m.MarketingReport), { loading: pageLoading });
 const HrPage = dynamic(() => import("@/components/hr-page").then((m) => m.HrPage), { loading: pageLoading });
 const NhanSuPage = dynamic(() => import("@/components/nhan-su-page").then((m) => m.NhanSuPage), { loading: pageLoading });
+const AssetPage = dynamic(() => import("@/components/asset-page").then((m) => m.AssetPage), { loading: pageLoading });
 const AutomaticSyncSettings = dynamic(() => import("@/components/automatic-sync-settings").then((m) => m.AutomaticSyncSettings), { loading: pageLoading });
 const BluejaySyncSettings = dynamic(() => import("@/components/bluejay-sync-settings").then((m) => m.BluejaySyncSettings), { loading: pageLoading });
 const BranchSheetsSettings = dynamic(() => import("@/components/branch-sheets-settings").then((m) => m.BranchSheetsSettings), { loading: pageLoading });
@@ -155,6 +158,8 @@ const allReportPlatforms: Platform[] = [...typePlatformOrder.hotel, "grabfood", 
 function filterTypeOf(type: LocationType): LocationFilterType {
   return type === "cafe" || type === "restaurant" ? "cafe" : type === "mart" || type === "other" ? "mart" : type === "entertainment" ? "entertainment" : "hotel";
 }
+// The pending close of the collapsed sidebar's group list (one sidebar per page). Outside the component: a ref read in its handlers makes the React Compiler skip it.
+let flyoutCloseTimer: number | undefined;
 const reportPlatformColors = PLATFORM_COLORS; // one colour per platform on every page (src/lib/platforms.ts)
 
 const demoExpediaUrl = "https://www.expedia.com.vn/Da-Nang-Khach-San-YZISTEL.h113589597.Thong-tin-khach-san?chkin=2025-04-11&chkout=2025-04-13&x_pwa=1&rfrr=HSR&pwa_ts=1743476005040&referrerUrl=aHR0cHM6Ly93d3cuZXhwZWRpYS5jb20udm4vSG90ZWwtU2VhcmNo&useRewards=false&rm1=a2&regionId=6034264&destination=H%E1%BB%99i+An%2C+Qu%E1%BA%A3ng+Nam+%28t%E1%BB%89nh%29%2C+Vi%C3%AA%CC%A3t+Nam&destType=MARKET&neighborhoodId=553248633981701234&selected=113589597&latLong=15.87749%2C108.331009&sort=RECOMMENDED&top_dp=881834&top_cur=VND&userIntent=&selectedRoomType=326233694&selectedRatePlan=400456848&searchId=9b6c19c5-5039-4499-b679-4849b8fd28a4";
@@ -301,34 +306,28 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isReachTotalPage = pathname === "/reach";
   const isHrPage = pathname === "/hr";
   const isNhanSuPage = pathname === "/nhan-su";
+  const isAssetPage = pathname === "/tai-san";
   const isReachPage = isGoogleProfilePage || isFacebookPage || isInstagramPage || isFacebookAdsPage || isGoogleAdsPage || isGoogleAnalyticsPage || isTiktokPage || isReachTotalPage;
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayFinancePage || isBluejayDailyPage || isBluejayComparePage || isBluejayPnlPage || isBluejayQlPage || isBluejayStockPage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
-  const pageGroup = isHrPage || isNhanSuPage ? "nhan-su" : isBluejayPage ? "van-hanh" : "marketing"; // Review, Tiếp cận and the monthly report are one menu group
-  const [openGroup, setOpenGroup] = useState(pathname === "/" ? "van-hanh" : pageGroup); // sidebar accordion: one group open at a time; opening the app on Tổng quan shows Vận hành first
+  const pageGroup = isHrPage || isNhanSuPage || isAssetPage ? "nhan-su" : isBluejayPage ? "van-hanh" : isSettingsPage ? "" : "marketing"; // Review, Tiếp cận and the monthly report are one menu group
+  const [openGroup, setOpenGroup] = useState(pageGroup); // sidebar accordion: one group open at a time, the one of the page being viewed
+  const [flyout, setFlyout] = useState<{ id: string; top: number; path: string } | null>(null); // collapsed sidebar: the group whose list is shown beside its icon (only on the page it was opened on)
   const [groupPath, setGroupPath] = useState(pathname);
   if (groupPath !== pathname) { setGroupPath(pathname); setOpenGroup(pageGroup); } // moving to another page opens that page's group
   const [collapsed, setCollapsed] = useState(false); // desktop sidebar shrunk to icons; remembered per browser
   useEffect(() => { try { setCollapsed(localStorage.getItem("sidebar-collapsed") === "1"); } catch { /* private window: stays expanded */ } }, []);
   const [tip, setTip] = useState<{ text: string; top: number } | null>(null); // name of the hovered icon while the sidebar is collapsed
   const showTip = (target: EventTarget) => {
-    const item = collapsed ? (target as HTMLElement).closest<HTMLElement>("[data-tip]") : null;
+    const item = collapsed && !(target as HTMLElement).closest(".nav-flyout") ? (target as HTMLElement).closest<HTMLElement>("[data-tip]") : null; // the list beside a group icon names its links already
     if (!item) { setTip(null); return; }
     const box = item.getBoundingClientRect();
     setTip({ text: item.dataset.tip ?? "", top: box.top + box.height / 2 });
   };
-  const toggleSidebar = () => { setTip(null); setCollapsed((value) => { try { localStorage.setItem("sidebar-collapsed", value ? "0" : "1"); } catch { /* not remembered */ } return !value; }); };
-  /** A sidebar heading that folds its links with a short slide; opening one closes the others. A sidebar shrunk to icons always shows them. */
-  const navGroup = (id: string, label: string, spaced: boolean, links: ReactNode) => {
-    const open = collapsed || openGroup === id;
-    return <>
-      <button type="button" className={`nav-label nav-group-toggle${spaced ? " nav-label-spaced" : ""}`} aria-expanded={open} onClick={() => setOpenGroup(open ? "" : id)}><span>{label}</span><ChevronDown size={13} className={open ? "" : "folded"} aria-hidden="true" /></button>
-      <div className="nav-group-body" data-open={open} inert={!open}><div className="nav-group-inner">{links}</div></div>
-    </>;
-  };
+  const toggleSidebar = () => { setTip(null); setFlyout(null); setCollapsed((value) => { try { localStorage.setItem("sidebar-collapsed", value ? "0" : "1"); } catch { /* not remembered */ } return !value; }); };
   const bluejayHotel = (isBluejayFinancePage || isBluejayStockPage || isBluejayQlPage ? BRANCHES : BLUEJAY_HOTELS).find((hotel) => hotel.id === bluejayHotelId) ?? null; // a unit with no hotel (VTDC) is chosen on Thu chi, Kho and Báo cáo quản lý only
-  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isMonthPage && !isBluejayPage && !isReachPage && !isHrPage && !isNhanSuPage;
+  const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isMonthPage && !isBluejayPage && !isReachPage && !isHrPage && !isNhanSuPage && !isAssetPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
   const needsLiveMetrics = pathname === "/" || isDetailPage || isMonthPage; // Tổng quan (bảng điểm), Chi tiết cơ sở và phần Review của Báo cáo marketing dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
@@ -336,6 +335,27 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const [user, setUser] = useState<User | null>(null);
   const hrOnly = isHr(user); // hr account: only Nhân sự (read-only) and Tuyển dụng
   const mktOnly = isMkt(user); // mkt account: only Review and Tiếp cận, read-only
+  /** A sidebar heading that folds its links with a short slide; opening one closes the others.
+   *  An account that sees one group only gets its links without the fold. Shrunk to icons, a group is one icon: hovering, focusing or clicking it shows its links beside it. */
+  const navGroup = (id: string, label: string, spaced: boolean, links: ReactNode, icon: ReactNode) => {
+    if ([!hrOnly && !mktOnly, !mktOnly, !hrOnly].filter(Boolean).length === 1) return <><span className={`nav-label${spaced ? " nav-label-spaced" : ""}`}>{label}</span><div className="nav-group-inner">{links}</div></>;
+    if (collapsed) {
+      const shown = flyout?.id === id && flyout.path === pathname; // following a link closes the list
+      const show = (el: HTMLElement) => { window.clearTimeout(flyoutCloseTimer); setTip(null); setFlyout({ id, top: el.getBoundingClientRect().top, path: pathname }); };
+      const hideSoon = () => { window.clearTimeout(flyoutCloseTimer); flyoutCloseTimer = window.setTimeout(() => setFlyout((f) => (f?.id === id ? null : f)), 160); }; // time to move the pointer onto the list
+      return <div className="nav-flyout-wrap" onMouseEnter={(e) => show(e.currentTarget)} onMouseLeave={hideSoon}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFlyout((f) => (f?.id === id ? null : f)); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setFlyout(null); e.currentTarget.querySelector("button")?.focus(); } }}>
+        <button type="button" className={`nav-link nav-group-icon ${pageGroup === id ? "active" : ""}`} aria-label={label} aria-expanded={shown} aria-controls={`flyout-${id}`} onClick={(e) => (shown ? setFlyout(null) : show(e.currentTarget))}>{icon}</button>
+        {shown && <div className="nav-flyout" id={`flyout-${id}`} role="group" aria-label={label} style={{ top: flyout.top, maxHeight: `calc(100vh - ${flyout.top}px - 12px)` }}><span className="nav-flyout-title">{label}</span>{links}</div>}
+      </div>;
+    }
+    const open = openGroup === id;
+    return <>
+      <button type="button" className={`nav-label nav-group-toggle${spaced ? " nav-label-spaced" : ""}`} aria-expanded={open} onClick={() => setOpenGroup(open ? "" : id)}><span>{label}</span><ChevronDown size={13} className={open ? "" : "folded"} aria-hidden="true" /></button>
+      <div className="nav-group-body" data-open={open} inert={!open}><div className="nav-group-inner">{links}</div></div>
+    </>;
+  };
   const [loading, setLoading] = useState(supabaseConfigured);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -675,8 +695,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }, [user, loadLocations]);
 
   useEffect(() => {
-    if (isHr(user) && pathname !== "/nhan-su" && pathname !== "/hr") router.replace("/nhan-su"); // an hr account has only these two pages
-    if (isMkt(user) && ["/bluejay", "/hr", "/nhan-su", "/settings"].some((p) => pathname.startsWith(p))) router.replace("/"); // a mkt account has no operations, HR or settings page
+    if (isHr(user) && !["/nhan-su", "/hr", "/tai-san"].includes(pathname)) router.replace("/nhan-su"); // an hr account has only the Hành chính nhân sự pages
+    if (isMkt(user) && ["/bluejay", "/hr", "/nhan-su", "/tai-san", "/settings"].some((p) => pathname.startsWith(p))) router.replace("/"); // a mkt account has no operations, HR or settings page
   }, [user, pathname, router]);
 
   useEffect(() => {
@@ -1813,49 +1833,53 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
         </div>
         <nav className="side-nav" aria-label="Điều hướng chính">
           {!hrOnly && !mktOnly && navGroup("van-hanh", "VẬN HÀNH", false, <>
-            <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} href="/bluejay" data-tip="Vận hành khách sạn"><BedDouble size={17} /><span>Vận hành khách sạn</span></Link>
-            <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} href="/bluejay-revenue" data-tip="Doanh thu &amp; thanh toán"><Banknote size={17} /><span>Doanh thu &amp; thanh toán</span></Link>
-            <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} href="/bluejay-daily" data-tip="Doanh thu theo ngày"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
-            <Link className={`nav-link ${isBluejayComparePage ? "active" : ""}`} href="/bluejay-compare" data-tip="So sánh khách sạn"><FileBarChart size={17} /><span>So sánh khách sạn</span></Link>
-            <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} href="/bluejay-stock" data-tip="Kho"><Package size={17} /><span>Kho</span></Link>
-            <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} href="/bluejay-finance" data-tip="Thu chi"><Wallet size={17} /><span>Thu chi</span></Link>
-            <Link className={`nav-link ${isBluejayQlPage ? "active" : ""}`} href="/bluejay-ql" data-tip="Báo cáo quản lý"><ClipboardList size={17} /><span>Báo cáo quản lý</span></Link>
-            <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} href="/bluejay-pnl" data-tip="Kết quả HĐKD"><Landmark size={17} /><span>Kết quả HĐKD</span></Link>
-            <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} href="/bluejay-reconcile" data-tip="Đối soát bảng kê"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
-          </>)}
-          {!mktOnly && navGroup("nhan-su", "NHÂN SỰ", true, <>
-            <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
-            <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
-          </>)}
+            <span className="nav-subhead">Báo cáo</span>
+            <Link className={`nav-link ${pathname === "/bluejay" ? "active" : ""}`} aria-current={pathname === "/bluejay" ? "page" : undefined} href="/bluejay" data-tip="Báo cáo vận hành" title="Công suất, ADR, RevPAR theo tuần hoặc khoảng ngày"><BedDouble size={17} /><span>Báo cáo vận hành</span></Link>
+            <Link className={`nav-link ${isBluejayComparePage ? "active" : ""}`} aria-current={isBluejayComparePage ? "page" : undefined} href="/bluejay-compare" data-tip="So sánh khách sạn" title="Công suất và doanh thu từng khách sạn theo tuần"><FileBarChart size={17} /><span>So sánh khách sạn</span></Link>
+            <Link className={`nav-link ${isBluejayPnlPage ? "active" : ""}`} aria-current={isBluejayPnlPage ? "page" : undefined} href="/bluejay-pnl" data-tip="Kết quả kinh doanh" title="Doanh thu, chi phí, lợi nhuận theo tháng"><Landmark size={17} /><span>Kết quả kinh doanh</span></Link>
+            <Link className={`nav-link ${isBluejayQlPage ? "active" : ""}`} aria-current={isBluejayQlPage ? "page" : undefined} href="/bluejay-ql" data-tip="Báo cáo quản lý" title="Bảng tuần của kế toán: doanh thu, thu chi, F&amp;B"><ClipboardList size={17} /><span>Báo cáo quản lý</span></Link>
+            <span className="nav-subhead">Doanh thu</span>
+            <Link className={`nav-link ${isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "active" : ""}`} aria-current={isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage ? "page" : undefined} href="/bluejay-revenue" data-tip="Đặt phòng &amp; thanh toán" title="Từng đặt phòng: tiền phòng, dịch vụ, đã thu, còn nợ"><Banknote size={17} /><span>Đặt phòng &amp; thanh toán</span></Link>
+            <Link className={`nav-link ${isBluejayDailyPage ? "active" : ""}`} aria-current={isBluejayDailyPage ? "page" : undefined} href="/bluejay-daily" data-tip="Doanh thu theo ngày" title="Tiền phòng và dịch vụ theo ngày trả phòng"><CalendarDays size={17} /><span>Doanh thu theo ngày</span></Link>
+            <Link className={`nav-link ${isBluejayReconcilePage ? "active" : ""}`} aria-current={isBluejayReconcilePage ? "page" : undefined} href="/bluejay-reconcile" data-tip="Đối soát bảng kê" title="So bảng kê thu với Blue Jay"><Scale size={17} /><span>Đối soát bảng kê</span></Link>
+            <span className="nav-subhead">Tiền &amp; kho</span>
+            <Link className={`nav-link ${isBluejayFinancePage ? "active" : ""}`} aria-current={isBluejayFinancePage ? "page" : undefined} href="/bluejay-finance" data-tip="Thu chi" title="Tiền thu và chi theo bảng kê"><Wallet size={17} /><span>Thu chi</span></Link>
+            <Link className={`nav-link ${isBluejayStockPage ? "active" : ""}`} aria-current={isBluejayStockPage ? "page" : undefined} href="/bluejay-stock" data-tip="Kho" title="Nhập, xuất, tồn kho theo tháng"><Package size={17} /><span>Kho</span></Link>
+          </>, <BedDouble size={17} />)}
+          {!mktOnly && navGroup("nhan-su", "HÀNH CHÍNH NHÂN SỰ", true, <>
+            <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} aria-current={isNhanSuPage ? "page" : undefined} href="/nhan-su" data-tip="Hồ sơ nhân sự" title="Danh sách, hồ sơ và thống kê nhân viên"><Users size={17} /><span>Hồ sơ nhân sự</span></Link>
+            <Link className={`nav-link ${isHrPage ? "active" : ""}`} aria-current={isHrPage ? "page" : undefined} href="/hr" data-tip="Tuyển dụng" title="Vị trí tuyển, ứng viên, sinh nhật"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
+            <Link className={`nav-link ${isAssetPage ? "active" : ""}`} aria-current={isAssetPage ? "page" : undefined} href="/tai-san" data-tip="Tài sản" title="Sổ tài sản, bàn giao, mượn trả, bảo trì, kiểm kê, thanh lý"><Laptop size={17} /><span>Tài sản</span></Link>
+          </>, <Users size={17} />)}
           {!hrOnly && navGroup("marketing", "MARKETING", true, <>
             <span className="nav-subhead">Báo cáo</span>
-            <Link className={`nav-link ${isMonthPage ? "active" : ""}`} href="/month" data-tip="Báo cáo marketing"><FileBarChart size={17} /><span>Báo cáo marketing</span></Link>
+            <Link className={`nav-link ${isMonthPage ? "active" : ""}`} aria-current={isMonthPage ? "page" : undefined} href="/month" data-tip="Báo cáo marketing" title="Review, tiếp cận, quảng cáo theo tháng hoặc khoảng ngày"><FileBarChart size={17} /><span>Báo cáo marketing</span></Link>
             <span className="nav-subhead">Đánh giá</span>
-            <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
-            <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
-            <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
+            <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} aria-current={isOverviewPage && activeSection === "overview" ? "page" : undefined} href="/" data-tip="Bảng điểm" title="Điểm và số đánh giá mới nhất của mọi cơ sở"><LayoutDashboard size={17} /><span>Bảng điểm</span></Link>
+            <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} aria-current={inDetailGroup ? "page" : undefined} href="/detail" data-tip="Chi tiết cơ sở" title="Điểm, lịch sử và xếp hạng của một cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
+            <Link className={`nav-link ${isComparePage ? "active" : ""}`} aria-current={isComparePage ? "page" : undefined} href="/compare" data-tip="So sánh đánh giá" title="Điểm và lượt đánh giá giữa các cơ sở theo ngày"><TrendingUp size={17} /><span>So sánh đánh giá</span></Link>
             <span className="nav-subhead">Kênh</span>
-            <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps (tiếp cận)"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
-            <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
-            <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
-            <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} href="/google-analytics" data-tip="Google Analytics"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
-            <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
+            <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} aria-current={isGoogleProfilePage ? "page" : undefined} href="/google-profile" data-tip="Google Maps" title="Lượt xem, gọi, chỉ đường trên Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
+            <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} aria-current={isFacebookPage ? "page" : undefined} href="/facebook" data-tip="Facebook" title="Lượt tiếp cận, tương tác, người theo dõi trang"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
+            <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} aria-current={isInstagramPage ? "page" : undefined} href="/instagram" data-tip="Instagram" title="Lượt tiếp cận, tương tác, người theo dõi"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
+            <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} aria-current={isGoogleAnalyticsPage ? "page" : undefined} href="/google-analytics" data-tip="Google Analytics" title="Lượt truy cập và hành vi trên website"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
+            <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} aria-current={isTiktokPage ? "page" : undefined} href="/tiktok" data-tip="TikTok" title="Lượt xem, tương tác, người theo dõi"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
             <span className="nav-subhead">Quảng cáo</span>
-            <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
-            <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
-          </>)}
+            <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} aria-current={isFacebookAdsPage ? "page" : undefined} href="/facebook-ads" data-tip="Facebook Ads" title="Chi tiêu, hiển thị, nhấp, chuyển đổi"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
+            <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} aria-current={isGoogleAdsPage ? "page" : undefined} href="/google-ads" data-tip="Google Ads" title="Chi tiêu, hiển thị, nhấp, chuyển đổi"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
+          </>, <Megaphone size={17} />)}
         </nav>
         <div className="sidebar-bottom">
-          {!hrOnly && !mktOnly && <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} href="/settings" data-tip="Cài đặt"><Settings2 size={17} /><span>Cài đặt</span></Link>}
+          {!hrOnly && !mktOnly && <Link className={`nav-link ${isSettingsPage ? "active" : ""}`} aria-current={isSettingsPage ? "page" : undefined} href="/settings" data-tip="Cài đặt" title="Cơ sở, đồng bộ, khóa API, phân quyền"><Settings2 size={17} /><span>Cài đặt</span></Link>}
           <button className="profile-row" type="button" onClick={() => { if (supabaseConfigured) void logout(); }} disabled={!supabaseConfigured} aria-label={supabaseConfigured ? "Đăng xuất" : "Chế độ xem demo"}><span className="profile-avatar">{user?.email?.slice(0, 1).toUpperCase() || "D"}</span><span className="profile-meta"><strong>{user?.email || "Chế độ demo"}</strong><small>{supabaseConfigured ? "Tài khoản Supabase" : "Chưa kết nối Supabase"}</small></span>{supabaseConfigured ? <LogOut size={16} /> : <CircleHelp size={16} />}</button>
         </div>
       </aside>
       {tip && <div className="nav-tip" role="tooltip" style={{ top: tip.top }}>{tip.text}</div>}
 
       <main className="main-area" id="overview">
-        <header className={`dashboard-topbar ${isReachPage || isHrPage || isNhanSuPage || isMonthPage ? "topbar-hidden" : ""}`}>
+        <header className={`dashboard-topbar ${isReachPage || isHrPage || isNhanSuPage || isAssetPage || isMonthPage ? "topbar-hidden" : ""}`}>
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
-          <div className="topbar-title"><span className="topbar-overline">{isMonthPage ? "BÁO CÁO MARKETING" : isNhanSuPage ? "NHÂN SỰ" : isHrPage ? "TUYỂN DỤNG" : isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ HĐKD" : isBluejayQlPage ? "BÁO CÁO QUẢN LÝ" : isBluejayComparePage ? "SO SÁNH KHÁCH SẠN" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isMonthPage ? "Tất cả loại hình" : isHrPage ? "Nhân sự & tuyển dụng" : isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isReachTotalPage ? "Báo cáo tổng" : isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          <div className="topbar-title"><span className="topbar-overline">{isMonthPage ? "BÁO CÁO MARKETING" : isNhanSuPage ? "HỒ SƠ NHÂN SỰ" : isAssetPage ? "TÀI SẢN" : isHrPage ? "TUYỂN DỤNG" : isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ KINH DOANH" : isBluejayQlPage ? "BÁO CÁO QUẢN LÝ" : isBluejayComparePage ? "SO SÁNH KHÁCH SẠN" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "ĐẶT PHÒNG & THANH TOÁN" : "BÁO CÁO VẬN HÀNH") : isComparePage ? "SO SÁNH ĐÁNH GIÁ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "BẢNG ĐIỂM"}</span><strong>{isMonthPage ? "Tất cả loại hình" : isHrPage ? "Nhân sự & tuyển dụng" : isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isReachTotalPage ? "Báo cáo tổng" : isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotel?.id ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{(isBluejayFinancePage || isBluejayStockPage || isBluejayQlPage ? BRANCHES : BLUEJAY_HOTELS).map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}</>}{(isSummaryPage || isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <><label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => {
             const next = event.target.value as ReportRange;
             if (next === "custom" && !customValid(customRange)) { const today = reportDateInVietnam(); setCustomRange({ from: rangeWindow(dailyReportRange === "custom" || dailyReportRange === "all" ? "30" : dailyReportRange, customRange, today).start ?? today, to: today }); } // a typed range starts from the one on screen
@@ -1899,6 +1923,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isTiktokPage && <TiktokPage />}
           {isMonthPage && <MarketingReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
           {isHrPage && <HrPage />}
+          {isAssetPage && <AssetPage />}
           {isNhanSuPage && <NhanSuPage canSync={!hrOnly} />}
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile key={bluejayHotel?.id ?? 0} scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayQlPage ? <BluejayQl scopeId={bluejayHotel?.id ?? null} /> : isBluejayComparePage ? <BluejayCompare /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}

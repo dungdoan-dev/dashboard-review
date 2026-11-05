@@ -14,6 +14,8 @@ test("hr: the staff list is read-only, recruitment is read and write, nothing el
   assert.equal(apiAllowed(as("hr"), "GET", "/api/nhan-su"), true);
   assert.equal(apiAllowed(as("hr"), "POST", "/api/nhan-su"), false);
   assert.equal(apiAllowed(as("hr"), "POST", "/api/hr"), true);
+  assert.equal(apiAllowed(as("hr"), "POST", "/api/assets"), true);
+  assert.equal(apiAllowed(as("mkt"), "GET", "/api/assets"), false);
   assert.equal(apiAllowed(as("hr"), "GET", "/api/facebook"), false);
 });
 

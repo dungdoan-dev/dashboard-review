@@ -9,7 +9,7 @@ const AXIS = { fill: "#696974", fontSize: 12 };
 export const ROOM = "#4f46a5", SERVICE = "#e0892b", PAID = "#2f9e6e", DUE = "#d9534f";
 
 const num = (x: number) => Math.round(x).toLocaleString("vi-VN");
-export const compact = (v: number) => (v >= 1e9 ? `${+(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${+(v / 1e6).toFixed(1)} tr` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v));
+export const compact = (v: number) => (v >= 1e9 ? `${(v / 1e9).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tỷ` : v >= 1e6 ? `${(v / 1e6).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tr` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v));
 
 type Channel = { name: string; room: number; service: number; payment: number; balance: number };
 type Day = { date: string; room: number; service: number };
@@ -40,7 +40,7 @@ const GAP = { stroke: "#fff", strokeWidth: 2 }; // the 2px surface gap between t
 
 /** Bars: one per category (horizontal) or per day (vertical), stacked unless grouped; bars at most 24px thick, the data end rounded, the base square.
  *  fmt formats the hover card, axis the value axis and the labels at the bar ends (money by default). With 12 bars or fewer each bar gets its total (or value) at its end. */
-export function Stacked({ data, series, label, horizontal, grouped, fmt = num, axis = compact, valueLabel = axis }: { data: Record<string, string | number | null>[]; series: Series[]; label: string; horizontal?: boolean; grouped?: boolean; fmt?: (v: number) => string; axis?: (v: number) => string; valueLabel?: (v: number) => string }) {
+export function Stacked({ data, series, label, horizontal, grouped, whole, fmt = num, axis = compact, valueLabel = axis }: { data: Record<string, string | number | null>[]; series: Series[]; label: string; horizontal?: boolean; grouped?: boolean; whole?: boolean /* counts: no 0,25 ticks */; fmt?: (v: number) => string; axis?: (v: number) => string; valueLabel?: (v: number) => string }) {
   const labelled = !grouped && data.length <= 12;
   const rows = labelled ? data.map((d) => { const vs = series.map((s) => d[s.key]).filter((v): v is number => typeof v === "number"); return { ...d, __total: vs.length ? vs.reduce((a, b) => a + b, 0) : null }; }) : data;
   const end = horizontal ? [0, 4, 4, 0] as [number, number, number, number] : [4, 4, 0, 0] as [number, number, number, number];
@@ -51,8 +51,8 @@ export function Stacked({ data, series, label, horizontal, grouped, fmt = num, a
         <BarChart data={rows} layout={horizontal ? "vertical" : "horizontal"} margin={{ top: labelled && !horizontal ? 18 : 4, right: labelled && horizontal ? 56 : 12, bottom: 0, left: 0 }} barCategoryGap={horizontal ? "28%" : "20%"}>
           <CartesianGrid stroke="#f0edf6" vertical={!!horizontal} horizontal={!horizontal} />
           {horizontal
-            ? <><XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} tickFormatter={axis} /><YAxis type="category" dataKey="x" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} width={110} interval={0} /></>
-            : <><XAxis dataKey="x" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} interval="preserveStartEnd" minTickGap={16} /><YAxis tick={AXIS} tickLine={false} axisLine={false} width={56} tickFormatter={axis} /></>}
+            ? <><XAxis type="number" allowDecimals={!whole} tick={AXIS} tickLine={false} axisLine={false} tickFormatter={axis} /><YAxis type="category" dataKey="x" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} width={110} interval={0} /></>
+            : <><XAxis dataKey="x" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e5dff0" }} interval="preserveStartEnd" minTickGap={16} /><YAxis allowDecimals={!whole} tick={AXIS} tickLine={false} axisLine={false} width={56} tickFormatter={axis} /></>}
           <Tooltip cursor={{ fill: "#f6f4fa" }} content={(p) => <Tip {...(p as TipProps)} series={series} fmt={fmt} total={!grouped} />} />
           {series.map((s, i) => <Bar key={s.key} dataKey={s.key} name={s.name} stackId={grouped ? undefined : "a"} fill={s.color} {...GAP} maxBarSize={24} radius={grouped || i === series.length - 1 ? end : 0} isAnimationActive={false}>
             {labelled && i === series.length - 1 && <LabelList dataKey="__total" content={(p) => { // drawn by hand: the default label wraps to the bar's width ("9,4 / tr" on two lines)

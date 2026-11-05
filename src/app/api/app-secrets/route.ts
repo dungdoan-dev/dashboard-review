@@ -21,7 +21,7 @@ function invalid(name: string, value: string) {
   if (name === "GOOGLE_SERVICE_ACCOUNT_JSON") {
     try { const key = JSON.parse(value); if (!key.client_email || !key.private_key || !key.token_uri) return "JSON thiếu client_email, private_key hoặc token_uri."; } catch { return "Không phải JSON hợp lệ."; }
   }
-  if (name === "HR_APPS_SCRIPT_URL" && !/^https:\/\/\S+$/.test(value)) return "Địa chỉ phải bắt đầu bằng https://.";
+  if ((name === "HR_APPS_SCRIPT_URL" || name === "ASSET_APPS_SCRIPT_URL") &&!/^https:\/\/\S+$/.test(value)) return "Địa chỉ phải bắt đầu bằng https://.";
   return value.length > 20_000 ? "Giá trị quá dài." : null;
 }
 

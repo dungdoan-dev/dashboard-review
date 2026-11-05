@@ -13,6 +13,8 @@ export const SECRET_KEYS: SecretKey[] = [
   { name: "GOOGLE_SERVICE_ACCOUNT_JSON", label: "Google Sheet", note: "JSON tài khoản dịch vụ: thu chi, kho, nhân sự" },
   { name: "HR_APPS_SCRIPT_URL", label: "Apps Script · địa chỉ", note: "Ứng dụng web nhân sự và tuyển dụng" },
   { name: "HR_APPS_SCRIPT_TOKEN", label: "Apps Script · mã truy cập", note: "Mã của ứng dụng web nhân sự và tuyển dụng" },
+  { name: "ASSET_APPS_SCRIPT_URL", label: "Tài sản · địa chỉ", note: "Ứng dụng web file Quản lý tài sản" },
+  { name: "ASSET_APPS_SCRIPT_TOKEN", label: "Tài sản · mã truy cập", note: "ASSET_TOKEN của ứng dụng web tài sản" },
 ];
 
 const TTL_MS = 60_000;
