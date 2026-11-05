@@ -922,6 +922,8 @@ tbody tr:hover { background: #fcfcfd; }
 .summary-chip { width: 14px; height: 14px; border-radius: 4px; }
 .summary-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .share-tiles { margin-top: 8px; }
+.marketing-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.marketing-toggles .range-presets { width: auto; margin: 0; }
 .chart-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; padding: 0; list-style: none; color: #56565f; font-size: 12px; }
 .chart-keys li { display: inline-flex; align-items: center; gap: 6px; }
 .chart-keys i, .chart-tip i { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
@@ -1415,6 +1417,10 @@ select { cursor: pointer; }
 .nav-group-body { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .26s ease, opacity .2s ease; }
 .nav-group-body[data-open="false"] { grid-template-rows: 0fr; opacity: 0; }
 .nav-group-inner { display: grid; gap: 4px; min-height: 0; overflow: hidden; }
+/* Small headings inside a menu group (MARKETING: Báo cáo, Đánh giá, Kênh, Quảng cáo); the collapsed sidebar shows icons only */
+.nav-subhead { margin: 8px 0 0 12px; color: #8a8a96; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+.nav-subhead:first-child { margin-top: 2px; }
+.app-shell.collapsed .nav-subhead { display: none; }
 @media (prefers-reduced-motion: reduce) { .nav-group-body, .nav-group-toggle svg { transition: none; } }
 
 

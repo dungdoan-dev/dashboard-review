@@ -5,9 +5,9 @@ import { addScoreboardSheet, type ScoreTable } from "./scoreboard-excel.ts";
 import { addReachSummarySheet } from "./reach-total-excel.ts";
 import type { ChannelTables } from "./reach-total.ts";
 
-/** month: "2026-10"; scoreNote / period: the note line of the Review sheet and the "Kỳ: ..." line of the other two; channels: loadReachTotal(...), the advertising ones go to "Quảng cáo". */
+/** month: "2026-10" (titles "THÁNG 10/2026"), or any period label such as "01/10/2026 – 15/10/2026"; scoreNote / period: the note line of the Review sheet and the "Kỳ: ..." line of the other two; channels: loadReachTotal(...), the advertising ones go to "Quảng cáo". */
 export function monthWorkbook(month: string, scoreNote: string, tables: ScoreTable[], period: string, channels: ChannelTables[]) {
-  const label = `THÁNG ${month.slice(5, 7)}/${month.slice(0, 4)}`;
+  const label = /^[0-9]{4}-[0-9]{2}$/.test(month) ? `THÁNG ${month.slice(5, 7)}/${month.slice(0, 4)}` : month;
   const book = new ExcelJS.Workbook();
   addScoreboardSheet(book, "Review", `BÁO CÁO ${label} · REVIEW`, scoreNote, tables);
   addReachSummarySheet(book, `BÁO CÁO ${label} · TIẾP CẬN`, period, channels.filter((c) => !c.ads), "Tiếp cận");

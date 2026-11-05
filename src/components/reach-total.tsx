@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowDownToLine } from "lucide-react";
-import { fmtDate } from "@/lib/format-date";
-import { addDays, todayVN } from "@/lib/bluejay-metrics";
-import { REACH_MAX_DAYS, loadReachTotal, spanDays, type Block, type Cell, type ChannelTables } from "@/lib/reach-total";
-import { IsoDatePicker } from "@/components/date-picker";
+import type { Block, Cell, ChannelTables } from "@/lib/reach-total";
 import { ReachTable, type Col } from "@/components/reach-table";
-import { PageSkeleton } from "@/components/page-skeleton";
 
 const show = (label: string, x: number) => (/CTR|Tỷ lệ/i.test(label) ? `${(x * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%` : x.toLocaleString("vi-VN", { maximumFractionDigits: 2 }));
 
@@ -33,48 +27,4 @@ export function ReachChannels({ data }: { data: ChannelTables[] }) {
       </details>
     ))}
   </>;
-}
-
-/** Báo cáo tổng Tiếp cận: all seven channels for one date range on one page, and the same tables in one Excel file. */
-export function ReachTotal() {
-  const today = todayVN();
-  const [from, setFrom] = useState(`${today.slice(0, 8)}01`);
-  const [to, setTo] = useState(addDays(today, -1));
-  const [loaded, setLoaded] = useState<{ key: string; data: ChannelTables[] } | null>(null);
-  const key = `${from}|${to}`;
-  const data = loaded?.key === key ? loaded.data : null; // the tables of an older range are not shown while the new one loads
-  const invalid = !from || !to || from > to || spanDays(from, to) > REACH_MAX_DAYS;
-
-  useEffect(() => {
-    if (invalid) return;
-    let active = true;
-    void loadReachTotal(from, to).then((next) => { if (active) setLoaded({ key: `${from}|${to}`, data: next }); });
-    return () => { active = false; };
-  }, [from, to, invalid]);
-
-  async function exportExcel() {
-    if (!data) return;
-    const [m, q] = await Promise.all([import("@/lib/reach-total-excel"), import("@/lib/ql-excel")]);
-    await q.downloadQlWorkbook(`bao-cao-tong-tiep-can-${from}-${to}.xlsx`, m.reachTotalWorkbook("BÁO CÁO TỔNG TIẾP CẬN", `Kỳ: ${fmtDate(from)} – ${fmtDate(to)}`, data));
-  }
-
-  const readable = data?.some((c) => !c.error) ?? false;
-  return (
-    <section className="summary-report">
-      <div className="summary-hero">
-        <div>
-          <h1>Báo cáo tổng Tiếp cận</h1>
-          <p>Gộp Google Maps, Facebook, Instagram, Google Analytics, TikTok, Facebook Ads và Google Ads của một khoảng ngày, lấy từ số liệu đã lưu của từng kênh (không gọi lại nguồn). File Excel có sheet “Tổng hợp” và mỗi kênh một sheet theo ngày.</p>
-        </div>
-        <div className="summary-controls">
-          <IsoDatePicker label="Từ ngày" value={from} onChange={setFrom} />
-          <IsoDatePicker label="Đến ngày" value={to} onChange={setTo} />
-          <button type="button" disabled={!readable || invalid} onClick={() => void exportExcel()}><ArrowDownToLine size={15} />Xuất Excel</button>
-        </div>
-      </div>
-      {invalid && <p className="summary-note">Chọn khoảng ngày hợp lệ, tối đa {REACH_MAX_DAYS} ngày.</p>}
-      {!data && !invalid && <PageSkeleton label="Đang lấy số liệu các kênh…" />}
-      {data && !invalid && <ReachChannels data={data} />}
-    </section>
-  );
 }

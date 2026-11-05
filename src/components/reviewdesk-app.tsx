@@ -91,7 +91,6 @@ const PlaceNewReviews = dynamic(() => import("@/components/analytics-charts").th
 const PlaceReviewLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlaceReviewLines), { loading: chartLoading });
 const PlatformScoreLines = dynamic(() => import("@/components/analytics-charts").then((m) => m.PlatformScoreLines), { loading: chartLoading });
 const IsoDatePicker = dynamic(() => import("@/components/date-picker").then((m) => m.IsoDatePicker), { loading: () => null }); // brings react-day-picker and its css
-const SummaryReport = dynamic(() => import("@/components/summary-report").then((m) => m.SummaryReport), { loading: pageLoading });
 const BluejayReport = dynamic(() => import("@/components/bluejay-report").then((m) => m.BluejayReport), { loading: pageLoading });
 const BluejayReconcile = dynamic(() => import("@/components/bluejay-reconcile").then((m) => m.BluejayReconcile), { loading: pageLoading });
 const BluejayFinance = dynamic(() => import("@/components/bluejay-finance").then((m) => m.BluejayFinance), { loading: pageLoading });
@@ -109,8 +108,7 @@ const FacebookAds = dynamic(() => import("@/components/facebook-ads").then((m) =
 const GoogleAds = dynamic(() => import("@/components/google-ads").then((m) => m.GoogleAds), { loading: pageLoading });
 const GoogleAnalytics = dynamic(() => import("@/components/google-analytics").then((m) => m.GoogleAnalytics), { loading: pageLoading });
 const TiktokPage = dynamic(() => import("@/components/tiktok-page").then((m) => m.TiktokPage), { loading: pageLoading });
-const MonthReport = dynamic(() => import("@/components/month-report").then((m) => m.MonthReport), { loading: pageLoading });
-const ReachTotal = dynamic(() => import("@/components/reach-total").then((m) => m.ReachTotal), { loading: pageLoading });
+const MarketingReport = dynamic(() => import("@/components/marketing-report").then((m) => m.MarketingReport), { loading: pageLoading });
 const HrPage = dynamic(() => import("@/components/hr-page").then((m) => m.HrPage), { loading: pageLoading });
 const NhanSuPage = dynamic(() => import("@/components/nhan-su-page").then((m) => m.NhanSuPage), { loading: pageLoading });
 const AutomaticSyncSettings = dynamic(() => import("@/components/automatic-sync-settings").then((m) => m.AutomaticSyncSettings), { loading: pageLoading });
@@ -307,7 +305,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const isBluejayPage = pathname === "/bluejay" || isBluejayRevenuePage || isBluejayReconcilePage || isBluejayFinancePage || isBluejayDailyPage || isBluejayComparePage || isBluejayPnlPage || isBluejayQlPage || isBluejayStockPage || isBluejayDebtPage || isBluejayPaidPage; // cả hai báo cáo Blue Jay dùng chung khung và chọn khách sạn
   const [bluejayHotelId, setBluejayHotelId] = useState<number | null>(null); // null = whole chain
   const [navOpen, setNavOpen] = useState(false); // sidebar drawer on narrow screens
-  const pageGroup = isMonthPage ? "bao-cao-thang" : isHrPage || isNhanSuPage ? "nhan-su" : isReachPage ? "tiep-can" : isBluejayPage ? "van-hanh" : "review";
+  const pageGroup = isHrPage || isNhanSuPage ? "nhan-su" : isBluejayPage ? "van-hanh" : "marketing"; // Review, Tiếp cận and the monthly report are one menu group
   const [openGroup, setOpenGroup] = useState(pathname === "/" ? "van-hanh" : pageGroup); // sidebar accordion: one group open at a time; opening the app on Tổng quan shows Vận hành first
   const [groupPath, setGroupPath] = useState(pathname);
   if (groupPath !== pathname) { setGroupPath(pathname); setOpenGroup(pageGroup); } // moving to another page opens that page's group
@@ -332,7 +330,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const bluejayHotel = (isBluejayFinancePage || isBluejayStockPage || isBluejayQlPage ? BRANCHES : BLUEJAY_HOTELS).find((hotel) => hotel.id === bluejayHotelId) ?? null; // a unit with no hotel (VTDC) is chosen on Thu chi, Kho and Báo cáo quản lý only
   const isOverviewPage = !isReportDataPage && !isSettingsPage && !isDetailPage && !isSummaryPage && !isMonthPage && !isBluejayPage && !isReachPage && !isHrPage && !isNhanSuPage;
   const inDetailGroup = isDetailPage || isDailyAnalyticsPage || isReportPage || isTripadvisorRankPage;
-  const needsLiveMetrics = pathname === "/" || isDetailPage || isSummaryPage; // Tổng quan (bảng điểm) và Chi tiết cơ sở dùng số liệu mới nhất
+  const needsLiveMetrics = pathname === "/" || isDetailPage || isMonthPage; // Tổng quan (bảng điểm), Chi tiết cơ sở và phần Review của Báo cáo marketing dùng số liệu mới nhất
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
@@ -1829,24 +1827,22 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
             <Link className={`nav-link ${isNhanSuPage ? "active" : ""}`} href="/nhan-su" data-tip="Nhân sự"><Users size={17} /><span>Nhân sự</span></Link>
             <Link className={`nav-link ${isHrPage ? "active" : ""}`} href="/hr" data-tip="Tuyển dụng"><UserPlus size={17} /><span>Tuyển dụng</span></Link>
           </>)}
-          {!hrOnly && navGroup("review", "REVIEW", true, <>
+          {!hrOnly && navGroup("marketing", "MARKETING", true, <>
+            <span className="nav-subhead">Báo cáo</span>
+            <Link className={`nav-link ${isMonthPage ? "active" : ""}`} href="/month" data-tip="Báo cáo marketing"><FileBarChart size={17} /><span>Báo cáo marketing</span></Link>
+            <span className="nav-subhead">Đánh giá</span>
             <Link className={`nav-link ${isOverviewPage && activeSection === "overview" ? "active" : ""}`} href="/" data-tip="Tổng quan"><LayoutDashboard size={17} /><span>Tổng quan</span></Link>
-            <Link className={`nav-link ${isSummaryPage ? "active" : ""}`} href="/summary" data-tip="Báo cáo tổng hợp"><FileBarChart size={17} /><span>Báo cáo tổng hợp</span></Link>
             <Link className={`nav-link ${inDetailGroup ? "active" : ""}`} href="/detail" data-tip="Chi tiết cơ sở"><Building2 size={17} /><span>Chi tiết cơ sở</span></Link>
             <Link className={`nav-link ${isComparePage ? "active" : ""}`} href="/compare" data-tip="So sánh cơ sở"><TrendingUp size={17} /><span>So sánh cơ sở</span></Link>
-          </>)}
-          {!hrOnly && navGroup("tiep-can", "TIẾP CẬN", true, <>
-            <Link className={`nav-link ${isReachTotalPage ? "active" : ""}`} href="/reach" data-tip="Báo cáo tổng"><BarChart3 size={17} /><span>Báo cáo tổng</span></Link>
-            <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
+            <span className="nav-subhead">Kênh</span>
+            <Link className={`nav-link ${isGoogleProfilePage ? "active" : ""}`} href="/google-profile" data-tip="Google Maps (tiếp cận)"><SocialIcon platform="google-maps" size={17} /><span>Google Maps</span></Link>
             <Link className={`nav-link ${isFacebookPage ? "active" : ""}`} href="/facebook" data-tip="Facebook"><SocialIcon platform="facebook" size={17} /><span>Facebook</span></Link>
             <Link className={`nav-link ${isInstagramPage ? "active" : ""}`} href="/instagram" data-tip="Instagram"><SocialIcon platform="instagram" size={17} /><span>Instagram</span></Link>
             <Link className={`nav-link ${isGoogleAnalyticsPage ? "active" : ""}`} href="/google-analytics" data-tip="Google Analytics"><SocialIcon platform="google-analytics" size={17} /><span>Google Analytics</span></Link>
             <Link className={`nav-link ${isTiktokPage ? "active" : ""}`} href="/tiktok" data-tip="TikTok"><SocialIcon platform="tiktok" size={17} /><span>TikTok</span></Link>
+            <span className="nav-subhead">Quảng cáo</span>
             <Link className={`nav-link ${isFacebookAdsPage ? "active" : ""}`} href="/facebook-ads" data-tip="Facebook Ads"><SocialIcon platform="facebook-ads" size={17} /><span>Facebook Ads</span></Link>
             <Link className={`nav-link ${isGoogleAdsPage ? "active" : ""}`} href="/google-ads" data-tip="Google Ads"><SocialIcon platform="google-ads" size={17} /><span>Google Ads</span></Link>
-          </>)}
-          {!hrOnly && navGroup("bao-cao-thang", "BÁO CÁO THÁNG", true, <>
-            <Link className={`nav-link nav-text-only ${isMonthPage ? "active" : ""}`} href="/month" data-tip="Báo cáo marketing"><span>Báo cáo marketing</span></Link>
           </>)}
         </nav>
         <div className="sidebar-bottom">
@@ -1859,7 +1855,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
       <main className="main-area" id="overview">
         <header className={`dashboard-topbar ${isReachPage || isHrPage || isNhanSuPage || isMonthPage ? "topbar-hidden" : ""}`}>
           <button className="icon-button nav-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Menu size={20} /></button>
-          <div className="topbar-title"><span className="topbar-overline">{isMonthPage ? "BÁO CÁO THÁNG" : isNhanSuPage ? "NHÂN SỰ" : isHrPage ? "TUYỂN DỤNG" : isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ HĐKD" : isBluejayQlPage ? "BÁO CÁO QUẢN LÝ" : isBluejayComparePage ? "SO SÁNH KHÁCH SẠN" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isMonthPage ? "Tất cả loại hình" : isHrPage ? "Nhân sự & tuyển dụng" : isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isReachTotalPage ? "Báo cáo tổng" : isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
+          <div className="topbar-title"><span className="topbar-overline">{isMonthPage ? "BÁO CÁO MARKETING" : isNhanSuPage ? "NHÂN SỰ" : isHrPage ? "TUYỂN DỤNG" : isSummaryPage ? "BÁO CÁO TỔNG HỢP" : isReachPage ? "CHỈ SỐ TIẾP CẬN" : isBluejayPage ? (isBluejayPaidPage ? "ĐÃ THANH TOÁN" : isBluejayDebtPage ? "CÔNG NỢ OTA" : isBluejayReconcilePage ? "ĐỐI SOÁT BẢNG KÊ" : isBluejayFinancePage ? "THU CHI" : isBluejayPnlPage ? "KẾT QUẢ HĐKD" : isBluejayQlPage ? "BÁO CÁO QUẢN LÝ" : isBluejayComparePage ? "SO SÁNH KHÁCH SẠN" : isBluejayDailyPage ? "DOANH THU THEO NGÀY" : isBluejayStockPage ? "KHO" : isBluejayRevenuePage ? "DOANH THU & THANH TOÁN" : "VẬN HÀNH KHÁCH SẠN") : isComparePage ? "SO SÁNH CƠ SỞ" : isTripadvisorRankPage ? "XẾP HẠNG TRIPADVISOR" : isDailyAnalyticsPage ? "XU HƯỚNG THEO NGÀY" : isReportPage ? "BẢNG SỐ LIỆU THEO NGÀY" : isSettingsPage ? "CẤU HÌNH WORKSPACE" : isDetailPage ? "CHI TIẾT CƠ SỞ" : "TỔNG QUAN"}</span><strong>{isMonthPage ? "Tất cả loại hình" : isHrPage ? "Nhân sự & tuyển dụng" : isSummaryPage ? "Tất cả loại hình" : isReachPage ? (isReachTotalPage ? "Báo cáo tổng" : isTiktokPage ? "TikTok" : isFacebookAdsPage ? "Facebook Ads" : isInstagramPage ? "Instagram" : isFacebookPage ? "Facebook" : "Google Maps") : isBluejayPage ? bluejayHotel?.name ?? "Toàn chuỗi" : isComparePage ? `${comparisonLocations.length} cơ sở đang so sánh` : isSettingsPage ? "Cài đặt" : isOverviewPage ? `Tất cả ${filterTypeOptions.find(([type]) => type === selectedType)?.[1] ?? ""}` : allHotelsSelected ? "Tất cả khách sạn" : dashboardLocation?.name ?? "Chọn cơ sở"}</strong></div>
           {isBluejayPage && <label className="location-picker"><Building2 size={17} /><span>Khách sạn đang xem</span><select aria-label="Chọn khách sạn để xem báo cáo vận hành" value={bluejayHotel?.id ?? ""} onChange={(event) => setBluejayHotelId(event.target.value ? Number(event.target.value) : null)}><option value="">Toàn chuỗi</option>{(isBluejayFinancePage || isBluejayStockPage || isBluejayQlPage ? BRANCHES : BLUEJAY_HOTELS).map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}</select><ChevronDown size={15} /></label>}{!isSummaryPage && !isBluejayPage && <><label className="location-picker type-picker"><Store size={17} /><span>Loại hình</span><select aria-label="Chọn loại hình" value={selectedType} onChange={(event) => changeLocationType(event.target.value as LocationFilterType)}>{filterTypeOptions.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><ChevronDown size={15} /></label>{!isComparePage && !isOverviewPage && <label className="location-picker"><Building2 size={17} /><span>Cơ sở đang xem</span><select aria-label="Chọn cơ sở để xem báo cáo" value={allHotelsSelected ? "all-hotels" : dashboardLocation?.id ?? ""} onChange={(event) => setSelectedLocationId(event.target.value)}><option value="" disabled>{typeLocations.length ? "Chọn cơ sở" : "Chưa có cơ sở loại này"}</option>{isDailyAnalyticsPage && selectedType === "hotel" && hotelLocations.length > 0 && <option value="all-hotels">Tất cả khách sạn</option>}{typeLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><ChevronDown size={15} /></label>}</>}{(isSummaryPage || isReportPage || isDailyAnalyticsPage || isComparePage || isTripadvisorRankPage) && <><label className="location-picker range-picker"><CalendarDays size={17} /><span>Thời gian</span><select aria-label="Chọn khoảng thời gian" value={dailyReportRange} onChange={(event) => {
             const next = event.target.value as ReportRange;
             if (next === "custom" && !customValid(customRange)) { const today = reportDateInVietnam(); setCustomRange({ from: rangeWindow(dailyReportRange === "custom" || dailyReportRange === "all" ? "30" : dailyReportRange, customRange, today).start ?? today, to: today }); } // a typed range starts from the one on screen
@@ -1901,14 +1897,12 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isGoogleAdsPage && <GoogleAds />}
           {isGoogleAnalyticsPage && <GoogleAnalytics />}
           {isTiktokPage && <TiktokPage />}
-          {isReachTotalPage && <ReachTotal />}
-          {isMonthPage && <MonthReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
+          {isMonthPage && <MarketingReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
           {isHrPage && <HrPage />}
           {isNhanSuPage && <NhanSuPage canSync={!hrOnly} />}
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile key={bluejayHotel?.id ?? 0} scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayQlPage ? <BluejayQl scopeId={bluejayHotel?.id ?? null} /> : isBluejayComparePage ? <BluejayCompare /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 
-          {isSummaryPage && <SummaryReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} range={dailyReportRange} customRange={customRange} />}
 
           {isDetailPage && <>
           {detailTabs}

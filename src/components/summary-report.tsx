@@ -1,31 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import { useReactToPrint } from "react-to-print";
-import { AlertTriangle, CheckCircle2, FileBarChart, Printer } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { AreaTrend, Donut, PLATFORM_COLORS, TrackBars, num } from "@/components/dashboard-charts";
 import { ReachTable } from "@/components/reach-table";
 import { createClient } from "@/lib/supabase/client";
-import { fmtDate, fmtDateTime } from "@/lib/format-date";
+import { fmtDate } from "@/lib/format-date";
 import { PLATFORM_LABELS } from "@/lib/platforms";
-import { customValid, type CustomRange, type ReportRange } from "@/lib/report-range";
 import { SUMMARY_SCALE, buildTrend, summarizeLocation, summarizeType, type LocationSummary, type Snapshot } from "@/lib/summary";
 import type { LocationRecord, Platform } from "@/lib/types";
 
 export type SummarySection = { type: string; label: string; color: string; platforms: Platform[]; locations: LocationRecord[] };
 
-const DAY = 86_400_000;
 const GOOD = 9; // từ 9/10 trở lên: xuất sắc
 const WATCH = 8; // dưới 8/10: cần chú ý
 
-const vnToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
-const daysBefore = (date: string, days: number) => new Date(new Date(`${date}T00:00:00Z`).getTime() - days * DAY).toISOString().slice(0, 10);
 const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toLocaleString("vi-VN")}`;
 const count = (value: number) => value.toLocaleString("vi-VN");
 const level = (score: number) => (score >= GOOD ? { text: "Xuất sắc", cls: "good" } : score >= WATCH ? { text: "Tốt", cls: "ok" } : { text: "Cần chú ý", cls: "bad" });
-
-const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
 
 async function fetchSnapshots(ids: string[], from: string, to: string): Promise<Snapshot[]> {
   const db = createClient();
@@ -54,32 +46,15 @@ function ChartCard({ title, unit, wide, children }: { title: string; unit?: stri
   return <article className={`summary-chart ${wide ? "wide" : ""}`}><h4>{title}{unit && <small>{unit}</small>}</h4>{children}</article>;
 }
 
-/** range / customRange: the "Thời gian" choice of the app's header. */
-export function SummaryReport({ sections, userId, range, customRange }: { sections: SummarySection[]; userId: string | null; range: ReportRange; customRange: CustomRange }) {
-  // In qua react-to-print: chỉ báo cáo được đưa vào khung in riêng (không kéo theo thanh bên, vùng cuộn của app).
-  // Biểu đồ là SVG chụp theo bề rộng lúc in, nên trước đó đặt bề rộng cố định vừa trang và tắt hiệu ứng vẽ dần.
-  const [printing, setPrinting] = useState(false);
+/** The Review part of Báo cáo marketing (marketing-report.tsx) for from..to: KPIs, highlights, charts and the table of each type of place.
+ *  Scores and totals are the latest figures; "mới trong kỳ" and the trend come from the finalized reports of the period. printing: charts at a fixed width for the PDF. */
+export function SummaryReport({ sections, userId, from, to, printing = false }: { sections: SummarySection[]; userId: string | null; from: string; to: string; printing?: boolean }) {
   const chartWidth = printing ? 640 : "100%";
-  const reportRef = useRef<HTMLDivElement>(null);
-  const print = useReactToPrint({
-    contentRef: reportRef,
-    documentTitle: "bao-cao-tong-hop-danh-gia",
-    pageStyle: "@page { size: A4; margin: 12mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
-    onBeforePrint: async () => {
-      flushSync(() => setPrinting(true));
-      await new Promise((resolve) => setTimeout(resolve, 300)); // chờ biểu đồ vẽ lại ở bề rộng mới
-    },
-    onAfterPrint: () => setPrinting(false),
-  });
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const idsKey = useMemo(() => sections.flatMap((section) => section.locations.map((location) => location.id)).sort().join(","), [sections]);
-  const today = vnToday();
-  const custom = range === "custom", allTime = range === "all";
-  const from = custom ? customRange.from : allTime ? "2000-01-01" : daysBefore(today, Number(range)); // N days back: the day before the first counted day is the baseline of "mới trong kỳ"
-  const to = custom ? customRange.to : today;
-  const invalid = custom && !customValid(customRange); // only a typed range can be wrong
-  const periodText = custom ? `${fmtDate(from)} – ${fmtDate(to)}` : allTime ? "toàn bộ dữ liệu" : `${range} ngày qua`;
+  const invalid = !from || !to || from > to;
+  const periodText = `${fmtDate(from)} – ${fmtDate(to)}`;
 
   useEffect(() => {
     if (!userId || !idsKey || invalid) return;
@@ -107,24 +82,11 @@ export function SummaryReport({ sections, userId, range, customRange }: { sectio
   const overallReviews = data.reduce((sum, item) => sum + item.summary.totalReviews, 0);
   const overallGained = data.reduce((sum, item) => sum + item.trend.gained, 0);
   const hasHistory = snapshots.length > 0;
-  const latestCapture = sections.flatMap((section) => section.locations.flatMap((location) => section.platforms.map((platform) => location[platform]?.capturedAt ?? null))).reduce<string | null>((max, at) => (at && (!max || at > max) ? at : max), null);
 
   const byType = data.filter((item) => item.summary.count > 0);
   const watchList = all.filter((row) => row.score != null && row.score < WATCH).sort((a, b) => a.score! - b.score!);
 
-  return <div className="summary-report" ref={reportRef}>
-    <header className="summary-hero">
-      <div>
-        <div className="section-kicker"><FileBarChart size={14} /> BÁO CÁO TỔNG HỢP</div>
-        <h1>Báo cáo tổng hợp đánh giá</h1>
-        <p>Kỳ báo cáo: <strong>{allTime ? "Toàn bộ dữ liệu" : `${fmtDate(from)} – ${fmtDate(to)}`}</strong>{!allTime && ` (${daysBetween(from, to)} ngày)`} · Số liệu mới nhất: <strong>{latestCapture ? fmtDateTime(latestCapture) : "chưa có"}</strong></p>
-      </div>
-      <div className="summary-controls summary-no-print">
-        <button type="button" onClick={() => void print()}><Printer size={15} /> In / Lưu PDF</button>
-      </div>
-    </header>
-
-    {invalid && <p className="summary-note bad summary-no-print" role="alert">Chọn khoảng ngày hợp lệ ở “Thời gian” (từ ngày không sau đến ngày).</p>}
+  return <div className="summary-review">
     {status === "error" && !invalid && <p className="summary-note bad" role="alert">Không tải được lịch sử đánh giá nên các số “mới trong kỳ” và biểu đồ diễn biến tạm thời không có.</p>}
     {status === "ready" && !invalid && !hasHistory && <p className="summary-note">Chưa có số liệu đã chốt trong kỳ này nên chưa tính được đánh giá mới và diễn biến.</p>}
 

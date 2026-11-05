@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
-import { monthRange, monthScoreRow, toExcelRow, type DayReport } from "./month-report.ts";
+import { monthRange, monthScoreRow, rangeOf, toExcelRow, type DayReport } from "./month-report.ts";
 import { monthWorkbook } from "./month-report-excel.ts";
 import type { ChannelTables } from "./reach-total.ts";
 import type { LocationRecord } from "./types.ts";
@@ -55,4 +55,10 @@ test("the monthly workbook has three sheets: Review (a score table per type), Ti
   const back = new ExcelJS.Workbook();
   await back.xlsx.load((await book.xlsx.writeBuffer()) as unknown as ArrayBuffer);
   assert.equal(back.worksheets.length, 3);
+});
+
+test("any date range: the change is against the report of its first day, the 31 days before only as the fallback", () => {
+  const range = rangeOf("2026-10-10", "2026-10-20");
+  assert.deepEqual(range, { from: "2026-10-10", to: "2026-10-20", length: 11, prevStart: "2026-09-09", prevEnd: "2026-10-09" });
+  assert.equal(rangeOf("2026-10-20", "2026-10-10").length, 0);
 });

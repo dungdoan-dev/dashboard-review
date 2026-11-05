@@ -20,6 +20,11 @@ export function monthRange(month: string, today: string) {
   return { from, to, length: to >= from ? Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1 : 0, prevStart: `${prevEnd.slice(0, 8)}01`, prevEnd };
 }
 
+/** Any date range, same shape as monthRange: the change is against the report of `from` (the last one in the 31 days before it, when that day has none). */
+export function rangeOf(from: string, to: string) {
+  return { from, to, length: to >= from ? Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1 : 0, prevStart: shift(from, -31), prevEnd: shift(from, -1) };
+}
+
 const lastUpTo = (rows: DayReport[], limit: string) => rows.filter((r) => r.date <= limit).reduce<DayReport | null>((best, r) => (!best || r.date > best.date ? r : best), null);
 
 /** One place of the month table. `reports`: that place's daily reports from the start of the month before to the end of this month (the month before is only the fallback for a base day without a report). */
