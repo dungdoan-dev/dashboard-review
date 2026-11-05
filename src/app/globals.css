@@ -929,6 +929,8 @@ tbody tr:hover { background: #fcfcfd; }
 .chart-keys i, .chart-tip i { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
 .chart-tip { display: grid; gap: 4px; min-width: 180px; padding: 10px 12px; border: 1px solid #e5dff0; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #2a1b4518; color: #47474f; font-size: 13px; }
 .chart-tip > strong { margin-bottom: 2px; }
+.chart-key-icon { display: inline-grid; width: 14px; height: 14px; flex: 0 0 auto; place-items: center; }
+.chart-key-icon img, .chart-key-icon svg { width: 100%; height: 100%; object-fit: contain; }
 .chart-tip > div { display: flex; align-items: center; gap: 8px; }
 .chart-tip b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
 .chart-tip-total { margin-top: 2px; padding-top: 6px; border-top: 1px solid #f0edf6; }

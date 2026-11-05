@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { fmtDate } from "@/lib/format-date";
 import type { Platform } from "@/lib/types";
 import { placeColors } from "@/components/dashboard-charts";
+import { PlatformBrandLogo } from "@/components/platform-brand-logo";
 import { Keys, Stacked, Tip, type Series, type TipProps } from "@/components/bluejay-revenue-charts";
 
 // The report pages' recharts blocks, kept out of the main bundle: reviewdesk-app loads this file only when a report is open.
@@ -64,5 +65,5 @@ export function PlaceReviewLines({ rows, locations, all = locations }: { rows: R
 
 /** Star score per day, one line per platform. */
 export function PlatformScoreLines({ data, domain, scale, platforms, colors, labels }: { data: Rows; domain: { min: number; max: number }; scale: number; platforms: Platform[]; colors: Record<Platform, string>; labels: Record<Platform, string>; days?: number }) {
-  return <Lines rows={data} series={platforms.map((p) => ({ key: p, name: labels[p], color: colors[p] }))} fmt={(v) => `${score(v)} / ${scale}`} axis={score} domain={[domain.min, domain.max]} label="Diễn biến điểm sao" />;
+  return <Lines rows={data} series={platforms.map((p) => ({ key: p, name: labels[p], color: colors[p], icon: <PlatformBrandLogo platform={p} /> }))} fmt={(v) => `${score(v)} / ${scale}`} axis={score} domain={[domain.min, domain.max]} label="Diễn biến điểm sao" />;
 }

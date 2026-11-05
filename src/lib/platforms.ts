@@ -42,10 +42,12 @@ export function getPlatformUrl(
   return value[PLATFORM_URL_FIELDS[platform]] ?? "";
 }
 
-/** One colour per platform on every page, the validated chart palette (PALETTE in dashboard-charts.tsx) in its order: google … traveloka are slots 1 to 7; the F&B set google, tripadvisor, grabfood, shopeefood takes slots 1 to 4. Not the brand colours: Google, Booking and Traveloka are all blue. */
+/** Each platform's own colour on every report, so a reader knows the platform by its colour. Sampled from the official logos in public/platforms
+ *  (Google: the blue of the Maps pin; Agoda, whose logo is five dots: its purple dot, the one no other platform uses). Google, Trip.com and Traveloka are all
+ *  blues, so the chart legends and hover cards also show the logo next to the name (PlatformBrandLogo). */
 export const PLATFORM_COLORS: Record<Platform, string> = {
-  google: "#2a78d6", tripadvisor: "#eb6834", agoda: "#1baf7a", booking: "#eda100", expedia: "#e87ba4", tripcom: "#008300", traveloka: "#6250d6",
-  grabfood: "#1baf7a", shopeefood: "#eda100",
+  google: "#4285f4", tripadvisor: "#34e0a1", agoda: "#a3499b", booking: "#0c3b7c", expedia: "#fddb32", tripcom: "#2681ff", traveloka: "#1ba0e2",
+  grabfood: "#00b14f", shopeefood: "#ee4d2d",
 };
 
 export const PLATFORM_LABELS: Record<Platform, string> = {

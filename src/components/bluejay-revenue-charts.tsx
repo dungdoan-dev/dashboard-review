@@ -14,12 +14,12 @@ export const compact = (v: number) => (v >= 1e9 ? `${+(v / 1e9).toFixed(1)} tỷ
 type Channel = { name: string; room: number; service: number; payment: number; balance: number };
 type Day = { date: string; room: number; service: number };
 export const CHANNEL_ORDER = [...OTA_CHANNELS, "Khách lẻ"]; // a channel keeps its colour whatever its rank
-export type Series = { key: string; name: string; color: string };
+export type Series = { key: string; name: string; color: string; icon?: React.ReactNode }; // icon: e.g. the platform logo, shown beside the swatch
 
 /** The legend: one swatch per series, in the series' order (the stack's order), text in text colour. Only for two series or more: a single series is named by the card title. */
 export function Keys({ series }: { series: Series[] }) {
   if (series.length < 2) return null;
-  return <ul className="chart-keys">{series.map((s) => <li key={s.key}><i style={{ background: s.color }} aria-hidden="true" />{s.name}</li>)}</ul>;
+  return <ul className="chart-keys">{series.map((s) => <li key={s.key}><i style={{ background: s.color }} aria-hidden="true" />{s.icon && <span className="chart-key-icon">{s.icon}</span>}{s.name}</li>)}</ul>;
 }
 
 export type TipProps = { active?: boolean; label?: unknown; payload?: readonly { payload?: Record<string, unknown> }[] };
@@ -31,7 +31,7 @@ export function Tip({ active, label, payload, series, fmt, total }: TipProps & {
   const sum = values.reduce((t, x) => t + (typeof x.v === "number" ? x.v : 0), 0);
   return <div className="chart-tip">
     <strong>{String(label ?? row.x ?? "")}</strong>
-    {values.map((x) => <div key={x.key}><i style={{ background: x.color }} aria-hidden="true" /><span>{x.name}</span><b>{typeof x.v === "number" ? fmt(x.v) : "Chưa có số liệu"}</b></div>)}
+    {values.map((x) => <div key={x.key}><i style={{ background: x.color }} aria-hidden="true" />{x.icon && <span className="chart-key-icon">{x.icon}</span>}<span>{x.name}</span><b>{typeof x.v === "number" ? fmt(x.v) : "Chưa có số liệu"}</b></div>)}
     {total && series.length > 1 && <div className="chart-tip-total"><span>Tổng</span><b>{fmt(sum)}</b></div>}
   </div>;
 }
