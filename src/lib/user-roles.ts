@@ -1,8 +1,8 @@
 // Roles an admin can give in Cài đặt → Phân quyền (stored in app_metadata.role, read by src/lib/admin.ts).
 export const ROLES = [
   { value: "admin", label: "Admin", note: "Dùng được mọi chức năng và vào Cài đặt." },
-  { value: "hr", label: "Nhân sự", note: "Trang Nhân sự (chỉ xem) và Tuyển dụng (xem, sửa)." },
-  { value: "mkt", label: "Marketing", note: "Review và Tiếp cận, chỉ xem." },
+  { value: "hr", label: "Hành chính nhân sự", note: "Toàn quyền nhóm Hành chính nhân sự: Hồ sơ nhân sự (cả đồng bộ), Tuyển dụng, Tài sản." },
+  { value: "mkt", label: "Marketing", note: "Toàn quyền nhóm Marketing: báo cáo, đánh giá (thêm cơ sở, cập nhật, nhập báo cáo), kênh, quảng cáo (cập nhật số liệu)." },
 ] as const;
 export type Role = (typeof ROLES)[number]["value"];
 export const isRole = (v: unknown): v is Role => ROLES.some((r) => r.value === v);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceDb } from "@/lib/bluejay";
-import { bluejayViewer, reachViewer } from "@/lib/bluejay-auth";
+import { reachViewer } from "@/lib/bluejay-auth";
 import { addDays, isDate, todayVN } from "@/lib/bluejay-metrics";
 import { SYNC_DAYS, syncSocial, type Source } from "@/lib/social-store";
 
@@ -22,7 +22,7 @@ export function socialRoute(source: Source, maxDays: number, read: (db: Supabase
       }
     },
     async POST() {
-      const denied = await bluejayViewer();
+      const denied = await reachViewer();
       if (denied) return fail(denied.message, denied.status);
       try {
         const today = todayVN();

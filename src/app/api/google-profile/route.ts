@@ -1,5 +1,5 @@
 import { serviceDb } from "@/lib/bluejay";
-import { bluejayViewer, reachViewer } from "@/lib/bluejay-auth";
+import { reachViewer } from "@/lib/bluejay-auth";
 import { addDays, isDate, todayVN } from "@/lib/bluejay-metrics";
 import { MAX_DAYS, readGoogleProfile, syncGoogleProfile } from "@/lib/google-profile";
 
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
 // "Cập nhật" button: re-pull the last 35 days from Windsor.
 export async function POST() {
-  const denied = await bluejayViewer();
+  const denied = await reachViewer();
   if (denied) return Response.json({ message: denied.message }, { status: denied.status });
   try {
     const today = todayVN();

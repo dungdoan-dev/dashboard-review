@@ -333,8 +333,8 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   const needsPlatformLinks = needsLiveMetrics || isSettingsPage;
   const [locations, setLocations] = useState<LocationRecord[]>(() => supabaseConfigured ? [] : demoLocations);
   const [user, setUser] = useState<User | null>(null);
-  const hrOnly = isHr(user); // hr account: only Nhân sự (read-only) and Tuyển dụng
-  const mktOnly = isMkt(user); // mkt account: only Review and Tiếp cận, read-only
+  const hrOnly = isHr(user); // hr account: only the Hành chính nhân sự pages, every action on them
+  const mktOnly = isMkt(user); // mkt account: only the Marketing pages, every action on them
   /** A sidebar heading that folds its links with a short slide; opening one closes the others.
    *  An account that sees one group only gets its links without the fold. Shrunk to icons, a group is one icon: hovering, focusing or clicking it shows its links beside it. */
   const navGroup = (id: string, label: string, spaced: boolean, links: ReactNode, icon: ReactNode) => {
@@ -1821,7 +1821,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
   }
 
   return (
-    <div className={`app-shell ${collapsed ? "collapsed" : ""} ${mktOnly ? "read-only" : ""}`} onClick={navigateWithinDashboard}>
+    <div className={`app-shell ${collapsed ? "collapsed" : ""}`} onClick={navigateWithinDashboard}>
       {navOpen && <button className="sidebar-backdrop" type="button" aria-label="Đóng menu" onClick={() => setNavOpen(false)} />}
       <aside className={`sidebar ${navOpen ? "open" : ""}`} id="sidebar" onMouseOver={(event) => showTip(event.target)} onFocus={(event) => showTip(event.target)} onMouseLeave={() => setTip(null)} onBlur={() => setTip(null)} onScroll={() => setTip(null)} onClick={(event) => { if ((event.target as HTMLElement).closest("a, button")) setNavOpen(false); }} onKeyDown={(event) => { if (event.key === "Escape") setNavOpen(false); }}>
         <div className="brand-row">
@@ -1924,7 +1924,7 @@ export function ReviewdeskApp({ supabaseConfigured }: { supabaseConfigured: bool
           {isMonthPage && <MarketingReport sections={summarySections} userId={supabaseConfigured ? user?.id ?? null : null} />}
           {isHrPage && <HrPage />}
           {isAssetPage && <AssetPage />}
-          {isNhanSuPage && <NhanSuPage canSync={!hrOnly} />}
+          {isNhanSuPage && <NhanSuPage canSync />}
           {(isBluejayRevenuePage || isBluejayPaidPage || isBluejayDebtPage) && <div className="range-presets" role="group" aria-label="Doanh thu và thanh toán" style={{ marginLeft: 0, marginBottom: 12 }}>{([["/bluejay-revenue", "Doanh thu"], ["/bluejay-paid", "Đã thanh toán theo kênh"], ["/bluejay-debt", "Công nợ OTA"]] as const).map(([href, label]) => <button type="button" key={href} aria-pressed={pathname === href} onClick={() => router.push(href)}>{label}</button>)}</div>}
           {isBluejayPage && (isBluejayPaidPage ? <BluejayPaid scopeId={bluejayHotel?.id ?? null} /> : isBluejayDebtPage ? <BluejayDebt scopeId={bluejayHotel?.id ?? null} /> : isBluejayReconcilePage ? <BluejayReconcile key={bluejayHotel?.id ?? 0} scopeId={bluejayHotel?.id ?? null} /> : isBluejayFinancePage ? <BluejayFinance scopeId={bluejayHotel?.id ?? null} /> : isBluejayPnlPage ? <BluejayPnl scopeId={bluejayHotel?.id ?? null} /> : isBluejayQlPage ? <BluejayQl scopeId={bluejayHotel?.id ?? null} /> : isBluejayComparePage ? <BluejayCompare /> : isBluejayDailyPage ? <BluejayDaily scopeId={bluejayHotel?.id ?? null} /> : isBluejayStockPage ? <BluejayStock scopeId={bluejayHotel?.id ?? null} /> : <BluejayReport key={pathname} scopeId={bluejayHotel?.id ?? null} view={isBluejayRevenuePage ? "revenue" : "operations"} />)}
 

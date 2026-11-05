@@ -7,13 +7,17 @@ export const isMkt = (user: Who) => user?.app_metadata?.role === "mkt";
 /** May sign in at all. */
 export const canUse = (user: Who) => isAdmin(user) || isHr(user) || isMkt(user);
 
-/** The Tiếp cận pages' APIs: a mkt account may read them (GET), never pull (POST). */
+/** The Kênh and Quảng cáo pages' APIs. */
 export const REACH_APIS = ["/api/facebook", "/api/instagram", "/api/tiktok", "/api/facebook-ads", "/api/google-ads", "/api/google-analytics", "/api/google-profile"];
+/** The review refresh of the Đánh giá pages. */
+export const CRAWL_APIS = ["/api/crawl", "/api/crawl/bulk"];
+/** The APIs of the Hành chính nhân sự pages. */
+export const HR_APIS = ["/api/nhan-su", "/api/hr", "/api/assets"];
 
-/** What an account may call under /api: admin everything, hr the staff list (read) and recruitment, mkt the reach figures (read). */
+/** What an account may call under /api: admin everything; hr every API of the Hành chính nhân sự pages, mkt every API of the Marketing pages (read and write). */
 export function apiAllowed(user: Who, method: string, path: string) {
   if (isAdmin(user)) return true;
-  if (isHr(user)) return path === "/api/hr" || path === "/api/assets" || (path === "/api/nhan-su" && method === "GET");
-  if (isMkt(user)) return method === "GET" && REACH_APIS.includes(path);
+  if (isHr(user)) return HR_APIS.includes(path);
+  if (isMkt(user)) return REACH_APIS.includes(path) || CRAWL_APIS.includes(path);
   return false;
 }

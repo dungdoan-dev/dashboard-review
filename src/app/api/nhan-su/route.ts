@@ -1,5 +1,5 @@
 import { serviceDb } from "@/lib/bluejay";
-import { bluejayViewer, hrViewer } from "@/lib/bluejay-auth";
+import { hrViewer } from "@/lib/bluejay-auth";
 import { readHr, syncHr } from "@/lib/hr-sync";
 
 export const maxDuration = 60;
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const denied = await bluejayViewer();
+  const denied = await hrViewer();
   if (denied) return fail(denied.message, denied.status);
   try {
     return Response.json(await syncHr(serviceDb()));

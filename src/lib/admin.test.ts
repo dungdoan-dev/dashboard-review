@@ -10,19 +10,24 @@ test("admin may call everything; an unknown or missing role nothing", () => {
   assert.equal(apiAllowed(null, "GET", "/api/facebook"), false);
 });
 
-test("hr: the staff list is read-only, recruitment is read and write, nothing else", () => {
+test("hr: every Hành chính nhân sự API, read and write, nothing else", () => {
   assert.equal(apiAllowed(as("hr"), "GET", "/api/nhan-su"), true);
-  assert.equal(apiAllowed(as("hr"), "POST", "/api/nhan-su"), false);
+  assert.equal(apiAllowed(as("hr"), "POST", "/api/nhan-su"), true);
+  assert.equal(apiAllowed(as("hr"), "POST", "/api/crawl"), false);
+  assert.equal(apiAllowed(as("hr"), "GET", "/api/users"), false);
   assert.equal(apiAllowed(as("hr"), "POST", "/api/hr"), true);
   assert.equal(apiAllowed(as("hr"), "POST", "/api/assets"), true);
   assert.equal(apiAllowed(as("mkt"), "GET", "/api/assets"), false);
   assert.equal(apiAllowed(as("hr"), "GET", "/api/facebook"), false);
 });
 
-test("mkt: reach figures can be read, never pulled; no HR and no Blue Jay", () => {
+test("mkt: every Marketing API, read and write; no HR, no Blue Jay, no settings", () => {
   assert.equal(apiAllowed(as("mkt"), "GET", "/api/google-analytics"), true);
-  assert.equal(apiAllowed(as("mkt"), "POST", "/api/google-analytics"), false);
+  assert.equal(apiAllowed(as("mkt"), "POST", "/api/google-analytics"), true);
+  assert.equal(apiAllowed(as("mkt"), "POST", "/api/crawl/bulk"), true);
+  assert.equal(apiAllowed(as("mkt"), "PUT", "/api/app-secrets"), false);
+  assert.equal(apiAllowed(as("mkt"), "GET", "/api/users"), false);
   assert.equal(apiAllowed(as("mkt"), "GET", "/api/nhan-su"), false);
   assert.equal(apiAllowed(as("mkt"), "GET", "/api/bluejay"), false);
-  assert.equal(apiAllowed(as("mkt"), "POST", "/api/crawl"), false);
+  assert.equal(apiAllowed(as("mkt"), "POST", "/api/crawl"), true);
 });

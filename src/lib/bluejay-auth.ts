@@ -10,7 +10,7 @@ export async function hrViewer() {
   return null;
 }
 
-/** Admin or mkt: the reach figures (Tiếp cận) may be read by a mkt account; pulling new figures stays bluejayViewer (admin). */
+/** Admin or mkt: the Marketing pages, reading and pulling the reach and ads figures. */
 export async function reachViewer() {
   const { data } = await (await createClient()).auth.getUser();
   if (!data.user) return { status: 401, message: "Chưa đăng nhập." } as const;

@@ -1440,8 +1440,6 @@ select { cursor: pointer; }
 .reach-table.ruled th, .reach-table.ruled td { height: auto; border-right: 1px solid #c5c5c9; border-bottom: 1px solid #c5c5c9; } /* the global td is 67px high */
 .reach-table.ruled thead th { padding: 9px 10px; background: #e7e7e9; color: #3c3c42; text-align: center; vertical-align: middle; }
 
-/* A read-only account (role mkt, class on .app-shell): the buttons that write are hidden; the server and the database refuse them anyway. */
-.read-only [data-write], .read-only .dashboard-add-location, .read-only .report-dashboard-actions, .read-only .platform-table-actions, .read-only .report-import-trigger, .read-only .manual-import-bar { display: none; }
 
 /* Cài đặt → Phân quyền */
 .role-legend { display: grid; gap: 4px; margin: 0 0 16px; padding: 0; list-style: none; color: #6d6d78; font-size: 13px; }
