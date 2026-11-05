@@ -57,7 +57,7 @@ export function BluejayPnl({ scopeId }: { scopeId: number | null }) {
       for (const x of d) for (const [g, v] of Object.entries(x.services)) sold[g] = (sold[g] ?? 0) + v;
       const services = onCheckout(sold, d.reduce((s, x) => s + x.checkoutService, 0)); // service money of the stays that check out in the month, over the groups in the proportion sold
       const slept = stays?.days.some(Boolean) ? stays.days.reduce((s, x) => s + (x?.occupied ?? 0), 0) : undefined; // nights slept, from the occupancy report: occupancy is by night, not by check-out
-      return [m, { rooms: slept ?? d.reduce((s, x) => s + x.rooms, 0), room: stays ? roomByCheckout(stays) : Math.round(d.reduce((s, x) => s + x.room, 0)), services }];
+      return [m, { rooms: slept ?? d.reduce((s, x) => s + x.rooms, 0), room: stays ? roomByCheckout(stays) + d.reduce((s, x) => s + x.upgrade, 0) : Math.round(d.reduce((s, x) => s + x.room, 0)), services }];
     })).then((entries) => { if (active) setDaily(Object.fromEntries(entries)); });
     return () => { active = false; };
   }, [scopeId, year, list]);

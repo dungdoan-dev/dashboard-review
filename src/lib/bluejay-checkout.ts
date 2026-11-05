@@ -3,7 +3,7 @@
 // M-Standard and Unassigned rooms are left out of the totals, as in every other report, and kept apart in "excluded".
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
-import { latestStays, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
+import { latestStays, upgradeTotal, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 
 export type CheckoutDay = {
   date: string;
@@ -48,9 +48,15 @@ export function checkoutRevenue(revenues: RevenueWeek[], from: string, to: strin
   const hotels = [...names].map(([id, name]): CheckoutHotel => {
     const weeks = revenues.flatMap((week) => { const hotel = week.hotels.find((h) => h.id === id); return hotel ? [{ week, hotel }] : []; });
     const stays = byCheckout(weeks, (h) => h.bookings, from, to), excluded = byCheckout(weeks, (h) => h.excluded ?? [], from, to);
+    const upgrades = new Map<string, { at: string; total: number }>(); // room upgrades (nâng hạng phòng) by the day sold, latest pull per day: room money for the finance team, as on the revenue page
+    for (const { week, hotel } of weeks) for (const d of hotel.services) {
+      const at = week.paymentsAt ?? week.fetchedAt, seen = upgrades.get(d.date);
+      if (d.date >= from && d.date <= to && (!seen || at > seen.at)) upgrades.set(d.date, { at, total: upgradeTotal([d]) });
+    }
     const days = dates.map((date): CheckoutDay => {
       const r = stays.get(date) ?? { nights: 0, room: 0, service: 0 }, x = excluded.get(date) ?? { nights: 0, room: 0, service: 0 };
-      return { date, rooms: r.nights, room: r.room, service: r.service, total: r.room + r.service, excludedRooms: x.nights, excludedRoom: x.room, excludedService: x.service };
+      const up = upgrades.get(date)?.total ?? 0;
+      return { date, rooms: r.nights, room: r.room + up, service: r.service - up, total: r.room + r.service, excludedRooms: x.nights, excludedRoom: x.room, excludedService: x.service };
     });
     return { id, name, days };
   });

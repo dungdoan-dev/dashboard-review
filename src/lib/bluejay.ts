@@ -183,8 +183,8 @@ export async function readDailyRevenue(db: SupabaseClient, from: string, to: str
   const { data, error } = await db.from("bluejay_revenue_weeks").select("revenue").gte("week_start", mondayOf(from)).lte("week_start", basis !== "stay" ? mondayOf(to) : addDays(mondayOf(to), 35));
   if (error) throw new Error(error.message);
   const weeks = (data ?? []).map((r) => r.revenue as RevenueWeek).filter((r) => r?.v === REVENUE_VERSION);
-  if (basis === "checkout") return checkoutRevenue(weeks, from, to);
-  return dailyRevenue(weeks, from, to, basis === "lines");
+  const result = basis === "checkout" ? checkoutRevenue(weeks, from, to) : dailyRevenue(weeks, from, to, basis === "lines");
+  return { ...result, missingWeeks: result.missingWeeks.filter((m) => m <= todayVN()) }; // a week that has not started yet cannot be stored: not missing
 }
 
 /**

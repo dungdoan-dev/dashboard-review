@@ -3,7 +3,7 @@
 // Service money: the stored daily totals by service group. M-Standard and Unassigned rooms are left out of the totals, as in every other report, and kept apart in "excluded".
 // Imports use ".ts" because tests run this with plain Node.
 import { addDays, mondayOf } from "./bluejay-metrics.ts";
-import { latestStays, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
+import { latestStays, upgradeTotal, type HotelRevenue, type RevenueBooking, type RevenueWeek } from "./bluejay-revenue.ts";
 import { otaSplit } from "./ota-commission.ts";
 
 export type DailyDay = {
@@ -16,6 +16,7 @@ export type DailyDay = {
   service: number;
   total: number;                      // room + service
   excludedRooms: number; excludedRoom: number; // M-Standard / Unassigned nights and their room money: not in the totals
+  upgrade: number;                    // room upgrades (nâng hạng phòng) sold this day: room money for the finance team, so already in room and roomGross and out of services
   checkoutService: number;            // service money of the stays that check out this day (only filled with checkout, else 0)
 };
 export type DailyHotel = { id: number; name: string; days: DailyDay[] };
@@ -61,19 +62,19 @@ export function dailyRevenue(revenues: RevenueWeek[], from: string, to: string, 
   const hotels = [...names].map(([id, name]): DailyHotel => {
     const weeks = revenues.flatMap((week) => { const hotel = week.hotels.find((h) => h.id === id); return hotel ? [{ week, hotel }] : []; });
     const rooms = roomByDay(id, weeks, (h) => h.bookings, from, to, checkout), excluded = roomByDay(id, weeks, (h) => h.excluded ?? [], from, to, checkout);
-    const serviceOf = new Map<string, { at: string; groups: Record<string, number> }>(); // a day is stored once per week; if two weeks hold it, the latest pull wins
+    const serviceOf = new Map<string, { at: string; groups: Record<string, number>; upgrade: number }>(); // a day is stored once per week; if two weeks hold it, the latest pull wins
     for (const { week, hotel } of weeks) for (const d of hotel.services) {
       if (d.date < from || d.date > to) continue;
       const at = week.paymentsAt ?? week.fetchedAt;
       if (serviceOf.has(d.date) && serviceOf.get(d.date)!.at >= at) continue;
-      serviceOf.set(d.date, { at, groups: Object.fromEntries(d.groups.map((g) => [g.name, g.total])) });
+      serviceOf.set(d.date, { at, groups: Object.fromEntries(d.groups.map((g) => [g.name, g.total - upgradeTotal([{ ...d, groups: [g] }])])), upgrade: upgradeTotal([d]) });
     }
     const days = dates.map((date): DailyDay => {
       const r = rooms.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0, service: 0 }, x = excluded.get(date) ?? { nights: 0, money: 0, gross: 0, commission: 0, service: 0 };
-      const services = serviceOf.get(date)?.groups ?? {};
+      const services = serviceOf.get(date)?.groups ?? {}, up = serviceOf.get(date)?.upgrade ?? 0; // upgrades by the day sold, as the revenue page
       const service = Object.values(services).reduce((s, v) => s + v, 0);
       for (const [g, v] of Object.entries(services)) groupTotal.set(g, (groupTotal.get(g) ?? 0) + v);
-      return { date, rooms: r.nights, room: r.money, roomGross: r.gross, commission: r.commission, services, service, total: r.money + service, excludedRooms: x.nights, excludedRoom: x.money, checkoutService: r.service };
+      return { date, rooms: r.nights, room: r.money + up, roomGross: r.gross + up, commission: r.commission, services, service, total: r.money + up + service, excludedRooms: x.nights, excludedRoom: x.money, upgrade: up, checkoutService: checkout ? r.service - up : 0 };
     });
     return { id, name, days };
   });

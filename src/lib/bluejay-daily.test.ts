@@ -71,3 +71,9 @@ test("two stays of one booking in the same room both count; a later snapshot of 
   const extended = booking({ code: "010209", checkIn: "2026-08-02", checkOut: "2026-08-07", nights: 5, roomPrice: 1_500_000 });
   assert.equal(room([week("2026-07-27", [first], {}, "2026-08-10T00:00:00Z"), week("2026-08-03", [extended], {}, "2026-08-20T00:00:00Z")]), 1_500_000); // the newer pull wins
 });
+
+test("a room upgrade (nâng hạng phòng) sold as a service is room money: it moves from its service group to the room, and out of the check-out service", () => {
+  const services = [{ date: "2026-08-04", total: 300_000, groups: [{ name: "Dịch vụ khác", quantity: 2, total: 300_000, items: [{ name: "Nâng hạng phòng", unit: "Lần", quantity: 1, total: 200_000 }, { name: "Đưa đón", unit: "Lần", quantity: 1, total: 100_000 }] }] }];
+  const day = dailyRevenue([week("2026-08-03", [booking({ checkOut: "2026-08-04", servicePrice: 300_000 })], { services })], "2026-08-04", "2026-08-04", true).hotels[0].days[0];
+  assert.deepEqual([day.room, day.roomGross, day.upgrade, day.services["Dịch vụ khác"], day.service, day.checkoutService], [1_100_000, 1_100_000, 200_000, 100_000, 100_000, 100_000]);
+});

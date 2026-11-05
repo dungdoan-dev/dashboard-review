@@ -62,3 +62,9 @@ test("with check-out service, the total is the checked-out bookings' and the gro
   assert.equal(row(out(500, {})).other, 500);
   assert.equal(row(out(0, { Minibar: 100 })).minibar, 0);
 });
+
+test("days still to come are not counted as missing occupancy", () => {
+  const rows = compareRows("2026-10", daily, range, "2026-10-06");
+  assert.equal(rows.find((r) => r.week === "Cả tháng" && r.hotel === "A")!.missingDays, 6 - 2); // 1..6 Oct, A has the 1st and the 6th
+  assert.equal(rows.find((r) => r.week === "Tuần 42" && r.hotel === "A")!.missingDays, 0); // 12..18 Oct has not started
+});

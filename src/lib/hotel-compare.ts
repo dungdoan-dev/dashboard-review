@@ -4,7 +4,7 @@
 // Pure function: tested by hotel-compare.test.ts. Imports use ".ts" because tests run this with plain Node.
 import type { DailyRevenue } from "./bluejay-daily.ts";
 import type { RangeData } from "./bluejay-range.ts";
-import { addDays, mondayOf } from "./bluejay-metrics.ts";
+import { addDays, mondayOf, todayVN } from "./bluejay-metrics.ts";
 import { weekColumns } from "./finance-summary.ts";
 import { revenueLines } from "./pnl.ts";
 
@@ -32,7 +32,7 @@ export const onCheckout = (sold: Record<string, number>, total: number): Record<
   return Object.fromEntries(parts);
 };
 
-export function compareRows(month: string, daily: DailyRevenue, range: RangeData): CompareRow[] {
+export function compareRows(month: string, daily: DailyRevenue, range: RangeData, today = todayVN()): CompareRow[] {
   // A week is the whole Monday-Sunday (the same week as the operations report, so a week split by two months shows in full in both); only "Cả tháng" is cut at the month's ends.
   const columns = weekColumns({ from: `${month}-01`, to: monthEnd(month) }).map((c) => (c.label === "Cả kỳ" ? c : { ...c, from: mondayOf(c.from), to: addDays(mondayOf(c.from), 6) }));
   const rows: CompareRow[] = [];
@@ -45,8 +45,8 @@ export function compareRows(month: string, daily: DailyRevenue, range: RangeData
       const lines = revenueLines({ room: days.reduce((s, d) => s + d.roomGross, 0), services: daily.serviceOnCheckout ? onCheckout(services, days.reduce((s, d) => s + d.checkoutService, 0)) : services });
       const stored = (range.hotels.find((x) => x.id === h.id)?.days ?? []).filter((d, i) => d && range.dates[i] >= c.from && range.dates[i] <= c.to);
       const occupied = stored.reduce((s, d) => s + d!.occupied, 0), available = stored.reduce((s, d) => s + d!.total, 0);
-      const commission = days.reduce((s, d) => s + d.commission, 0), dayCount = Math.round((Date.parse(c.to) - Date.parse(c.from)) / 864e5) + 1;
-      const row = { key: `${week}|${h.id}`, week, hotel: h.name, chain: false, rooms: occupied, available, occ: available ? occupied / available : null, room: Math.round(lines["Tiền phòng"]), minibar: Math.round(lines["Minibar"]), outside: Math.round(lines["Dịch vụ ngoài"]), laundry: Math.round(lines["Giặt ủi"]), other: Math.round(lines["Thu khác"]), deduction: 0 - Math.round(commission), total: 0, missingDays: dayCount - stored.length };
+      const commission = days.reduce((s, d) => s + d.commission, 0), last = c.to < today ? c.to : today, dayCount = last < c.from ? 0 : Math.round((Date.parse(last) - Date.parse(c.from)) / 864e5) + 1; // days still to come are not missing
+      const row = { key: `${week}|${h.id}`, week, hotel: h.name, chain: false, rooms: occupied, available, occ: available ? occupied / available : null, room: Math.round(lines["Tiền phòng"]), minibar: Math.round(lines["Minibar"]), outside: Math.round(lines["Dịch vụ ngoài"]), laundry: Math.round(lines["Giặt ủi"]), other: Math.round(lines["Thu khác"]), deduction: 0 - Math.round(commission), total: 0, missingDays: dayCount - (range.hotels.find((x) => x.id === h.id)?.days ?? []).filter((d, i) => d && range.dates[i] >= c.from && range.dates[i] <= last).length };
       row.total = row.room + row.minibar + row.outside + row.laundry + row.other + row.deduction;
       return row;
     });
